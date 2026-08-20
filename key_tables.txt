@@ -1,0 +1,3641 @@
+
+=== ABANDONED_PAYMENTS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  reference: text
+  amount: numeric
+  currency: text  default='NGN'::text
+  purpose: text  default='product_purchase'::text
+  order_id: uuid
+  product_name: text
+  provider: text
+  status: text  default='abandoned'::text
+  metadata: jsonb  default='{}'::jsonb
+  recovery_shown: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  expires_at: timestamp with time zone
+
+=== ACHIEVEMENT_PROGRESS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  achievement_id: uuid
+  progress: integer  default=0
+  target: integer  default=1
+  is_completed: boolean  default=false
+  completed_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== ACTIVITY_FEED (3 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  event_type: text
+  category: text  default='system'::text
+  title: text
+  description: text
+  related_id: uuid
+  related_type: text
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== ADMIN_ACTIVITY_LOGS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  admin_id: uuid
+  action: text
+  target_type: text
+  target_id: text
+  details: jsonb
+  ip_address: text
+  created_at: timestamp with time zone  default=now()
+
+=== ADMIN_AGREEMENTS (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  admin_id: uuid
+  agreement_version: text  default='v1.0'::text
+  accepted_at: timestamp with time zone  default=now()
+  ip_address: text
+  user_agent: text
+  pdf_downloaded: boolean  default=false
+  is_deleted: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== ADMIN_INVITATIONS (1 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  email: text
+  invite_token: text
+  invited_by: uuid
+  status: text  default='pending'::text
+  expires_at: timestamp with time zone  default=(now() + '7 days'::interval)
+  created_at: timestamp with time zone  default=now()
+  accepted_at: timestamp with time zone
+
+=== ADMIN_LOGS (11 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  admin_id: uuid
+  action_type: text
+  target_id: uuid
+  target_type: text
+  details: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== ADMIN_PERFORMANCE (0 rows, 22 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  admin_id: uuid
+  period_type: text  default='daily'::text
+  period_start: date
+  period_end: date
+  tickets_resolved: integer  default=0
+  avg_response_time_minutes: numeric  default=0
+  customer_satisfaction_score: numeric  default=0
+  listings_approved: integer  default=0
+  listings_rejected: integer  default=0
+  marketing_recoveries: integer  default=0
+  subscription_renewals_recovered: integer  default=0
+  revenue_influenced: numeric  default=0
+  promotions_managed: integer  default=0
+  compliance_reviews_completed: integer  default=0
+  total_score: numeric  default=0
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== ADMIN_VERIFICATIONS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  admin_id: uuid
+  doc_type: text
+  doc_url: text
+  status: text  default='pending'::text
+  reviewer_id: uuid
+  reviewer_notes: text
+  reviewed_at: timestamp with time zone
+  phone_verified: boolean  default=false
+  email_verified: boolean  default=false
+  is_deleted: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== AFFILIATE_CLICKS (2 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  referrer_id: uuid
+  product_id: uuid
+  clicker_ip: text
+  created_at: timestamp with time zone  default=now()
+  source: text  default='affiliate_link'::text
+
+=== AI_ABUSE_LOG (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  ip_address: text
+  feature: text
+  prompt: text  default=''::text
+  violation_type: text
+  severity: text  default='medium'::text
+  blocked: boolean  default=true
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== AI_BUSINESS_REPORTS (0 rows, 17 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  title: text
+  summary: text
+  detailed_analysis: text
+  key_findings: jsonb  default='[]'::jsonb
+  metrics_snapshot: jsonb  default='{}'::jsonb
+  period_start: timestamp with time zone
+  period_end: timestamp with time zone
+  ai_provider: text  default='openai'::text
+  ai_model: text
+  prompt_used: text
+  tokens_used: integer
+  generated_by: uuid
+  status: text  default='active'::text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  deleted_at: timestamp with time zone
+
+=== AI_CACHE (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  cache_key: text
+  cache_value: jsonb
+  feature: text
+  ttl_seconds: integer  default=300
+  hit_count: integer  default=0
+  expires_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== AI_CONTEXT_SNAPSHOTS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  context_type: text  default='general'::text
+  context_data: jsonb  default='{}'::jsonb
+  message_count: integer  default=0
+  tokens_used: integer  default=0
+  created_at: timestamp with time zone  default=now()
+
+=== AI_CONVERSATIONS (6 rows, 19 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  role: text
+  content: text
+  context_type: text
+  context_id: uuid
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+  title: text  default='New Conversation'::text
+  archived: boolean  default=false
+  summary: text
+  provider: text  default='groq'::text
+  tokens_total: integer  default=0
+  cost_total: numeric  default=0
+  updated_at: timestamp with time zone  default=now()
+  assistant_type: text  default='shopping'::text
+  messages: jsonb  default='[]'::jsonb
+  message_count: integer  default=0
+  last_message_at: timestamp with time zone
+
+=== AI_CUSTOMER_INSIGHTS (3 rows, 21 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  insight_type: text
+  insight_category: text  default='general'::text
+  title: text
+  description: text
+  affected_user_ids: ARRAY  default='{}'::uuid[]
+  severity: text  default='medium'::text
+  confidence_score: numeric  default=0
+  recommended_action: text
+  ai_provider: text  default='openai'::text
+  ai_model: text
+  insight_data: jsonb  default='{}'::jsonb
+  is_dismissed: boolean  default=false
+  dismissed_by: uuid
+  dismissed_at: timestamp with time zone
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== AI_FORECASTS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  forecast_type: text
+  target: text
+  prediction: jsonb
+  confidence_level: numeric  default=0
+  time_horizon: text  default='30d'::text
+  created_at: timestamp with time zone  default=now()
+
+=== AI_IMAGES (0 rows, 17 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  prompt: text  default=''::text
+  image_url: text  default=''::text
+  type: text  default='generated'::text
+  provider: text  default='groq'::text
+  model: text  default=''::text
+  status: text  default='completed'::text
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  favorite: boolean  default=false
+  deleted_at: timestamp with time zone
+  storage_path: text
+  generation_ms: integer  default=0
+  cost: numeric  default=0
+  size: text  default='1024x1024'::text
+  quality: text  default='standard'::text
+
+=== AI_MEMORY (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  memory_type: text  default='context'::text
+  scope: text  default='user'::text
+  key: text
+  value: jsonb  default='{}'::jsonb
+  confidence: numeric  default=1.0
+  source: text  default='inferred'::text
+  access_count: integer  default=0
+  last_accessed_at: timestamp with time zone
+  expires_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== AI_MESSAGES (72 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  user_id: uuid  default=auth.uid()
+  role: text
+  content: text
+  tokens: integer  default=0
+  model: text  default='groq-llama-3.3-70b'::text
+  feature: text  default='chat'::text
+  latency_ms: integer  default=0
+  created_at: timestamp with time zone  default=now()
+  provider: text  default='groq'::text
+
+=== AI_MODERATION_QUEUE (9 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  entity_type: text  default='product'::text
+  entity_id: uuid
+  content: text
+  content_type: text  default='listing'::text
+  risk_score: numeric  default=0
+  risk_flags: ARRAY  default='{}'::text[]
+  status: text  default='pending'::text
+  auto_action: text
+  reviewed_by: uuid
+  reviewed_at: timestamp with time zone
+  review_note: text  default=''::text
+  created_at: timestamp with time zone  default=now()
+
+=== AI_MODERATION_RULES (6 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  rule_type: text
+  pattern: text
+  action: text  default='review'::text
+  severity: text  default='medium'::text
+  is_active: boolean  default=true
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== AI_PREDICTION_LOGS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  prediction_type: text
+  predicted_value: numeric
+  actual_value: numeric
+  accuracy: numeric
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== AI_PROMPT_VERSIONS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  prompt_id: uuid
+  version: integer
+  system_prompt: text
+  user_prompt_template: text  default=''::text
+  changed_by: uuid
+  change_note: text  default=''::text
+  created_at: timestamp with time zone  default=now()
+
+=== AI_PROMPTS (5 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  key: text
+  title: text
+  description: text  default=''::text
+  system_prompt: text
+  user_prompt_template: text  default=''::text
+  version: integer  default=1
+  is_active: boolean  default=true
+  feature: text  default='chat'::text
+  tags: ARRAY  default='{}'::text[]
+  variables: jsonb  default='[]'::jsonb
+  model_override: text
+  temperature_override: numeric
+  max_tokens_override: integer
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== AI_QUALITY_SCORES (2 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  listing_id: uuid
+  listing_type: text  default='product'::text
+  overall_score: integer  default=0
+  title_score: integer  default=0
+  description_score: integer  default=0
+  image_score: integer  default=0
+  pricing_score: integer  default=0
+  keyword_score: integer  default=0
+  engagement_score: integer  default=0
+  conversion_score: integer  default=0
+  suggestions: jsonb
+  estimated_impact: text
+  created_at: timestamp with time zone  default=now()
+
+=== AI_RATE_LIMITS (4 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  tier: text
+  feature: text  default='all'::text
+  requests_per_minute: integer  default=20
+  requests_per_hour: integer  default=200
+  requests_per_day: integer  default=1000
+  burst_limit: integer  default=5
+  cooldown_seconds: integer  default=30
+  is_active: boolean  default=true
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== AI_RECOMMENDATIONS (0 rows, 27 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  recommendation_type: text
+  title: text
+  description: text
+  confidence: numeric  default=0
+  metadata: jsonb
+  is_dismissed: boolean  default=false
+  is_acted_on: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  status: text  default='pending'::text
+  priority: text  default='medium'::text
+  category: text  default='general'::text
+  action_type: text  default='suggestion'::text
+  target_entity: text
+  target_entity_id: uuid
+  expected_impact: text
+  ai_provider: text  default='openai'::text
+  ai_model: text
+  metrics_context: jsonb  default='{}'::jsonb
+  acted_on_by: uuid
+  acted_on_at: timestamp with time zone
+  action_notes: text
+  dismissed_by: uuid
+  dismissed_at: timestamp with time zone
+  updated_at: timestamp with time zone  default=now()
+  deleted_at: timestamp with time zone
+
+=== AI_REPORTS (3 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  report_type: text
+  title: text
+  summary: text
+  data: jsonb
+  period_start: date
+  period_end: date
+  generated_by: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== AI_VOICE_TRANSCRIPTIONS (0 rows, 17 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  audio_url: text  default=''::text
+  storage_path: text
+  transcript: text  default=''::text
+  language: text
+  language_confidence: numeric
+  duration_seconds: numeric  default=0
+  model: text  default='whisper-1'::text
+  provider: text  default='openai'::text
+  confidence: numeric
+  segments: jsonb
+  context_type: text
+  context_id: uuid
+  status: text  default='completed'::text
+  error_message: text
+  created_at: timestamp with time zone  default=now()
+
+=== ALGOLIA_SYNC_STATE (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  table_name: text
+  record_id: uuid
+  index_name: text
+  last_synced_at: timestamp with time zone  default=now()
+  sync_status: text  default='pending'::text
+  error_message: text
+  object_data: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== ALGORITHM_SETTINGS (1 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  is_singleton: boolean  default=true
+  search_weight: numeric  default=30
+  click_weight: numeric  default=15
+  conversion_weight: numeric  default=20
+  rating_weight: numeric  default=10
+  review_weight: numeric  default=8
+  freshness_weight: numeric  default=5
+  velocity_weight: numeric  default=7
+  trust_weight: numeric  default=5
+  trending_threshold: numeric  default=50
+  fraud_sensitivity: numeric  default=50
+  min_reviews_for_confidence: integer  default=5
+  trending_decay_rate: numeric  default=0.85
+  updated_at: timestamp with time zone  default=now()
+
+=== ANALYTICS_DASHBOARDS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  description: text
+  owner_id: uuid
+  widget_config: jsonb  default='[]'::jsonb
+  filters: jsonb  default='{}'::jsonb
+  is_default: boolean  default=false
+  is_shared: boolean  default=false
+  category: text  default='custom'::text
+  status: text  default='active'::text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  deleted_at: timestamp with time zone
+
+=== ANALYTICS_EVENTS (0 rows, 26 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  event_type: text
+  entity_type: text  default='product'::text
+  entity_id: uuid
+  seller_id: uuid
+  viewer_id: uuid
+  session_id: text
+  ip_hash: text
+  device_hash: text
+  browser: text
+  country: text
+  city: text
+  referrer: text
+  source: text  default='direct'::text
+  metadata: jsonb  default='{}'::jsonb
+  is_bot: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  device_type: text  default='desktop'::text
+  os: text
+  browser_name: text
+  state: text
+  language: text
+  timezone: text
+  session_duration: integer
+  is_bounce: boolean  default=false
+  keywords: text
+
+=== ANALYTICS_EXPORTS (0 rows, 16 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  report_id: uuid
+  export_type: text  default='csv'::text
+  data_category: text
+  date_range_start: timestamp with time zone
+  date_range_end: timestamp with time zone
+  filters: jsonb  default='{}'::jsonb
+  file_url: text
+  file_size_bytes: bigint
+  row_count: integer
+  download_count: integer  default=0
+  status: text  default='completed'::text
+  error_message: text
+  exported_by: uuid
+  created_at: timestamp with time zone  default=now()
+  deleted_at: timestamp with time zone
+
+=== ANALYTICS_KPIS (16 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  display_name: text
+  category: text  default='marketplace'::text
+  metric_key: text
+  unit: text  default='count'::text
+  target_value: numeric
+  warning_threshold: numeric
+  critical_threshold: numeric
+  comparison_operator: text  default='greater_than'::text
+  icon: text
+  color: text  default='#6366f1'::text
+  sort_order: integer  default=0
+  is_visible: boolean  default=true
+  status: text  default='active'::text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  deleted_at: timestamp with time zone
+
+=== ANALYTICS_REPORTS (0 rows, 25 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  description: text
+  category: text  default='marketplace'::text
+  format: text  default='csv'::text
+  date_range: jsonb  default='{}'::jsonb
+  filters: jsonb  default='{}'::jsonb
+  schedule_frequency: text  default='once'::text
+  schedule_day_of_week: integer
+  schedule_day_of_month: integer
+  schedule_time: text  default='09:00'::text
+  next_run_at: timestamp with time zone
+  last_run_at: timestamp with time zone
+  last_run_status: text
+  email_recipients: jsonb  default='[]'::jsonb
+  email_subject: text
+  email_body: text
+  file_url: text
+  file_size_bytes: bigint
+  row_count: integer
+  status: text  default='active'::text
+  created_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  deleted_at: timestamp with time zone
+
+=== ANALYTICS_SESSIONS (0 rows, 19 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  session_id: text
+  user_id: uuid
+  device_type: text
+  os: text
+  browser: text
+  language: text
+  timezone: text
+  country: text
+  ip_address: inet
+  entry_page: text
+  exit_page: text
+  page_views: integer  default=0
+  events_count: integer  default=0
+  duration_seconds: integer
+  is_bounce: boolean  default=false
+  started_at: timestamp with time zone  default=now()
+  ended_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== ANNOUNCEMENT_DELIVERIES (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  announcement_id: uuid
+  user_id: uuid
+  status: text  default='pending'::text
+  delivered_at: timestamp with time zone
+  read_at: timestamp with time zone
+  dismissed_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== ANNOUNCEMENT_TARGETS (0 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  announcement_id: uuid
+  target_audience: text  default='everyone'::text
+  created_at: timestamp with time zone  default=now()
+
+=== AUTH_ACTIVITY (138 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  email: text
+  event_type: text
+  success: boolean  default=true
+  reason: text
+  ip_hash: text
+  user_agent: text
+  device_fingerprint: text
+  country: text
+  created_at: timestamp with time zone  default=now()
+
+=== BADGE_ASSIGNMENTS (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  badge_id: uuid
+  user_id: uuid
+  assigned_by: uuid
+  reason: text
+  expires_at: timestamp with time zone
+  is_active: boolean  default=true
+  is_deleted: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== BADGES (6 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  slug: text
+  description: text
+  image_url: text
+  image_type: text
+  display_priority: integer  default=0
+  target_type: text  default='any'::text
+  eligibility_rules: jsonb  default='{}'::jsonb
+  is_active: boolean  default=true
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== BAN_APPEALS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  appeal_text: text
+  status: text  default='pending'::text
+  reviewed_by: uuid
+  reviewed_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== BANK_ACCOUNTS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  bank_code: text  default=''::text
+  bank_name: text
+  account_number: text
+  account_name: text  default=''::text
+  recipient_code: text
+  is_default: boolean  default=false
+  is_verified: boolean  default=false
+  verification_status: text  default='unverified'::text
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== BANNER_ANALYTICS (32 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  banner_id: uuid
+  user_id: uuid
+  event_type: text
+  device_type: text  default='desktop'::text
+  timestamp: timestamp with time zone  default=now()
+
+=== BANNER_LINKS (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  banner_id: uuid
+  destination_type: text
+  destination_id: text
+  external_url: text
+  created_at: timestamp with time zone  default=now()
+
+=== BUSINESS_SETTINGS (0 rows, 27 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  is_singleton: boolean  default=true
+  business_name: text  default='Dright'::text
+  tagline: text
+  description: text
+  street_address: text
+  address_line_2: text
+  city: text
+  region: text
+  postal_code: text
+  country: text
+  latitude: numeric
+  longitude: numeric
+  phone: text
+  email: text
+  website_url: text
+  logo_url: text
+  hours_json: jsonb  default='{}'::jsonb
+  service_area: ARRAY  default='{}'::text[]
+  social_profiles: jsonb  default='{}'::jsonb
+  google_business_profile_url: text
+  google_place_id: text
+  google_maps_embed_url: text
+  price_range: text  default='$$'::text
+  service_categories: ARRAY  default='{}'::text[]
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CAMPAIGN_EVENTS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  listing_id: uuid
+  user_id: uuid
+  event_type: text
+  ip_hash: text
+  device_fingerprint: text
+  is_fraudulent: boolean  default=false
+  fraud_reason: text
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== CAMPAIGN_REPORTS (0 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  report_type: text
+  period_start: date
+  period_end: date
+  total_revenue: numeric  default=0
+  total_campaigns: integer  default=0
+  total_impressions: integer  default=0
+  total_clicks: integer  default=0
+  total_conversions: integer  default=0
+  metadata: jsonb
+  generated_by: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== CAMPAIGN_STATISTICS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  stat_date: date  default=CURRENT_DATE
+  impressions: integer  default=0
+  clicks: integer  default=0
+  conversions: integer  default=0
+  reach: integer  default=0
+  spend: numeric  default=0
+  ctr: numeric  default=0
+  cpc: numeric  default=0
+  cpa: numeric  default=0
+  sales_revenue: numeric  default=0
+  messages: integer  default=0
+  applications: integer  default=0
+  enrollments: integer  default=0
+
+=== CC_AI_ANALYSIS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  submission_id: uuid
+  confidence_score: numeric  default=0
+  fraud_score: numeric  default=0
+  verdict: text  default='pending'::text
+  checks: jsonb  default='[]'::jsonb
+  duplicate_detected: boolean  default=false
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== CC_BOOKMARKS (0 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  user_id: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+
+=== CC_CAMPAIGNS (1 rows, 35 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  creator_id: uuid  default=auth.uid()
+  category_id: uuid
+  name: text
+  description: text
+  instructions: text
+  task_type: text  default='custom'::text
+  difficulty: text  default='easy'::text
+  estimated_completion_time: text
+  language: text  default='en'::text
+  countries_allowed: ARRAY  default='{}'::text[]
+  minimum_user_level: text  default='bronze'::text
+  age_requirement: integer
+  tags: ARRAY  default='{}'::text[]
+  reward_per_completion: numeric  default=0
+  max_workers: integer
+  workers_count: integer  default=0
+  completed_count: integer  default=0
+  pending_count: integer  default=0
+  rejected_count: integer  default=0
+  total_budget: numeric  default=0
+  platform_fee_percent: numeric  default=10
+  escrow_amount: numeric  default=0
+  verification_type: text  default='manual'::text
+  evidence_types: ARRAY  default='{}'::text[]
+  requirements: jsonb  default='[]'::jsonb
+  status: text  default='draft'::text
+  is_featured: boolean  default=false
+  is_promoted: boolean  default=false
+  featured_until: timestamp with time zone
+  ends_at: timestamp with time zone
+  launched_at: timestamp with time zone
+  completed_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CC_CATEGORIES (33 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  slug: text
+  icon: text
+  sort_order: integer  default=0
+  is_active: boolean  default=true
+  created_at: timestamp with time zone  default=now()
+
+=== CC_CLICKS (0 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  user_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== CC_CREATOR_PROFILES (0 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  total_campaigns: integer  default=0
+  active_campaigns: integer  default=0
+  total_spent: numeric  default=0
+  approval_speed_hours: numeric
+  worker_rating: numeric  default=0
+  refund_rate: numeric  default=0
+  avg_reward: numeric  default=0
+  response_time_hours: numeric
+  trust_badge: text  default='new'::text
+  is_premium: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CC_DISPUTES (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  submission_id: uuid
+  campaign_id: uuid
+  raised_by: uuid  default=auth.uid()
+  reason: text
+  status: text  default='open'::text
+  resolution: text
+  resolved_by: uuid
+  created_at: timestamp with time zone  default=now()
+  resolved_at: timestamp with time zone
+
+=== CC_ESCROW (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  creator_id: uuid
+  amount_locked: numeric  default=0
+  amount_released: numeric  default=0
+  amount_refunded: numeric  default=0
+  status: text  default='active'::text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CC_FRAUD_REPORTS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  reported_by: uuid  default=auth.uid()
+  reason: text
+  status: text  default='open'::text
+  admin_notes: text
+  created_at: timestamp with time zone  default=now()
+
+=== CC_HISTORY (1 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  campaign_id: uuid
+  action: text
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== CC_LEADERBOARD (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  username: text
+  avatar_url: text
+  total_earnings: numeric  default=0
+  completed_tasks: integer  default=0
+  level: text  default='bronze'::text
+  country: text
+  rank: integer
+  period: text  default='all'::text
+  updated_at: timestamp with time zone  default=now()
+
+=== CC_MEDIA (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  file_url: text
+  file_type: text  default='image'::text
+  file_name: text
+  file_size: bigint
+  position: integer  default=0
+  created_at: timestamp with time zone  default=now()
+
+=== CC_NOTIFICATIONS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  campaign_id: uuid
+  type: text
+  title: text
+  message: text
+  is_read: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+
+=== CC_PROMOTIONS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  creator_id: uuid  default=auth.uid()
+  promotion_type: text
+  budget: numeric  default=0
+  duration_days: integer  default=7
+  target_countries: ARRAY  default='{}'::text[]
+  target_categories: ARRAY  default='{}'::text[]
+  target_interests: ARRAY  default='{}'::text[]
+  impressions: integer  default=0
+  clicks: integer  default=0
+  status: text  default='active'::text
+  starts_at: timestamp with time zone  default=now()
+  ends_at: timestamp with time zone  default=(now() + '7 days'::interval)
+  created_at: timestamp with time zone  default=now()
+
+=== CC_REVIEWS (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  reviewer_id: uuid  default=auth.uid()
+  rating: integer  default=5
+  review_text: text
+  created_at: timestamp with time zone  default=now()
+
+=== CC_SETTINGS (1 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  platform_fee_percent: numeric  default=10
+  launch_fee: numeric  default=0
+  premium_creator_fee_percent: numeric  default=5
+  min_reward: numeric  default=0.25
+  max_reward: numeric  default=1000
+  min_withdrawal: numeric  default=5
+  ai_verification_premium_price: numeric  default=5
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CC_STATS (0 rows, 9 cols, RLS: True) ===
+  campaign_id: uuid
+  total_views: integer  default=0
+  total_clicks: integer  default=0
+  total_submissions: integer  default=0
+  total_approved: integer  default=0
+  total_rejected: integer  default=0
+  total_paid_out: numeric  default=0
+  ctr: numeric  default=0
+  updated_at: timestamp with time zone  default=now()
+
+=== CC_SUBMISSION_FILES (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  submission_id: uuid
+  file_url: text
+  file_type: text  default='image'::text
+  file_name: text
+  file_size: bigint
+  created_at: timestamp with time zone  default=now()
+
+=== CC_SUBMISSIONS (1 rows, 20 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  worker_id: uuid  default=auth.uid()
+  status: text  default='pending'::text
+  evidence_urls: ARRAY  default='{}'::text[]
+  evidence_text: text
+  evidence_links: ARRAY  default='{}'::text[]
+  notes: text
+  creator_notes: text
+  country: text
+  browser: text
+  ai_score: numeric
+  fraud_score: numeric  default=0
+  ai_verdict: text
+  reviewed_at: timestamp with time zone
+  reviewed_by: uuid
+  paid_at: timestamp with time zone
+  reward_amount: numeric
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CC_TRANSACTIONS (1 rows, 28 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  wallet_id: uuid
+  user_id: uuid  default=auth.uid()
+  type: text
+  amount: numeric  default=0
+  balance_after: numeric
+  campaign_id: uuid
+  description: text
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+  reference: text
+  receipt_number: text
+  currency: text  default='NGN'::text
+  exchange_rate: numeric  default=1.0
+  gateway: text
+  balance_before: numeric
+  status: text  default='completed'::text
+  category: text
+  notes: text
+  payment_provider: text
+  device_info: text
+  ip_address: inet
+  country: text
+  browser: text
+  related_order_id: uuid
+  related_escrow_id: uuid
+  related_subscription_id: uuid
+  related_withdrawal_id: uuid
+
+=== CC_VIEWS (8 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  user_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== CC_WALLETS (3 rows, 21 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  balance: numeric  default=0
+  escrow_balance: numeric  default=0
+  total_deposited: numeric  default=0
+  total_withdrawn: numeric  default=0
+  total_paid_out: numeric  default=0
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  pending_balance: numeric  default=0
+  locked_balance: numeric  default=0
+  referral_balance: numeric  default=0
+  affiliate_balance: numeric  default=0
+  creator_balance: numeric  default=0
+  advertiser_budget: numeric  default=0
+  seller_earnings: numeric  default=0
+  currency: text  default='NGN'::text
+  is_frozen: boolean  default=false
+  frozen_reason: text
+  frozen_by: uuid
+  frozen_at: timestamp with time zone
+
+=== CC_WORKER_LEVELS (6 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  level_name: text
+  min_xp: integer  default=0
+  max_xp: integer
+  perks: jsonb  default='[]'::jsonb
+  sort_order: integer  default=0
+  created_at: timestamp with time zone  default=now()
+
+=== CC_WORKER_PROFILES (2 rows, 16 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  total_earnings: numeric  default=0
+  completed_tasks: integer  default=0
+  rejected_tasks: integer  default=0
+  success_rate: numeric  default=0
+  approval_rate: numeric  default=0
+  avg_completion_time_hours: numeric
+  level: text  default='bronze'::text
+  xp: integer  default=0
+  country: text
+  skills: ARRAY  default='{}'::text[]
+  languages: ARRAY  default='{}'::text[]
+  badges: ARRAY  default='{}'::text[]
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CHALLENGE_PROGRESS (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  challenge_id: uuid
+  user_id: uuid  default=auth.uid()
+  progress: integer  default=0
+  is_completed: boolean  default=false
+  completed_at: timestamp with time zone
+  reward_claimed: boolean  default=false
+  claimed_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CHALLENGES (0 rows, 19 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  title: text
+  description: text
+  banner_image: text
+  icon: text  default='Trophy'::text
+  reward_amount: numeric  default=0
+  reward_currency: text  default='NGN'::text
+  reward_description: text
+  start_date: timestamp with time zone
+  end_date: timestamp with time zone
+  requirements: jsonb  default='[]'::jsonb
+  challenge_type: text  default='general'::text
+  status: text  default='upcoming'::text
+  is_active: boolean  default=true
+  sort_order: integer  default=0
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_at: timestamp with time zone  default=now()
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_ARCHIVED_CONVERSATIONS (0 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  user_id: uuid  default=auth.uid()
+  archived_at: timestamp with time zone  default=now()
+
+=== CHAT_AUDIT_LOGS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  admin_id: uuid  default=auth.uid()
+  action: text
+  target_type: text
+  target_id: uuid
+  conversation_id: uuid
+  details: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_CONVERSATION_LABELS (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  label_id: uuid
+  applied_by: uuid  default=auth.uid()
+  applied_at: timestamp with time zone  default=now()
+
+=== CHAT_CONVERSATION_SUMMARIES (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  summary_text: text
+  bullet_points: jsonb
+  message_count: integer  default=0
+  generated_at: timestamp with time zone  default=now()
+
+=== CHAT_CONVERSATION_TIMELINE (2 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  event_type: text
+  event_label: text
+  event_data: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_CONVERSATIONS (4 rows, 20 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  channel_type: text  default='general'::text
+  customer_id: uuid
+  seller_id: uuid
+  product_id: uuid
+  order_id: uuid
+  status: text  default='open'::text
+  last_message: text
+  last_message_at: timestamp with time zone
+  customer_unread_count: integer  default=0
+  seller_unread_count: integer  default=0
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  context_type: text  default='general'::text
+  context_id: uuid
+  context_data: jsonb
+  is_pinned: boolean  default=false
+  initiator_id: uuid
+  spam_score: integer  default=0
+  is_flagged: boolean  default=false
+
+=== CHAT_CUSTOMER_TAGS (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  seller_id: uuid  default=auth.uid()
+  customer_id: uuid
+  tag: text
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_FAVORITE_CONVERSATIONS (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  user_id: uuid  default=auth.uid()
+  favorited_at: timestamp with time zone  default=now()
+  sort_order: integer  default=0
+
+=== CHAT_FOLLOW_UP_REMINDERS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  seller_id: uuid  default=auth.uid()
+  reminder_type: text  default='reply_tomorrow'::text
+  title: text
+  due_at: timestamp with time zone
+  is_completed: boolean  default=false
+  completed_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_LABELS (12 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  color: text  default='gray'::text
+  is_system: boolean  default=false
+  created_by: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_MESSAGE_ATTACHMENTS (1 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  message_id: uuid
+  conversation_id: uuid
+  uploader_id: uuid  default=auth.uid()
+  file_name: text
+  file_type: text
+  file_size: integer
+  storage_path: text
+  public_url: text
+  thumbnail_url: text
+  duration_seconds: numeric
+  width: integer
+  height: integer
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_MESSAGE_DRAFTS (1 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  user_id: uuid  default=auth.uid()
+  body: text
+  updated_at: timestamp with time zone  default=now()
+
+=== CHAT_MESSAGE_EDITS (1 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  message_id: uuid
+  editor_id: uuid  default=auth.uid()
+  previous_body: text
+  edited_at: timestamp with time zone  default=now()
+
+=== CHAT_MESSAGE_REACTIONS (2 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  message_id: uuid
+  user_id: uuid  default=auth.uid()
+  emoji: text
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_MESSAGES (11 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  sender_id: uuid
+  body: text
+  status: text  default='sent'::text
+  created_at: timestamp with time zone  default=now()
+  reply_to_id: uuid
+  is_deleted: boolean  default=false
+  deleted_for_everyone: boolean  default=false
+  is_edited: boolean  default=false
+  message_type: text  default='text'::text
+  metadata: jsonb
+
+=== CHAT_PINNED_CONVERSATIONS (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  user_id: uuid  default=auth.uid()
+  pinned_at: timestamp with time zone  default=now()
+  sort_order: integer  default=0
+
+=== CHAT_PINNED_MESSAGES (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  message_id: uuid
+  pinned_by: uuid  default=auth.uid()
+  pinned_at: timestamp with time zone  default=now()
+
+=== CHAT_PRESENCE (4 rows, 3 cols, RLS: True) ===
+  user_id: uuid
+  is_online: boolean  default=false
+  last_seen_at: timestamp with time zone  default=now()
+
+=== CHAT_QUICK_REPLIES (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  title: text
+  body: text
+  sort_order: integer  default=0
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CHAT_REPORTS (0 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  reporter_id: uuid  default=auth.uid()
+  reported_user_id: uuid
+  conversation_id: uuid
+  message_id: uuid
+  reason: text
+  description: text
+  status: text  default='open'::text
+  resolved_by: uuid
+  resolution_notes: text
+  created_at: timestamp with time zone  default=now()
+  resolved_at: timestamp with time zone
+
+=== CHAT_SPAM_FLAGS (1 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  user_id: uuid  default=auth.uid()
+  flag_type: text
+  details: jsonb
+  is_resolved: boolean  default=false
+  resolved_by: uuid
+  created_at: timestamp with time zone  default=now()
+  resolved_at: timestamp with time zone
+
+=== CHAT_STARRED_MESSAGES (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  message_id: uuid
+  conversation_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== CHAT_TYPING_INDICATORS (0 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  conversation_id: uuid
+  user_id: uuid
+  updated_at: timestamp with time zone  default=now()
+
+=== CHAT_USER_BLOCKS (0 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  blocker_id: uuid  default=auth.uid()
+  blocked_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== CMS_BLOCKS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  page_id: uuid
+  block_type: text
+  block_data: jsonb  default='{}'::jsonb
+  title: text
+  status: text  default='draft'::text
+  sort_order: integer  default=0
+  is_hidden: boolean  default=false
+  publish_at: timestamp with time zone
+  expire_at: timestamp with time zone
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CMS_BUTTON_ACTIONS (0 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  block_id: uuid
+  button_text: text
+  internal_link: text
+  external_link: text
+  open_in_new_tab: boolean  default=false
+  is_hidden: boolean  default=false
+  is_disabled: boolean  default=false
+  button_style: text  default='primary'::text
+  sort_order: integer  default=0
+  created_by: uuid  default=auth.uid()
+  updated_at: timestamp with time zone  default=now()
+
+=== CMS_MEDIA (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  filename: text
+  file_url: text
+  file_type: text
+  mime_type: text
+  file_size: bigint  default=0
+  folder: text  default='root'::text
+  tags: ARRAY  default='{}'::text[]
+  alt_text: text
+  width: integer
+  height: integer
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CMS_NAVIGATION (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  page_key: text
+  section_key: text
+  sort_order: integer  default=0
+  is_hidden: boolean  default=false
+  config: jsonb  default='{}'::jsonb
+  created_by: uuid  default=auth.uid()
+  updated_at: timestamp with time zone  default=now()
+
+=== CMS_PAGE_VERSIONS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  page_id: uuid
+  version_number: integer
+  snapshot: jsonb  default='{}'::jsonb
+  change_summary: text
+  created_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+
+=== CMS_PAGES (0 rows, 21 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  slug: text
+  title: text
+  page_type: text  default='standard'::text
+  status: text  default='draft'::text
+  meta_title: text
+  meta_description: text
+  meta_keywords: ARRAY
+  og_title: text
+  og_description: text
+  og_image: text
+  canonical_url: text
+  publish_at: timestamp with time zone
+  expire_at: timestamp with time zone
+  sort_order: integer  default=0
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  published_at: timestamp with time zone
+
+=== CMS_VISIBILITY_RULES (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  target_type: text
+  target_id: uuid
+  user_role: text
+  country: text
+  device_type: text
+  is_visible: boolean  default=true
+  created_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+
+=== COMMISSION_SPLITS (0 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  escrow_id: uuid
+  order_id: uuid
+  recipient_id: uuid
+  recipient_role: text
+  amount: numeric
+  percentage: numeric  default=0
+  balance_field: text  default='balance'::text
+  status: text  default='pending'::text
+  distributed_at: timestamp with time zone
+  ledger_entry_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== COUPON_REDEMPTIONS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  coupon_id: uuid
+  user_id: uuid
+  listing_id: uuid
+  order_id: uuid
+  original_amount: numeric  default=0
+  discount_amount: numeric  default=0
+  final_amount: numeric  default=0
+  redeemed_at: timestamp with time zone  default=now()
+
+=== COUPONS (1 rows, 27 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  code: text
+  name: text
+  description: text
+  reward_type: text  default='percentage_discount'::text
+  value: numeric  default=0
+  currency: text  default='USD'::text
+  start_date: timestamp with time zone  default=now()
+  end_date: timestamp with time zone
+  max_uses: integer
+  uses_per_user: integer  default=1
+  min_purchase_amount: numeric  default=0
+  max_discount_amount: numeric
+  applicable_categories: ARRAY  default='{}'::text[]
+  applicable_sellers: ARRAY  default='{}'::text[]
+  applicable_listing_types: ARRAY  default='{}'::text[]
+  excluded_listings: ARRAY  default='{}'::text[]
+  excluded_categories: ARRAY  default='{}'::text[]
+  excluded_sellers: ARRAY  default='{}'::text[]
+  promotion_restrictions: jsonb
+  is_active: boolean  default=true
+  is_published: boolean  default=false
+  is_archived: boolean  default=false
+  current_uses: integer  default=0
+  created_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CRM_CUSTOMERS (0 rows, 25 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  customer_status: text  default='active'::text
+  lifetime_value: numeric  default=0
+  total_purchases: integer  default=0
+  total_sales: integer  default=0
+  total_earnings: numeric  default=0
+  total_withdrawals: numeric  default=0
+  pending_withdrawals: numeric  default=0
+  wallet_balance: numeric  default=0
+  reviews_received: integer  default=0
+  avg_rating: numeric  default=0
+  referral_count: integer  default=0
+  affiliate_performance: jsonb  default='{}'::jsonb
+  seller_performance: jsonb  default='{}'::jsonb
+  assigned_admin_id: uuid
+  tags: ARRAY  default='{}'::text[]
+  notes: text
+  last_contacted_at: timestamp with time zone
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CUSTOMER_CONTACT_LOGS (0 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  contact_id: uuid
+  user_id: uuid
+  staff_id: uuid
+  log_type: text  default='message'::text
+  content: text
+  channel: text  default='in_app'::text
+  metadata: jsonb  default='{}'::jsonb
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CUSTOMER_CONTACTS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  staff_id: uuid
+  channel: text  default='in_app'::text
+  subject: text
+  summary: text
+  follow_up_reminder: timestamp with time zone
+  outcome: text  default='open'::text
+  contact_method_used: text
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CUSTOMER_RECOVERY_QUEUE (0 rows, 19 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  recovery_reason: text
+  related_entity_type: text
+  related_entity_id: uuid
+  related_data: jsonb  default='{}'::jsonb
+  assigned_admin_id: uuid
+  admin_notes: text
+  follow_up_date: timestamp with time zone
+  last_reminder_at: timestamp with time zone
+  reminder_count: integer  default=0
+  outcome: text  default='pending'::text
+  resolved_at: timestamp with time zone
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CUSTOMER_TIMELINES (0 rows, 16 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  event_type: text
+  event_category: text  default='general'::text
+  event_title: text
+  event_description: text
+  event_data: jsonb  default='{}'::jsonb
+  related_entity_type: text
+  related_entity_id: uuid
+  performed_by: uuid
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== CUSTOMIZATION_OPTIONS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  product_id: uuid
+  option_name: text
+  additional_price: numeric  default=0
+  additional_days: integer  default=0
+  created_at: timestamp with time zone  default=now()
+  option_type: text
+  description: text
+  is_required: boolean  default=false
+
+=== DIGITAL_PRODUCT_DETAILS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  product_id: uuid
+  delivery_type: text  default='INSTANT_DOWNLOAD'::text
+  download_file_url: text
+  download_limit: integer
+  expiry_days: integer  default=30
+  created_at: timestamp with time zone  default=now()
+  access_link: text
+  file_format: text
+  file_size: bigint
+  includes_bonus_materials: boolean  default=false
+
+=== DISPUTE_EVIDENCE (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  dispute_id: uuid
+  uploaded_by: uuid
+  file_url: text
+  file_name: text
+  file_type: text
+  description: text
+  created_at: timestamp with time zone  default=now()
+
+=== DISPUTE_MESSAGES (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  dispute_id: uuid
+  sender_id: uuid
+  message: text
+  is_admin_message: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+
+=== DISPUTES (0 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  dispute_number: text
+  buyer_id: uuid
+  seller_id: uuid
+  product_id: uuid
+  transaction_id: uuid
+  reason: text
+  description: text
+  status: text  default='open'::text
+  buyer_claim_amount: numeric
+  resolution_amount: numeric
+  admin_id: uuid
+  admin_decision: text
+  ai_summary: text
+  escrow_released: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  resolved_at: timestamp with time zone
+
+=== EMAIL_LOGS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  recipient_email: text
+  template_type: text
+  subject: text  default=''::text
+  status: text  default='sent'::text
+  provider: text  default='resend'::text
+  message_id: text
+  error_message: text
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== ESCROW_PAYMENTS (0 rows, 16 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  order_id: uuid
+  buyer_id: uuid
+  seller_id: uuid
+  amount: numeric
+  platform_fee: numeric  default=0
+  seller_earnings: numeric  default=0
+  status: text  default='held'::text
+  held_at: timestamp with time zone  default=now()
+  released_at: timestamp with time zone
+  refund_amount: numeric
+  auto_release_at: timestamp with time zone
+  dispute_id: uuid
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== FAQ_ITEMS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  category_id: uuid
+  question: text
+  answer: text  default=''::text
+  tags: ARRAY  default='{}'::text[]
+  sort_order: integer  default=0
+  status: text  default='draft'::text
+  is_published: boolean  default=false
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== FCM_TOKENS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  token: text
+  device_type: text  default='web'::text
+  device_name: text
+  is_active: boolean  default=true
+  last_used_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== FEATURED_LISTING_REWARDS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  listing_id: uuid
+  listing_type: text  default='product'::text
+  reward_type: text  default='homepage_feature'::text
+  duration_days: integer  default=7
+  start_date: timestamp with time zone  default=now()
+  end_date: timestamp with time zone
+  status: text  default='active'::text
+  granted_by: uuid
+  reason: text
+  created_at: timestamp with time zone  default=now()
+
+=== FEATURED_PRODUCTS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  product_id: uuid
+  promotion_type: text
+  start_date: timestamp with time zone  default=now()
+  end_date: timestamp with time zone
+  is_active: boolean  default=true
+  created_by: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== FEEDBACK (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  category: text  default='general'::text
+  message: text
+  created_at: timestamp with time zone  default=now()
+
+=== FINANCIAL_REPORTS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  report_type: text
+  period_start: date
+  period_end: date
+  total_amount: numeric  default=0
+  transaction_count: integer  default=0
+  metadata: jsonb
+  generated_by: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== FRAUD_CASES (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  case_type: text
+  user_id: uuid
+  listing_id: uuid
+  risk_score: integer  default=0
+  status: text  default='open'::text
+  details: jsonb
+  assigned_to: uuid
+  resolution: text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== FRAUD_EVENTS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  fraud_type: text
+  listing_id: uuid
+  user_id: uuid
+  severity: text  default='low'::text
+  status: text  default='flagged'::text
+  description: text
+  evidence: jsonb
+  created_at: timestamp with time zone  default=now()
+  reviewed_at: timestamp with time zone
+  reviewed_by: uuid
+
+=== FRAUD_REPORTS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  reporter_id: uuid
+  reported_id: uuid
+  report_type: text
+  description: text
+  status: text  default='pending'::text
+  reviewed_by: uuid
+  reviewed_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== GIVEAWAY_CAMPAIGNS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  description: text
+  giveaway_type: text  default='random_winners'::text
+  reward_type: text
+  reward_value: numeric  default=0
+  reward_coupon_id: uuid
+  max_winners: integer  default=1
+  max_entries: integer
+  start_date: timestamp with time zone  default=now()
+  end_date: timestamp with time zone
+  status: text  default='active'::text
+  created_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== GIVEAWAY_ENTRIES (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  giveaway_id: uuid
+  user_id: uuid
+  is_winner: boolean  default=false
+  entry_data: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== GLOBAL_ANNOUNCEMENTS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  title: text
+  message: text
+  type: text  default='news'::text
+  is_active: boolean  default=true
+  created_by: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== HELP_ARTICLES (0 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  category_id: uuid
+  title: text
+  slug: text
+  content: text  default=''::text
+  summary: text
+  tags: ARRAY  default='{}'::text[]
+  view_count: integer  default=0
+  sort_order: integer  default=0
+  status: text  default='draft'::text
+  is_published: boolean  default=false
+  publish_at: timestamp with time zone
+  expire_at: timestamp with time zone
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== HELP_CATEGORIES (12 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  slug: text
+  description: text
+  icon: text  default='HelpCircle'::text
+  sort_order: integer  default=0
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== INTEGRATION_API_KEYS (0 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  provider_id: uuid
+  key_name: text
+  key_value: text
+  environment: text  default='sandbox'::text
+  is_active: boolean  default=true
+  last_rotated_at: timestamp with time zone
+  expires_at: timestamp with time zone
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== INTEGRATION_HEALTH_CHECKS (1 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  provider_id: uuid
+  health_status: text  default='unknown'::text
+  response_time_ms: integer
+  error_message: text
+  checked_by: uuid
+  checked_at: timestamp with time zone  default=now()
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+
+=== INTEGRATION_PROVIDER_LOGS (5 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  provider_id: uuid
+  provider_key: text
+  admin_id: uuid
+  action: text
+  result: text  default='success'::text
+  error_message: text
+  ip_address: text
+  metadata: jsonb  default='{}'::jsonb
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+
+=== INTEGRATION_PROVIDER_SETTINGS (0 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  provider_id: uuid
+  setting_key: text
+  setting_value: text
+  is_secret: boolean  default=false
+  is_required: boolean  default=false
+  description: text
+  category: text  default='general'::text
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== INTEGRATION_PROVIDERS (48 rows, 20 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  provider_key: text
+  provider_name: text
+  category: text  default='general'::text
+  description: text
+  icon: text
+  documentation_url: text
+  supported_features: ARRAY  default='{}'::text[]
+  config_schema: jsonb  default='{}'::jsonb
+  is_enabled: boolean  default=false
+  is_connected: boolean  default=false
+  environment: text  default='sandbox'::text
+  is_default: boolean  default=false
+  display_order: integer  default=100
+  status: text  default='inactive'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== INTEGRATION_USAGE_STATISTICS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  provider_id: uuid
+  requests_count: bigint  default=0
+  success_count: bigint  default=0
+  error_count: bigint  default=0
+  avg_response_time_ms: integer  default=0
+  total_cost: numeric  default=0
+  period_date: date  default=CURRENT_DATE
+  metadata: jsonb  default='{}'::jsonb
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== INTEGRATION_WEBHOOKS (0 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  provider_id: uuid
+  webhook_url: text
+  callback_url: text
+  webhook_secret: text
+  expected_events: ARRAY  default='{}'::text[]
+  last_received_at: timestamp with time zone
+  last_event_type: text
+  status: text  default='inactive'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== INTERNAL_SETTLEMENTS (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  seller_id: uuid
+  product_id: uuid
+  sale_id: uuid
+  amount: numeric  default=0
+  settlement_type: text
+  status: text  default='pending'::text
+  approved_by: uuid
+  approved_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== INVOICES (5 rows, 21 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  invoice_number: text
+  user_id: uuid
+  order_id: uuid
+  subscription_id: uuid
+  amount: numeric  default=0
+  currency: text  default='NGN'::text
+  tax_amount: numeric  default=0
+  discount_amount: numeric  default=0
+  total_amount: numeric  default=0
+  status: text  default='pending'::text
+  invoice_type: text  default='product'::text
+  line_items: jsonb  default='[]'::jsonb
+  billing_details: jsonb  default='{}'::jsonb
+  payment_reference: text
+  payment_provider: text
+  paid_at: timestamp with time zone
+  due_date: timestamp with time zone
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== KYC_AUDIT_LOGS (4 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  admin_id: uuid
+  action: text
+  entity_type: text
+  entity_id: uuid
+  ip_address: text
+  device_info: text
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== KYC_DOCUMENTS (0 rows, 19 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  submission_id: uuid
+  user_id: uuid
+  doc_type: text
+  doc_url: text
+  doc_name: text
+  doc_mime_type: text
+  doc_size_bytes: bigint
+  status: text  default='pending'::text
+  expires_at: timestamp with time zone
+  replaced_by: uuid
+  reviewer_id: uuid
+  reviewer_notes: text
+  version: integer  default=1
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== KYC_PROFILES (1 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  user_type: text  default='buyer'::text
+  status: text  default='not_started'::text
+  provider_id: uuid
+  verification_level: text  default='standard'::text
+  expires_at: timestamp with time zone
+  last_reviewed_at: timestamp with time zone
+  reviewer_id: uuid
+  notes: text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== KYC_PROVIDER_SETTINGS (6 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  provider_id: uuid
+  is_connected: boolean  default=false
+  is_enabled: boolean  default=false
+  is_active: boolean  default=false
+  api_key: text
+  secret_key: text
+  webhook_secret: text
+  mode: text  default='sandbox'::text
+  health_status: text  default='unknown'::text
+  last_sync_at: timestamp with time zone
+  last_error: text
+  error_log: jsonb  default='[]'::jsonb
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== KYC_PROVIDERS (6 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  slug: text
+  display_name: text
+  description: text
+  provider_type: text  default='manual'::text
+  is_enabled: boolean  default=false
+  is_system: boolean  default=false
+  config_schema: jsonb  default='{}'::jsonb
+  is_deleted: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== KYC_REVIEWS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  submission_id: uuid
+  reviewer_id: uuid
+  action: text
+  notes: text
+  internal_notes: text
+  is_deleted: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== KYC_RULES (8 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_type: text
+  is_required: boolean  default=false
+  required_for_action: text
+  description: text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== KYC_SUBMISSIONS (1 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  profile_id: uuid
+  user_id: uuid
+  status: text  default='pending'::text
+  provider_id: uuid
+  provider_reference: text
+  provider_result: jsonb
+  reviewer_id: uuid
+  reviewer_notes: text
+  rejection_reason: text
+  submitted_at: timestamp with time zone  default=now()
+  reviewed_at: timestamp with time zone
+  version: integer  default=1
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== LEADERBOARD_SNAPSHOTS (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  category: text
+  period: text
+  entries: jsonb  default='[]'::jsonb
+  snapshot_date: date  default=CURRENT_DATE
+  created_at: timestamp with time zone  default=now()
+
+=== LEDGER_ENTRIES (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  transaction_id: uuid
+  wallet_id: uuid
+  user_id: uuid  default=auth.uid()
+  entry_type: text
+  account: text
+  amount: numeric
+  balance_after: numeric
+  description: text
+  reference_type: text
+  reference_id: uuid
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== LEGAL_PAGES (10 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  title: text
+  slug: text
+  page_type: text  default='terms'::text
+  content: text  default=''::text
+  is_published: boolean  default=false
+  publish_at: timestamp with time zone
+  version_number: integer  default=1
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== LISTING_EVENTS (59 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  listing_id: uuid
+  listing_type: text  default='product'::text
+  user_id: uuid
+  event_type: text
+  metadata: jsonb
+  session_id: text
+  created_at: timestamp with time zone  default=now()
+  view_source: text  default='marketplace'::text
+
+=== LISTING_SCORES (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  listing_id: uuid
+  listing_type: text  default='product'::text
+  dds_score: numeric  default=0
+  relevance_score: numeric  default=0
+  engagement_score: numeric  default=0
+  conversion_score: numeric  default=0
+  rating_score: numeric  default=0
+  freshness_score: numeric  default=0
+  velocity_score: numeric  default=0
+  trust_score: numeric  default=0
+  trending_score: numeric  default=0
+  is_trending: boolean  default=false
+  trending_tier: text
+  calculated_at: timestamp with time zone  default=now()
+
+=== LISTING_SIMILARITY (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  listing_a: uuid
+  listing_b: uuid
+  score: numeric  default=0
+  reasons: ARRAY  default='{}'::text[]
+  updated_at: timestamp with time zone  default=now()
+
+=== LISTING_STATISTICS (0 rows, 26 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  listing_id: uuid
+  listing_type: text  default='product'::text
+  total_impressions: integer  default=0
+  unique_impressions: integer  default=0
+  total_clicks: integer  default=0
+  unique_clicks: integer  default=0
+  ctr: numeric  default=0
+  total_favorites: integer  default=0
+  total_shares: integer  default=0
+  total_messages: integer  default=0
+  total_purchases: integer  default=0
+  completed_orders: integer  default=0
+  conversion_rate: numeric  default=0
+  avg_view_duration_seconds: numeric
+  return_visits: integer  default=0
+  avg_rating: numeric  default=0
+  total_reviews: integer  default=0
+  rating_confidence: numeric  default=0
+  refund_rate: numeric  default=0
+  dispute_rate: numeric  default=0
+  velocity_1h: numeric  default=0
+  velocity_24h: numeric  default=0
+  velocity_7d: numeric  default=0
+  velocity_30d: numeric  default=0
+  updated_at: timestamp with time zone  default=now()
+
+=== LOGIN_ATTEMPTS (3 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  email: text
+  user_id: uuid
+  attempt_count: integer  default=0
+  locked_until: timestamp with time zone
+  last_attempt_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== MARKETING_CAMPAIGNS (0 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_name: text
+  campaign_type: text
+  entity_type: text  default='product'::text
+  entity_id: uuid
+  owner_id: uuid
+  budget: numeric  default=0
+  spent: numeric  default=0
+  start_date: timestamp with time zone
+  end_date: timestamp with time zone
+  targeting: jsonb  default='{}'::jsonb
+  is_paid: boolean  default=false
+  status: text  default='draft'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== MARKETPLACE_COLLECTIONS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  slug: text
+  title: text
+  subtitle: text
+  icon: text  default='Package'::text
+  color: text  default='bg-primary-500'::text
+  collection_type: text
+  sort_config: jsonb  default='{}'::jsonb
+  is_active: boolean  default=true
+  is_auto_generated: boolean  default=true
+  display_order: integer  default=0
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== MARKETPLACE_MODERATION (0 rows, 19 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  entity_type: text
+  entity_id: uuid
+  submitter_id: uuid
+  status: text  default='pending_review'::text
+  priority: text  default='normal'::text
+  moderator_id: uuid
+  rejection_reason: text
+  revision_notes: text
+  reviewer_notes: text
+  submitted_at: timestamp with time zone  default=now()
+  review_started_at: timestamp with time zone
+  review_completed_at: timestamp with time zone
+  version: integer  default=1
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== MARKETPLACE_RANKING_WEIGHTS (1 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  is_singleton: boolean  default=true
+  relevance_weight: numeric  default=30.0
+  seller_verification_weight: numeric  default=15.0
+  listing_quality_weight: numeric  default=10.0
+  conversion_rate_weight: numeric  default=15.0
+  sales_history_weight: numeric  default=10.0
+  rating_weight: numeric  default=10.0
+  freshness_weight: numeric  default=5.0
+  trending_weight: numeric  default=5.0
+  updated_at: timestamp with time zone  default=now()
+
+=== MARKETPLACE_STATS_SNAPSHOT (0 rows, 20 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  snapshot_date: date  default=CURRENT_DATE
+  total_users: integer  default=0
+  new_users: integer  default=0
+  active_users: integer  default=0
+  total_sellers: integer  default=0
+  total_buyers: integer  default=0
+  total_listings: integer  default=0
+  active_listings: integer  default=0
+  pending_listings: integer  default=0
+  total_orders: integer  default=0
+  total_revenue: numeric  default=0
+  promotion_revenue: numeric  default=0
+  referral_revenue: numeric  default=0
+  total_wishlist_items: integer  default=0
+  total_reviews: integer  default=0
+  avg_rating: numeric  default=0
+  conversion_rate: numeric  default=0
+  page_views: integer  default=0
+  searches: integer  default=0
+
+=== MODERATION_AUDIT_LOGS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  admin_id: uuid
+  action: text
+  target_type: text
+  target_id: uuid
+  details: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== MODERATION_QUEUE (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  item_type: text
+  item_id: uuid
+  reason: text
+  reported_by: uuid
+  status: text  default='pending'::text
+  assigned_to: uuid
+  resolution_notes: text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== MODERATION_REPORTS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  reporter_id: uuid
+  target_type: text
+  target_id: uuid
+  reason: text
+  report_category: text  default='other'::text
+  status: text  default='pending'::text
+  admin_notes: text
+  resolved_by: uuid
+  resolved_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== NOTIFICATION_AUDIT_LOG (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  actor_id: uuid
+  action: text
+  notification_id: uuid
+  target_type: text
+  target_id: uuid
+  details: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== NOTIFICATION_CATEGORIES (16 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  key: text
+  label: text
+  description: text
+  icon: text
+  is_enabled: boolean  default=true
+  sort_order: integer  default=0
+  created_at: timestamp with time zone  default=now()
+
+=== NOTIFICATION_DELIVERY_LOGS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  notification_id: uuid
+  user_id: uuid
+  status: text  default='created'::text
+  channel: text  default='in_app'::text
+  created_at: timestamp with time zone  default=now()
+  queued_at: timestamp with time zone
+  delivered_at: timestamp with time zone
+  read_at: timestamp with time zone
+  archived_at: timestamp with time zone
+  dismissed_at: timestamp with time zone
+  expired_at: timestamp with time zone
+  metadata: jsonb
+
+=== NOTIFICATION_EVENT_LOG (101 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  event_type: text
+  module: text
+  actor_id: uuid
+  recipient_ids: ARRAY  default='{}'::uuid[]
+  priority: text  default='normal'::text
+  category: text  default='system'::text
+  group_key: text
+  metadata: jsonb
+  expires_at: timestamp with time zone
+  processed: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+
+=== NOTIFICATION_EVENTS (5 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  event_type: text
+  conversation_id: uuid
+  message_id: uuid
+  product_id: uuid
+  actor_id: uuid
+  payload: jsonb
+  read_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== NOTIFICATION_MUTES (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  mute_type: text
+  target_id: uuid
+  target_label: text
+  muted_until: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== NOTIFICATION_PREFERENCES (19 rows, 17 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  notification_type: text
+  in_app_enabled: boolean  default=true
+  email_enabled: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  quiet_hours_start: text
+  quiet_hours_end: text
+  quiet_hours_critical_bypass: boolean  default=true
+  category_toggles: jsonb  default='{}'::jsonb
+  delivery_channels: jsonb  default='{"sms": false, "push": true, "email": true}'::jsonb
+  reminder_frequency: text  default='daily'::text
+  ai_summaries_enabled: boolean  default=true
+  ai_summary_frequency: text  default='daily'::text
+  reduced_motion: boolean  default=false
+  high_contrast: boolean  default=false
+
+=== NOTIFICATION_REMINDERS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  reminder_type: text
+  title: text
+  message: text
+  related_id: uuid
+  related_type: text
+  status: text  default='pending'::text
+  scheduled_for: timestamp with time zone  default=now()
+  sent_at: timestamp with time zone
+  completed_at: timestamp with time zone
+  cancelled_at: timestamp with time zone
+  priority: text  default='normal'::text
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== NOTIFICATION_TEMPLATES_DB (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  template_key: text
+  locale: text  default='en'::text
+  title_template: text
+  message_template: text
+  category: text  default='system'::text
+  variables: ARRAY  default='{}'::text[]
+  is_active: boolean  default=true
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== NOTIFICATION_USER_SETTINGS (1 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  quiet_hours_start: text
+  quiet_hours_end: text
+  quiet_hours_critical_bypass: boolean  default=true
+  category_toggles: jsonb  default='{}'::jsonb
+  delivery_channels: jsonb  default='{"sms": false, "push": true, "email": true}'::jsonb
+  reminder_frequency: text  default='daily'::text
+  ai_summaries_enabled: boolean  default=true
+  ai_summary_frequency: text  default='daily'::text
+  reduced_motion: boolean  default=false
+  high_contrast: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== NOTIFICATIONS (111 rows, 16 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  title: text
+  message: text
+  notification_type: text
+  related_id: uuid
+  is_read: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  category: text  default='system'::text
+  priority: text  default='normal'::text
+  is_archived: boolean  default=false
+  is_deleted: boolean  default=false
+  metadata: jsonb
+  group_key: text
+  actor_id: uuid
+  read_at: timestamp with time zone
+
+=== ORDER_MESSAGES (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  order_id: uuid
+  sender_id: uuid
+  receiver_id: uuid
+  content: text
+  attachments: jsonb  default='[]'::jsonb
+  is_read: boolean  default=false
+  read_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== ORDER_REVIEWS (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  order_id: uuid
+  product_id: uuid
+  buyer_id: uuid
+  seller_id: uuid
+  rating: integer
+  title: text
+  comment: text
+  seller_response: text
+  created_at: timestamp with time zone  default=now()
+
+=== ORDERS (10 rows, 23 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  buyer_id: uuid
+  product_id: uuid
+  seller_id: uuid
+  order_type: text
+  status: text  default='PENDING'::text
+  base_price: numeric
+  tier_price: numeric  default=0
+  customization_price: numeric  default=0
+  admin_task_amount: numeric  default=0
+  sales_team_task_amount: numeric  default=0
+  affiliate_commission_amount: numeric  default=0
+  final_price: numeric
+  selected_tier_id: uuid
+  customization_options: jsonb
+  buyer_requirements: text
+  delivery_url: text
+  download_token: text
+  referrer_id: uuid
+  referrer_role: text
+  is_free_order: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  completed_at: timestamp with time zone
+
+=== PAYMENT_ATTEMPTS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  reference: text
+  provider: text  default='paystack'::text
+  amount: numeric
+  currency: text  default='NGN'::text
+  status: text  default='initialized'::text
+  purpose: text
+  attempt_time: timestamp with time zone  default=now()
+  ip_address: inet
+  device_info: text
+  user_agent: text
+  metadata: jsonb  default='{}'::jsonb
+
+=== PAYMENT_INVOICES (0 rows, 28 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  invoice_number: text
+  order_id: uuid
+  user_id: uuid  default=auth.uid()
+  seller_id: uuid
+  invoice_type: text  default='sale'::text
+  status: text  default='pending'::text
+  currency: text  default='NGN'::text
+  subtotal: numeric  default=0
+  discount: numeric  default=0
+  coupon_code: text
+  referral_discount: numeric  default=0
+  platform_fee: numeric  default=0
+  escrow_fee: numeric  default=0
+  total: numeric  default=0
+  items: jsonb  default='[]'::jsonb
+  buyer_name: text
+  buyer_email: text
+  seller_name: text
+  seller_email: text
+  payment_reference: text
+  payment_method: text
+  paid_at: timestamp with time zone
+  due_at: timestamp with time zone
+  notes: text
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== PAYMENT_PREFERENCES (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  last_gateway: text
+  last_funding_amount: numeric
+  last_bank_account_id: uuid
+  recent_amounts: jsonb  default='[]'::jsonb
+  amount_frequency: jsonb  default='{}'::jsonb
+  preferred_currency: text  default='NGN'::text
+  detected_country: text  default='NG'::text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== PAYMENT_PROVIDERS (6 rows, 17 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  slug: text
+  name: text
+  logo: text  default=''::text
+  description: text  default=''::text
+  status: text  default='coming_soon'::text
+  priority: integer  default=99
+  supported_countries: ARRAY  default='{}'::text[]
+  supported_currencies: ARRAY  default='{}'::text[]
+  badge: text
+  is_recommended: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+  sub_methods: ARRAY  default='{}'::text[]
+  rating: numeric  default=5.0
+  processing_time: text  default='Instant'::text
+  country_priority: jsonb  default='{}'::jsonb
+
+=== PAYMENT_SECURITY (1 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  pin_hash: text
+  pin_length: integer  default=4
+  is_locked: boolean  default=false
+  failed_attempts: integer  default=0
+  locked_until: timestamp with time zone
+  last_pin_change: timestamp with time zone  default=now()
+  auth_rules: jsonb  default='{"always_require_pin": true, "require_pin_threshold": 0, "require_pin_new_device": true, "require_pin_withdrawals": true, "require_pin_after_minutes": 30, "require_pin_payout_change": true}'::jsonb
+  recovery_email: text
+  is_active: boolean  default=true
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== PRODUCTS (15 rows, 41 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  uploaded_by: uuid  default=auth.uid()
+  name: text
+  description: text
+  price: numeric
+  commission_rate: numeric  default=10.00
+  image_url: text
+  category: text  default='General'::text
+  is_active: boolean  default=true
+  created_at: timestamp with time zone  default=now()
+  approval_status: text  default='pending'::text
+  rejection_reason: text
+  admin_task_percent: numeric  default=15.00
+  sales_team_task_percent: numeric  default=0.00
+  affiliate_commission_percent: numeric  default=0.00
+  sales_team_tier: text
+  total_reviews: integer  default=0
+  average_rating: numeric  default=0
+  one_star_count: integer  default=0
+  is_hidden: boolean  default=false
+  is_free: boolean  default=false
+  stock_quantity: integer
+  initial_stock: integer
+  product_type: text  default='PHYSICAL'::text
+  demo_video_url: text
+  has_dright_sales_team: boolean  default=false
+  total_sales: integer  default=0
+  view_count: integer  default=0
+  tags: ARRAY  default='{}'::text[]
+  sku: text
+  brand: text
+  condition: text  default='new'::text
+  specifications: jsonb  default='{}'::jsonb
+  faqs: jsonb  default='[]'::jsonb
+  old_price: numeric
+  discount_percent: integer
+  flash_sale_ends_at: timestamp with time zone
+  location: text
+  updated_at: timestamp with time zone  default=now()
+  is_featured: boolean  default=false
+  is_sponsored: boolean  default=false
+
+=== PROMOTION_PRICING (1 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  is_singleton: boolean  default=true
+  cost_per_impression: numeric  default=0.01
+  cost_per_100_impressions: numeric  default=0.80
+  cost_per_1000_impressions: numeric  default=6.00
+  cost_per_click: numeric  default=0.15
+  cost_per_reach: numeric  default=0.02
+  daily_minimum_budget: numeric  default=1.00
+  maximum_campaign_budget: numeric  default=5000.00
+  currency: text  default='USD'::text
+  default_ctr: numeric  default=0.02
+  default_conversion_rate: numeric  default=0.05
+  updated_at: timestamp with time zone  default=now()
+
+=== PROMOTION_STATISTICS (0 rows, 20 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  promotion_id: uuid
+  campaign_id: uuid
+  entity_type: text  default='product'::text
+  entity_id: uuid
+  impressions: bigint  default=0
+  clicks: bigint  default=0
+  reach: bigint  default=0
+  engagement: bigint  default=0
+  conversions: bigint  default=0
+  revenue_generated: numeric  default=0
+  budget: numeric  default=0
+  remaining_budget: numeric  default=0
+  recording_date: date  default=CURRENT_DATE
+  status: text  default='active'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== PROMOTIONAL_BANNERS (1 rows, 41 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  title: text
+  subtitle: text
+  media_url: text
+  media_type: text  default='image'::text
+  cta_label: text
+  cta_link: text
+  countdown_ends_at: timestamp with time zone
+  campaign_link: text
+  is_active: boolean  default=true
+  display_order: integer  default=0
+  starts_at: timestamp with time zone
+  ends_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  created_by: uuid
+  description: text
+  badge_text: text
+  promotional_message: text
+  desktop_image: text
+  tablet_image: text
+  mobile_image: text
+  background_image: text
+  video_url: text
+  button_text: text
+  button_style: text  default='primary'::text
+  button_visible: boolean  default=true
+  button_link: text
+  banner_type: text  default='platform'::text
+  target_audience: ARRAY  default='{all}'::text[]
+  priority: integer  default=0
+  status: text  default='active'::text
+  updated_by: uuid
+  updated_at: timestamp with time zone  default=now()
+  is_deleted: boolean  default=false
+  deleted_at: timestamp with time zone
+  advertiser_name: text
+  campaign_id: text
+  payment_status: text  default='unpaid'::text
+  campaign_duration: text
+  budget: numeric
+  performance_data: jsonb  default='{}'::jsonb
+
+=== PUBLISHING_WORKFLOW (0 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  entity_type: text
+  entity_id: uuid
+  status: text  default='draft'::text
+  author_id: uuid
+  reviewer_id: uuid
+  publisher_id: uuid
+  review_notes: text
+  rejection_reason: text
+  scheduled_at: timestamp with time zone
+  published_at: timestamp with time zone
+  archived_at: timestamp with time zone
+  version: integer  default=1
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== RECENTLY_VIEWED (35 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  product_id: uuid
+  viewed_at: timestamp with time zone  default=now()
+  view_count: integer  default=1
+
+=== RECOMMENDATION_LOGS (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  listing_id: uuid
+  strategy: text
+  shown: boolean  default=true
+  clicked: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+
+=== RECOMMENDATIONS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  strategy: text
+  listing_ids: ARRAY  default='{}'::uuid[]
+  reason: text
+  metadata: jsonb
+  expires_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== REFERRAL_FRAUD_LOGS (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  referrer_id: uuid
+  referred_user_id: uuid
+  reason: text
+  details: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== REFERRAL_LINKS (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  unique_code: text  default=upper(substr(md5((random())::text), 1, 8))
+  total_clicks: integer  default=0
+  total_conversions: integer  default=0
+  created_at: timestamp with time zone  default=now()
+
+=== REFERRAL_RELATIONSHIPS (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  referrer_id: uuid
+  referred_id: uuid
+  level: integer
+  created_at: timestamp with time zone  default=now()
+
+=== REFERRAL_REWARDS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  referrer_id: uuid
+  referred_user_id: uuid
+  level: integer
+  transaction_id: uuid
+  reward_amount: numeric  default=0
+  reward_type: text
+  status: text  default='pending'::text
+  expires_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  paid_at: timestamp with time zone
+
+=== REFERRAL_STATS (3 rows, 6 cols, RLS: True) ===
+  user_id: uuid
+  total_referrals: integer  default=0
+  active_referrals: integer  default=0
+  total_earned: numeric  default=0
+  pending_earnings: numeric  default=0
+  withdrawable_earnings: numeric  default=0
+
+=== REFERRAL_WITHDRAWALS (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  amount: numeric
+  method: text
+  status: text  default='pending'::text
+  created_at: timestamp with time zone  default=now()
+
+=== REFUND_RECORDS (0 rows, 21 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  refund_number: text
+  transaction_id: uuid
+  user_id: uuid  default=auth.uid()
+  order_id: uuid
+  amount: numeric
+  currency: text  default='NGN'::text
+  reason: text
+  status: text  default='pending'::text
+  approver_id: uuid
+  approved_at: timestamp with time zone
+  processed_at: timestamp with time zone
+  completed_at: timestamp with time zone
+  rejected_at: timestamp with time zone
+  rejection_reason: text
+  refund_method: text
+  gateway_reference: text
+  timeline: jsonb  default='[]'::jsonb
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== REVIEW_HELPFUL_VOTES (0 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  review_id: uuid
+  user_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== REVIEW_REPORTS (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  review_id: uuid
+  reporter_id: uuid
+  reason: text
+  description: text
+  status: text  default='pending'::text
+  admin_notes: text
+  ai_confidence_score: numeric
+  created_at: timestamp with time zone  default=now()
+  resolved_at: timestamp with time zone
+
+=== REVIEW_TIMEFRAMES (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  upload_type: text
+  min_hours: integer  default=1
+  max_hours: integer  default=24
+  updated_at: timestamp with time zone  default=now()
+
+=== REVIEW_VOTES (0 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  review_id: uuid
+  user_id: uuid
+  vote_type: text  default='helpful'::text
+  created_at: timestamp with time zone  default=now()
+
+=== REWARD_TRANSACTIONS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  transaction_type: text
+  reward_type: text
+  amount: numeric  default=0
+  coupon_id: uuid
+  description: text
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== REWARD_WALLETS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  promotion_credits: numeric  default=0
+  promotion_tokens: integer  default=0
+  voucher_count: integer  default=0
+  gift_code_count: integer  default=0
+  total_saved: numeric  default=0
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== RISK_PROFILES (0 rows, 8 cols, RLS: True) ===
+  user_id: uuid
+  risk_score: integer  default=0
+  risk_level: text  default='low'::text
+  flags: jsonb  default='[]'::jsonb
+  factors: jsonb  default='{}'::jsonb
+  recommended_action: text
+  last_assessed: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== ROLE_PERMISSIONS (381 rows, 5 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  role_id: uuid
+  permission_id: uuid
+  created_by: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== ROLES (39 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  slug: text
+  description: text
+  color: text  default='#6366f1'::text
+  icon: text  default='Shield'::text
+  is_system: boolean  default=false
+  is_archived: boolean  default=false
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== SALES_RECORDS (2 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  promoter_id: uuid  default=auth.uid()
+  buyer_name: text
+  product_name: text
+  commission_amount: numeric
+  status: text  default='pending'::text
+  sale_date: date  default=CURRENT_DATE
+  created_at: timestamp with time zone  default=now()
+  referrer_id: uuid
+  referrer_role: text
+  product_id: uuid
+  sale_amount: numeric  default=0
+
+=== SALES_TEAM_CONTRACTS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  seller_id: uuid
+  sales_team_id: uuid
+  product_id: uuid
+  duration: text  default='1_week'::text
+  total_amount: numeric  default=0
+  status: text  default='active'::text
+  admin_cut_applied: boolean  default=false
+  starts_at: timestamp with time zone  default=now()
+  expires_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== SAVED_FILTERS (0 rows, 13 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  name: text
+  search_query: text  default=''::text
+  category_filter: text  default='All'::text
+  sort_by: text  default='newest'::text
+  location_filter: text  default=''::text
+  price_min: text  default=''::text
+  price_max: text  default=''::text
+  date_filter: text  default='all'::text
+  is_default: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== SEARCH_HISTORY (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  query: text
+  category: text
+  filters: jsonb
+  result_count: integer  default=0
+  clicked_listing_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== SEARCH_SUGGESTIONS (5 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  term: text
+  term_type: text  default='keyword'::text
+  category: text
+  popularity: integer  default=0
+  growth_rate: numeric  default=0
+  updated_at: timestamp with time zone  default=now()
+
+=== SEARCH_TRENDS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  term: text
+  period_type: text
+  period_start: date
+  search_count: integer  default=0
+  unique_searchers: integer  default=0
+  result_clicks: integer  default=0
+  growth_rate: numeric  default=0
+  updated_at: timestamp with time zone  default=now()
+
+=== SELLER_SCORES (0 rows, 14 cols, RLS: True) ===
+  user_id: uuid
+  seller_rating: numeric  default=0
+  communication_score: numeric  default=0
+  delivery_score: numeric  default=0
+  product_accuracy: numeric  default=0
+  refund_score: numeric  default=0
+  customer_satisfaction: numeric  default=0
+  ai_quality_score: numeric  default=0
+  portfolio_score: numeric  default=0
+  response_rate: numeric  default=0
+  avg_response_time_minutes: integer  default=0
+  total_sales: integer  default=0
+  total_reviews: integer  default=0
+  updated_at: timestamp with time zone  default=now()
+
+=== SELLER_STATISTICS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  seller_id: uuid
+  total_sales: integer  default=0
+  total_revenue: numeric  default=0
+  avg_rating: numeric  default=0
+  total_reviews: integer  default=0
+  rating_confidence: numeric  default=0
+  completion_rate: numeric  default=0
+  refund_rate: numeric  default=0
+  dispute_rate: numeric  default=0
+  avg_response_time_hours: numeric
+  repeat_customer_rate: numeric  default=0
+  total_followers: integer  default=0
+  verified: boolean  default=false
+  updated_at: timestamp with time zone  default=now()
+
+=== SERVICE_PRODUCT_DETAILS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  product_id: uuid
+  service_category: text
+  delivery_time_days: integer  default=7
+  requires_consultation: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  is_customizable: boolean  default=true
+  revision_count: integer  default=1
+
+=== SERVICE_TIERS (0 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  product_id: uuid
+  tier_name: text
+  price: numeric  default=0
+  delivery_days: integer  default=7
+  features: jsonb  default='[]'::jsonb
+  is_most_popular: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  tier_number: integer  default=1
+  title: text
+  description: text
+  word_count: integer
+  revision_count: integer  default=1
+  sort_order: integer  default=0
+
+=== SITE_SETTINGS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  singleton: boolean  default=true
+  site_name: text  default='AffiliateHub'::text
+  favicon_url: text
+  logo_url: text
+  maintenance_mode: boolean  default=false
+  updated_at: timestamp with time zone  default=now()
+  updated_by: uuid
+
+=== SOCIAL_NOTIFICATIONS (3 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  actor_id: uuid
+  notification_type: text
+  entity_type: text
+  entity_id: uuid
+  metadata: jsonb  default='{}'::jsonb
+  read: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+
+=== SPONSORED_LISTING_LOGS (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  campaign_id: uuid
+  listing_id: uuid
+  placement: text
+  user_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== STORE_FOLLOWERS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  follower_id: uuid  default=auth.uid()
+  store_id: uuid
+  notify_new_products: boolean  default=true
+  notify_price_drops: boolean  default=true
+  notify_promotions: boolean  default=true
+  notify_events: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+
+=== SUBSCRIPTION_PLANS (7 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  slug: text
+  name: text
+  description: text
+  plan_type: text
+  amount: numeric
+  currency: text  default='NGN'::text
+  interval: text  default='monthly'::text
+  trial_days: integer  default=0
+  grace_period_days: integer  default=3
+  features: jsonb  default='[]'::jsonb
+  is_active: boolean  default=true
+  paystack_plan_code: text
+  sort_order: integer  default=0
+  created_at: timestamp with time zone  default=now()
+
+=== SUBSCRIPTION_REMINDERS (0 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  subscription_type: text
+  subscription_id: uuid
+  expiry_date: timestamp with time zone
+  reminder_stage: text  default='pending'::text
+  reminder_offset_days: integer  default=0
+  channel: text  default='email'::text
+  sent_at: timestamp with time zone
+  status: text  default='pending'::text
+  is_deleted: boolean  default=false
+  created_by: uuid
+  updated_by: uuid
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== SUPPORT_DEPARTMENTS (7 rows, 18 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  description: text
+  email: text
+  phone: text
+  whatsapp: text
+  telegram: text
+  messenger: text
+  live_chat_link: text
+  working_hours: text
+  avg_response_time: text
+  is_available: boolean  default=true
+  sort_order: integer  default=0
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== SUPPORT_TICKETS (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  subject: text
+  message: text
+  status: text  default='open'::text
+  priority: text  default='medium'::text
+  admin_reply: text
+  replied_by: uuid
+  replied_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+
+=== SYSTEM_CONFIG (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  singleton: boolean  default=true
+  admin_task_percent: numeric  default=15.00
+  marketer_task_pcts: jsonb  default='{"3": 14, "4": 13, "5": 12}'::jsonb
+  advertiser_task_pcts: jsonb  default='{"A": 12, "B": 11, "C": 10, "Pro": 9, "Super": 8, "Partnership": 7}'::jsonb
+  marketer_sub_prices: jsonb  default='{"3": 4, "4": 6, "5": 10}'::jsonb
+  advertiser_sub_prices: jsonb  default='{"A": 15, "B": 22, "C": 30, "Pro": 50, "Super": 100, "Partnership": 350}'::jsonb
+  admin_cut_percent: numeric  default=5.00
+  updated_at: timestamp with time zone  default=now()
+  updated_by: uuid
+
+=== TRANSACTION_RECEIPTS (0 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  receipt_number: text
+  transaction_id: uuid
+  user_id: uuid  default=auth.uid()
+  receipt_type: text  default='receipt'::text
+  qr_code_data: text
+  pdf_path: text
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== TRUST_SCORES (0 rows, 6 cols, RLS: True) ===
+  user_id: uuid
+  score: integer  default=50
+  level: text  default='building'::text
+  components: jsonb  default='{}'::jsonb
+  last_calculated: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== TURNSTILE_VERIFICATIONS (35 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  ip_address: text
+  action: text
+  token_hash: text
+  success: boolean  default=false
+  error_codes: ARRAY
+  verified_at: timestamp with time zone  default=now()
+
+=== TUTORIAL_CATEGORIES (13 rows, 9 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  name: text
+  slug: text
+  description: text
+  sort_order: integer  default=0
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== TUTORIALS (0 rows, 24 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  category_id: uuid
+  title: text
+  slug: text
+  description: text
+  content: text  default=''::text
+  cover_image: text
+  thumbnail: text
+  video_type: text  default='youtube'::text
+  video_url: text
+  video_thumbnail: text
+  duration_minutes: integer  default=0
+  difficulty: text  default='beginner'::text
+  tags: ARRAY  default='{}'::text[]
+  view_count: integer  default=0
+  sort_order: integer  default=0
+  status: text  default='draft'::text
+  is_published: boolean  default=false
+  publish_at: timestamp with time zone
+  is_deleted: boolean  default=false
+  created_by: uuid  default=auth.uid()
+  updated_by: uuid  default=auth.uid()
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== USER_ACHIEVEMENTS (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  achievement_type: text
+  achievement_name: text
+  metadata: jsonb  default='{}'::jsonb
+  earned_at: timestamp with time zone  default=now()
+
+=== USER_ACTIVITY (92 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  activity_type: text
+  listing_id: uuid
+  listing_type: text
+  category: text
+  metadata: jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== USER_BLOCKS (0 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  blocker_id: uuid  default=auth.uid()
+  blocked_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== USER_CAPABILITIES (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  capability: text
+  granted_at: timestamp with time zone  default=now()
+  granted_by: uuid
+  is_active: boolean  default=true
+
+=== USER_CURRENCY_PREFERENCES (1 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  currency: text  default='NGN'::text
+  country: text
+  language: text  default='en'::text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== USER_FOLLOWS (3 rows, 4 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  follower_id: uuid  default=auth.uid()
+  following_id: uuid
+  created_at: timestamp with time zone  default=now()
+
+=== USER_INTEREST_PROFILES (2 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  scores: jsonb  default='{}'::jsonb
+  top_categories: ARRAY  default='{}'::text[]
+  last_updated: timestamp with time zone  default=now()
+  interaction_count: integer  default=0
+
+=== USER_NOTIFICATION_STATISTICS (0 rows, 14 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  period_type: text
+  period_start: date
+  total_notifications: integer  default=0
+  unread_count: integer  default=0
+  read_count: integer  default=0
+  archived_count: integer  default=0
+  acted_upon_count: integer  default=0
+  ignored_count: integer  default=0
+  category_breakdown: jsonb  default='{}'::jsonb
+  top_types: jsonb  default='[]'::jsonb
+  response_time_avg_hours: numeric
+  updated_at: timestamp with time zone  default=now()
+
+=== USER_PAYMENT_PREFERENCES (2 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  last_gateway: text
+  last_amount: numeric
+  last_bank_account_id: uuid
+  last_funding_amount: numeric
+  preferred_currency: text  default='NGN'::text
+  recent_amounts: jsonb  default='[]'::jsonb
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== USER_REPORTS (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  reporter_id: uuid  default=auth.uid()
+  reported_id: uuid
+  reason: text
+  description: text
+  status: text  default='pending'::text
+  resolved_by: uuid
+  resolved_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  priority: text  default='normal'::text
+
+=== USER_RISK_SCORES (0 rows, 5 cols, RLS: True) ===
+  user_id: uuid
+  risk_score: integer  default=0
+  last_calculated: timestamp with time zone  default=now()
+  flags: jsonb  default='[]'::jsonb
+  updated_at: timestamp with time zone  default=now()
+
+=== USER_ROLES (0 rows, 6 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  role_id: uuid
+  assigned_at: timestamp with time zone  default=now()
+  assigned_by: uuid
+  is_active: boolean  default=true
+
+=== USER_SUBSCRIPTIONS (0 rows, 17 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  plan_id: uuid
+  status: text  default='active'::text
+  current_period_start: timestamp with time zone  default=now()
+  current_period_end: timestamp with time zone
+  trial_end: timestamp with time zone
+  grace_period_end: timestamp with time zone
+  canceled_at: timestamp with time zone
+  cancel_at_period_end: boolean  default=false
+  paystack_subscription_code: text
+  paystack_email_token: text
+  failed_renewal_count: integer  default=0
+  last_payment_ref: text
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== USER_VERIFICATIONS (0 rows, 8 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  verification_type: text
+  status: text  default='pending'::text
+  verified_by: uuid
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  verified_at: timestamp with time zone
+
+=== USERS (4 rows, 74 cols, RLS: True) ===
+  id: uuid  default=auth.uid()
+  email: text
+  phone: text
+  full_name: text
+  account_number: text
+  role: text  default='user'::text
+  created_at: timestamp with time zone  default=now()
+  is_admin: boolean  default=false
+  admin_status: text  default='active'::text
+  balance: numeric  default=0.00
+  marketer_level: integer  default=0
+  advertiser_grade: text
+  weekly_sales_count: integer  default=0
+  total_sales_count: integer  default=0
+  consecutive_weeks_streak: integer  default=0
+  social_media_links: jsonb
+  marketer_status: text  default='none'::text
+  advertiser_status: text  default='none'::text
+  locked_balance: numeric  default=0
+  available_balance: numeric  default=0
+  downgraded_at: timestamp with time zone
+  last_weekly_reset_at: timestamp with time zone
+  referral_code: text
+  admin_role: text
+  account_status: text  default='ACTIVE'::text
+  total_reviews: integer  default=0
+  average_rating: numeric  default=0
+  one_star_count: integer  default=0
+  account_locks_count: integer  default=0
+  referred_by: uuid
+  affiliate_earnings: numeric  default=0
+  avatar_url: text
+  location: text
+  preferred_currency: text  default='USD'::text
+  location_verified: boolean  default=false
+  store_title: text
+  store_banner_url: text
+  store_description: text
+  store_theme: jsonb  default='{}'::jsonb
+  store_location: text
+  username: text
+  is_verified: boolean  default=false
+  response_rate: integer  default=0
+  avg_response_time_hours: integer  default=24
+  languages: ARRAY  default='{English}'::text[]
+  joined_at: timestamp with time zone  default=now()
+  last_active_at: timestamp with time zone  default=now()
+  followers_count: integer  default=0
+  cover_image: text
+  bio: text
+  website: text
+  show_email: boolean  default=false
+  show_phone: boolean  default=false
+  last_active: timestamp with time zone  default=now()
+  is_online: boolean  default=false
+  verification_level: text  default='unverified'::text
+  privacy_profile: text  default='public'::text
+  privacy_email: text  default='private'::text
+  privacy_phone: text  default='private'::text
+  privacy_followers: text  default='public'::text
+  privacy_following: text  default='public'::text
+  privacy_portfolio: text  default='public'::text
+  privacy_analytics: text  default='private'::text
+  privacy_activity: text  default='public'::text
+  profession: text
+  skills: ARRAY  default='{}'::text[]
+  brand: text
+  company_name: text
+  rbac_role_id: uuid
+  admin_pending_since: timestamp with time zone
+  agreement_accepted: boolean  default=false
+  verification_status: text  default='not_submitted'::text
+  admin_verification_status: text
+  admin_rejection_reason: text
+
+=== VERIFICATION_BADGES (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  badge_type: text
+  badge_name: text
+  description: text
+  icon: text
+  is_active: boolean  default=true
+  earned_at: timestamp with time zone  default=now()
+  expires_at: timestamp with time zone
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+
+=== VERIFICATION_DOCUMENTS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  verification_request_id: uuid
+  user_id: uuid
+  doc_type: text
+  file_url: text
+  file_name: text
+  file_size: bigint
+  mime_type: text
+  status: text  default='pending'::text
+  admin_notes: text
+  created_at: timestamp with time zone  default=now()
+
+=== VERIFICATION_REQUESTS (0 rows, 11 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  type: text  default='individual'::text
+  status: text  default='pending'::text
+  admin_notes: text
+  reviewed_by: uuid
+  submitted_at: timestamp with time zone  default=now()
+  reviewed_at: timestamp with time zone
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== VOICE_PREFERENCES (0 rows, 10 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  enabled: boolean  default=false
+  voice_uri: text
+  rate: real  default=1.0
+  pitch: real  default=1.0
+  volume: real  default=1.0
+  auto_read: boolean  default=false
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== WALLET_FRAUD_ALERTS (0 rows, 16 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  alert_type: text
+  severity: text  default='medium'::text
+  description: text
+  metadata: jsonb  default='{}'::jsonb
+  is_resolved: boolean  default=false
+  resolved_by: uuid
+  resolved_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  risk_score: integer  default=0
+  ip_address: text
+  country: text
+  device_fingerprint: text
+  browser: text
+  action_type: text
+
+=== WISHLIST (0 rows, 7 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid  default=auth.uid()
+  product_id: uuid
+  folder: text
+  notify_price_drop: boolean  default=true
+  notify_back_in_stock: boolean  default=true
+  created_at: timestamp with time zone  default=now()
+
+=== WITHDRAWAL_METHODS (6 rows, 12 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  slug: text
+  name: text
+  logo: text  default=''::text
+  description: text  default=''::text
+  status: text  default='coming_soon'::text
+  priority: integer  default=99
+  supported_currencies: ARRAY  default='{}'::text[]
+  is_crypto: boolean  default=false
+  badge: text
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== WITHDRAWAL_QUEUE (0 rows, 20 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  withdrawal_request_id: uuid
+  user_id: uuid
+  amount: numeric
+  currency: text  default='NGN'::text
+  bank_code: text
+  account_number: text
+  account_name: text
+  recipient_code: text
+  transfer_reference: text
+  paystack_transfer_code: text
+  status: text  default='queued'::text
+  gateway_response: text
+  processed_at: timestamp with time zone
+  retry_count: integer  default=0
+  max_retries: integer  default=3
+  next_retry_at: timestamp with time zone
+  metadata: jsonb  default='{}'::jsonb
+  created_at: timestamp with time zone  default=now()
+  updated_at: timestamp with time zone  default=now()
+
+=== WITHDRAWAL_REQUESTS (3 rows, 15 cols, RLS: True) ===
+  id: uuid  default=gen_random_uuid()
+  user_id: uuid
+  amount: numeric
+  payment_method: text
+  account_details: text
+  status: text  default='pending'::text
+  admin_notes: text
+  processed_by: uuid
+  processed_at: timestamp with time zone
+  created_at: timestamp with time zone  default=now()
+  bank_account_id: uuid
+  pin_verified: boolean  default=false
+  withdrawal_method: text  default='nigerian_bank'::text
+  reference: text
+  failure_reason: text
