@@ -1,0 +1,385 @@
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import AppShell from './components/AppShell';
+import AdminShell from './components/AdminShell';
+import PublicAppShell from './components/PublicAppShell';
+import { canAccessPath } from './lib/adminPermissions';
+import ErrorBoundary from './components/ErrorBoundary';
+import { ToastContainer, Spinner } from './components/ui';
+
+/* ─── Lazy-loaded pages (code splitting) ─────────────────────── */
+
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const SignInPage = lazy(() => import('./pages/SignInPage'));
+const SignUpPage = lazy(() => import('./pages/SignUpPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
+const VerifyOtpPage = lazy(() => import('./pages/VerifyOtpPage'));
+const ReferralLandingPage = lazy(() => import('./pages/ReferralLandingPage'));
+const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
+
+const MarketPage = lazy(() => import('./pages/MarketPage'));
+const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
+const JobBoardPage = lazy(() => import('./pages/JobBoardPage'));
+const JobDetailPage = lazy(() => import('./pages/JobDetailPage'));
+const PublicStorePage = lazy(() => import('./pages/PublicStorePage'));
+const HelpCenterPage = lazy(() => import('./pages/HelpCenterPage'));
+const TutorialsPage = lazy(() => import('./pages/TutorialsPage'));
+const AnnouncementsPage = lazy(() => import('./pages/AnnouncementsPage'));
+const ChallengesPage = lazy(() => import('./pages/ChallengesPage'));
+const LegalPagesListPage = lazy(() => import('./pages/LegalPage').then(m => ({ default: m.LegalPagesListPage })));
+const LegalPageDetailPage = lazy(() => import('./pages/LegalPage').then(m => ({ default: m.LegalPageDetailPage })));
+const PermissionsPage = lazy(() => import('./pages/PermissionsPage'));
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const StorePage = lazy(() => import('./pages/StorePage'));
+const UploadProductPage = lazy(() => import('./pages/UploadProductPage'));
+const DraftsPage = lazy(() => import('./pages/DraftsPage'));
+const JobPostingPage = lazy(() => import('./pages/JobPostingPage'));
+const EditProductPage = lazy(() => import('./pages/EditProductPage'));
+const BuyerDashboardPage = lazy(() => import('./pages/BuyerDashboardPage'));
+const SalesPage = lazy(() => import('./pages/SalesPage'));
+const VerifyPage = lazy(() => import('./pages/VerifyPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const PublicProfilePage = lazy(() => import('./pages/PublicProfilePage'));
+const FollowersPage = lazy(() => import('./pages/FollowersPage'));
+const FollowingPage = lazy(() => import('./pages/FollowingPage'));
+const FriendsPage = lazy(() => import('./pages/FriendsPage'));
+const ReferPage = lazy(() => import('./pages/ReferPage'));
+const WishlistPage = lazy(() => import('./pages/WishlistPage'));
+const SmartCollectionsPage = lazy(() => import('./pages/SmartCollectionsPage'));
+const ComparePage = lazy(() => import('./pages/ComparePage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const BlockedUsersPage = lazy(() => import('./pages/BlockedUsersPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const ActivityFeedPage = lazy(() => import('./pages/ActivityFeedPage'));
+const NotificationPreferencesPage = lazy(() => import('./pages/NotificationPreferencesPage'));
+const UserSecurityCenterPage = lazy(() => import('./pages/UserSecurityCenterPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const CampaignDashboardPage = lazy(() => import('./pages/CampaignDashboardPage'));
+const RewardWalletPage = lazy(() => import('./pages/RewardWalletPage'));
+const CreatorCampaignsPage = lazy(() => import('./pages/CreatorCampaignsPage'));
+const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
+const MyTasksPage = lazy(() => import('./pages/MyTasksPage'));
+const CreatorDashboardPage = lazy(() => import('./pages/CreatorDashboardPage'));
+const CampaignWalletPage = lazy(() => import('./pages/CampaignWalletPage'));
+const CampaignBuilderPage = lazy(() => import('./pages/CampaignBuilderPage'));
+const WalletPage = lazy(() => import('./pages/WalletPage'));
+const CheckoutPaymentPage = lazy(() => import('./pages/CheckoutPaymentPage'));
+const FundWalletPage = lazy(() => import('./pages/FundWalletPage'));
+const WithdrawPage = lazy(() => import('./pages/WithdrawPage'));
+const TransactionHistoryPage = lazy(() => import('./pages/TransactionHistoryPage'));
+const PaymentCallbackPage = lazy(() => import('./pages/PaymentCallbackPage'));
+const SubscriptionCheckoutPage = lazy(() => import('./pages/SubscriptionCheckoutPage'));
+const SubscriptionsPage = lazy(() => import('./pages/SubscriptionsPage'));
+const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'));
+const TrustLeaderboardPage = lazy(() => import('./pages/TrustLeaderboardPage'));
+const AchievementsPage = lazy(() => import('./pages/AchievementsPage'));
+
+/* ─── Admin pages (lazy) ──────────────────────────────────────── */
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminProductsPage = lazy(() => import('./pages/admin/AdminProductsPage'));
+const AdminProductEditsPage = lazy(() => import('./pages/admin/AdminProductEditsPage'));
+const AdminVerificationsPage = lazy(() => import('./pages/admin/AdminVerificationsPage'));
+const AdminPayoutsPage = lazy(() => import('./pages/admin/AdminPayoutsPage'));
+const AdminWalletManagerPage = lazy(() => import('./pages/admin/AdminWalletManagerPage'));
+const AdminPaymentSecurityPage = lazy(() => import('./pages/admin/AdminPaymentSecurityPage'));
+const AdminPaymentProvidersPage = lazy(() => import('./pages/admin/AdminPaymentProvidersPage'));
+const AdminWebhookLogsPage = lazy(() => import('./pages/admin/AdminWebhookLogsPage'));
+const AdminPaymentAnalyticsPage = lazy(() => import('./pages/admin/AdminPaymentAnalyticsPage'));
+const AdminWithdrawalsPage = lazy(() => import('./pages/admin/AdminWithdrawalsPage'));
+const AdminAdminsPage = lazy(() => import('./pages/admin/AdminAdminsPage'));
+const AdminInvitePage = lazy(() => import('./pages/admin/AdminInvitePage'));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
+const AdminSystemSettingsPage = lazy(() => import('./pages/admin/AdminSystemSettingsPage'));
+const AdminAnnouncementsPage = lazy(() => import('./pages/admin/AdminAnnouncementsPage'));
+const AdminSiteSettingsPage = lazy(() => import('./pages/admin/AdminSiteSettingsPage'));
+const AdminLocalSeoPage = lazy(() => import('./pages/admin/AdminLocalSeoPage'));
+const AdminTicketsPage = lazy(() => import('./pages/admin/AdminTicketsPage'));
+const AdminFraudReportsPage = lazy(() => import('./pages/admin/AdminFraudReportsPage'));
+const AdminReviewsPage = lazy(() => import('./pages/admin/AdminReviewsPage'));
+const AdminLockedAccountsPage = lazy(() => import('./pages/admin/AdminLockedAccountsPage'));
+const AdminAppealsPage = lazy(() => import('./pages/admin/AdminAppealsPage'));
+const AdminReferralAnalyticsPage = lazy(() => import('./pages/admin/AdminReferralAnalyticsPage'));
+const AdminSettlementsPage = lazy(() => import('./pages/admin/AdminSettlementsPage'));
+const AdminMarketplacePage = lazy(() => import('./pages/admin/AdminMarketplacePage'));
+const AdminNotificationCenterPage = lazy(() => import('./pages/admin/AdminNotificationCenterPage'));
+const AdminAlgorithmPage = lazy(() => import('./pages/admin/AdminAlgorithmPage'));
+const AdminPromotionsPage = lazy(() => import('./pages/admin/AdminPromotionsPage'));
+const AdminCouponsPage = lazy(() => import('./pages/admin/AdminCouponsPage'));
+const AdminGiveawaysPage = lazy(() => import('./pages/admin/AdminGiveawaysPage'));
+const AdminMarketplaceAnalyticsPage = lazy(() => import('./pages/admin/AdminMarketplaceAnalyticsPage'));
+const AdminModerationPage = lazy(() => import('./pages/admin/AdminModerationPage'));
+const AdminFraudPage = lazy(() => import('./pages/admin/AdminFraudPage'));
+const AdminFinancialPage = lazy(() => import('./pages/admin/AdminFinancialPage'));
+const AdminFinancialCenterPage = lazy(() => import('./pages/admin/AdminFinancialCenterPage'));
+const AdminAuditLogsPage = lazy(() => import('./pages/admin/AdminAuditLogsPage'));
+const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage'));
+const AdminAIImagesPage = lazy(() => import('./pages/admin/AdminAIImagesPage'));
+const AdminAIConfigPage = lazy(() => import('./pages/admin/AdminAIConfigPage'));
+const AdminPromptLibraryPage = lazy(() => import('./pages/admin/AdminPromptLibraryPage'));
+const AdminAIModerationPage = lazy(() => import('./pages/admin/AdminAIModerationPage'));
+const AdminEnvHealthPage = lazy(() => import('./pages/admin/AdminEnvHealthPage'));
+const AdminSystemHealthPage = lazy(() => import('./pages/admin/AdminSystemHealthPage'));
+const AdminAuthCenterPage = lazy(() => import('./pages/admin/AdminAuthCenterPage'));
+const AdminCmsPage = lazy(() => import('./pages/admin/AdminCmsPage'));
+const AdminCmsPageBuilder = lazy(() => import('./pages/admin/AdminCmsPageBuilder'));
+const AdminCmsMediaPage = lazy(() => import('./pages/admin/AdminCmsMediaPage'));
+const AdminContentDashboardPage = lazy(() => import('./pages/admin/AdminContentDashboardPage'));
+const AdminBannerPage = lazy(() => import('./pages/admin/AdminBannerPage'));
+const AdminRolesPage = lazy(() => import('./pages/admin/AdminRolesPage'));
+const AdminModerationCenterPage = lazy(() => import('./pages/admin/AdminModerationCenterPage'));
+const AdminBadgeManagementPage = lazy(() => import('./pages/admin/AdminBadgeManagementPage'));
+const AdminApprovalWorkflowPage = lazy(() => import('./pages/admin/AdminApprovalWorkflowPage'));
+const AdminPublishingWorkflowPage = lazy(() => import('./pages/admin/AdminPublishingWorkflowPage'));
+const AdminVerificationReviewPage = lazy(() => import('./pages/admin/AdminVerificationReviewPage'));
+const AdminVerificationProvidersPage = lazy(() => import('./pages/admin/AdminVerificationProvidersPage'));
+const AdminComplianceCenterPage = lazy(() => import('./pages/admin/AdminComplianceCenterPage'));
+const AdminCrmDashboardPage = lazy(() => import('./pages/admin/AdminCrmDashboardPage'));
+const AdminCustomerRecoveryPage = lazy(() => import('./pages/admin/AdminCustomerRecoveryPage'));
+const AdminSubscriptionRecoveryPage = lazy(() => import('./pages/admin/AdminSubscriptionRecoveryPage'));
+const AdminSalesOperationsPage = lazy(() => import('./pages/admin/AdminSalesOperationsPage'));
+const AdminCustomerCarePage = lazy(() => import('./pages/admin/AdminCustomerCarePage'));
+const AdminMarketingDashboardPage = lazy(() => import('./pages/admin/AdminMarketingDashboardPage'));
+const AdminAdminPerformancePage = lazy(() => import('./pages/admin/AdminAdminPerformancePage'));
+const AdminAiInsightsPage = lazy(() => import('./pages/admin/AdminAiInsightsPage'));
+const AdminIntegrationHubPage = lazy(() => import('./pages/admin/AdminIntegrationHubPage'));
+const AdminIntegrationLogsPage = lazy(() => import('./pages/admin/AdminIntegrationLogsPage'));
+const AdminEnterpriseAnalyticsPage = lazy(() => import('./pages/admin/AdminEnterpriseAnalyticsPage'));
+const AdminBusinessIntelligencePage = lazy(() => import('./pages/admin/AdminBusinessIntelligencePage'));
+const AdminReportsCenterPage = lazy(() => import('./pages/admin/AdminReportsCenterPage'));
+const AdminCustomerAnalyticsPage = lazy(() => import('./pages/admin/AdminCustomerAnalyticsPage'));
+const AdminAffiliateAnalyticsPage = lazy(() => import('./pages/admin/AdminAffiliateAnalyticsPage'));
+const AdminFinancialAnalyticsPage = lazy(() => import('./pages/admin/AdminFinancialAnalyticsPage'));
+const AdminSupportAnalyticsPage = lazy(() => import('./pages/admin/AdminSupportAnalyticsPage'));
+const AdminAdminPerformanceAnalyticsPage = lazy(() => import('./pages/admin/AdminAdminPerformanceAnalyticsPage'));
+const AdminTrustCenterPage = lazy(() => import('./pages/admin/AdminTrustCenterPage'));
+
+const AIAssistant = lazy(() => import('./components/AIAssistant'));
+
+/* ─── Page loading fallback ───────────────────────────────────── */
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <Spinner size="lg" />
+    </div>
+  );
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAdmin, adminRole, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-muted">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!canAccessPath(adminRole, location.pathname)) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+    <AuthProvider>
+      <BrowserRouter>
+        <a href="#main-content" className="skip-link">Skip to content</a>
+        <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/welcome" element={<LandingPage />} />
+          <Route path="/sign-in" element={<SignInPage />} />
+          <Route path="/sign-up" element={<SignUpPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/verify-otp" element={<VerifyOtpPage />} />
+          <Route path="/ref" element={<ReferralLandingPage />} />
+          <Route path="/ref/:code" element={<ReferralLandingPage />} />
+          <Route path="/invite/:token" element={<AcceptInvitePage />} />
+
+          {/* Public browsing routes (accessible to guests and authenticated users) */}
+          <Route element={<PublicAppShell />}>
+            <Route path="/market" element={<MarketPage />} />
+            <Route path="/product/:id" element={<ProductDetailPage />} />
+            <Route path="/jobs" element={<JobBoardPage />} />
+            <Route path="/jobs/:id" element={<JobDetailPage />} />
+            <Route path="/shop/:userId" element={<PublicStorePage />} />
+            <Route path="/help" element={<HelpCenterPage />} />
+            <Route path="/tutorials" element={<TutorialsPage />} />
+            <Route path="/announcements" element={<AnnouncementsPage />} />
+            <Route path="/challenges" element={<ChallengesPage />} />
+            <Route path="/legal" element={<LegalPagesListPage />} />
+            <Route path="/legal/:slug" element={<LegalPageDetailPage />} />
+            <Route path="/permissions" element={<PermissionsPage />} />
+          </Route>
+
+          {/* Protected routes with app shell */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <AppShell />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/store" element={<StorePage />} />
+            <Route path="/upload-product" element={<UploadProductPage />} />
+            <Route path="/drafts" element={<DraftsPage />} />
+            <Route path="/post-job" element={<JobPostingPage />} />
+            <Route path="/product/:id/edit" element={<EditProductPage />} />
+            <Route path="/my-orders" element={<BuyerDashboardPage />} />
+            <Route path="/sales" element={<SalesPage />} />
+            <Route path="/verify" element={<VerifyPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile/:userId" element={<PublicProfilePage />} />
+            <Route path="/followers/:userId" element={<FollowersPage />} />
+            <Route path="/following/:userId" element={<FollowingPage />} />
+            <Route path="/friends/:userId" element={<FriendsPage />} />
+            <Route path="/refer" element={<ReferPage />} />
+            <Route path="/wishlist" element={<WishlistPage />} />
+            <Route path="/collections" element={<SmartCollectionsPage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/blocked-users" element={<BlockedUsersPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/activity" element={<ActivityFeedPage />} />
+            <Route path="/notification-preferences" element={<NotificationPreferencesPage />} />
+            <Route path="/security" element={<UserSecurityCenterPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/campaigns" element={<CampaignDashboardPage />} />
+            <Route path="/rewards" element={<RewardWalletPage />} />
+            <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/wallet/fund" element={<FundWalletPage />} />
+            <Route path="/wallet/withdraw" element={<WithdrawPage />} />
+            <Route path="/wallet/history" element={<TransactionHistoryPage />} />
+            <Route path="/checkout/payment" element={<CheckoutPaymentPage />} />
+            <Route path="/payment/callback" element={<PaymentCallbackPage />} />
+            <Route path="/subscriptions/checkout" element={<SubscriptionCheckoutPage />} />
+            <Route path="/subscriptions" element={<SubscriptionsPage />} />
+            <Route path="/creator-campaigns" element={<CreatorCampaignsPage />} />
+            <Route path="/creator-campaigns/create" element={<CampaignBuilderPage />} />
+            <Route path="/creator-campaigns/:id" element={<CampaignDetailPage />} />
+            <Route path="/creator-campaigns/my-tasks" element={<MyTasksPage />} />
+            <Route path="/creator-campaigns/dashboard" element={<CreatorDashboardPage />} />
+            <Route path="/creator-campaigns/wallet" element={<CampaignWalletPage />} />
+            <Route path="/creator-campaigns/leaderboard" element={<LeaderboardPage />} />
+            <Route path="/leaderboards" element={<TrustLeaderboardPage />} />
+            <Route path="/achievements" element={<AchievementsPage />} />
+          </Route>
+
+          {/* Admin routes */}
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminShell />
+              </AdminRoute>
+            }
+          >
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="products" element={<AdminProductsPage />} />
+            <Route path="product-edits" element={<AdminProductEditsPage />} />
+            <Route path="verifications" element={<AdminVerificationsPage />} />
+            <Route path="fraud-reports" element={<AdminFraudReportsPage />} />
+            <Route path="payouts" element={<AdminPayoutsPage />} />
+            <Route path="wallet-manager" element={<AdminWalletManagerPage />} />
+            <Route path="payment-security" element={<AdminPaymentSecurityPage />} />
+            <Route path="payment-providers" element={<AdminPaymentProvidersPage />} />
+            <Route path="webhook-logs" element={<AdminWebhookLogsPage />} />
+            <Route path="payment-analytics" element={<AdminPaymentAnalyticsPage />} />
+            <Route path="withdrawals" element={<AdminWithdrawalsPage />} />
+            <Route path="settlements" element={<AdminSettlementsPage />} />
+            <Route path="admins" element={<AdminAdminsPage />} />
+            <Route path="invite" element={<AdminInvitePage />} />
+            <Route path="settings" element={<AdminSystemSettingsPage />} />
+            <Route path="announcements" element={<AdminAnnouncementsPage />} />
+            <Route path="site-settings" element={<AdminSiteSettingsPage />} />
+            <Route path="local-seo" element={<AdminLocalSeoPage />} />
+            <Route path="tickets" element={<AdminTicketsPage />} />
+            <Route path="reviews" element={<AdminReviewsPage />} />
+            <Route path="locked-accounts" element={<AdminLockedAccountsPage />} />
+            <Route path="appeals" element={<AdminAppealsPage />} />
+            <Route path="referral-analytics" element={<AdminReferralAnalyticsPage />} />
+            <Route path="marketplace" element={<AdminMarketplacePage />} />
+            <Route path="notification-center" element={<AdminNotificationCenterPage />} />
+            <Route path="algorithm" element={<AdminAlgorithmPage />} />
+            <Route path="promotions" element={<AdminPromotionsPage />} />
+            <Route path="coupons" element={<AdminCouponsPage />} />
+            <Route path="giveaways" element={<AdminGiveawaysPage />} />
+            <Route path="marketplace-analytics" element={<AdminMarketplaceAnalyticsPage />} />
+            <Route path="moderation" element={<AdminModerationPage />} />
+            <Route path="fraud" element={<AdminFraudPage />} />
+            <Route path="financial" element={<AdminFinancialPage />} />
+            <Route path="financial-center" element={<AdminFinancialCenterPage />} />
+            <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+            <Route path="ai" element={<AdminAIPage />} />
+            <Route path="ai-config" element={<AdminAIConfigPage />} />
+            <Route path="ai-prompts" element={<AdminPromptLibraryPage />} />
+            <Route path="ai-moderation" element={<AdminAIModerationPage />} />
+            <Route path="ai-images" element={<AdminAIImagesPage />} />
+            <Route path="env-health" element={<AdminEnvHealthPage />} />
+            <Route path="system-health" element={<AdminSystemHealthPage />} />
+            <Route path="auth-center" element={<AdminAuthCenterPage />} />
+            <Route path="trust-center" element={<AdminTrustCenterPage />} />
+            <Route path="cms" element={<AdminCmsPage />} />
+            <Route path="cms/:pageId" element={<AdminCmsPageBuilder />} />
+            <Route path="cms/media" element={<AdminCmsMediaPage />} />
+            <Route path="content" element={<AdminContentDashboardPage />} />
+            <Route path="banners" element={<AdminBannerPage />} />
+            <Route path="roles" element={<AdminRolesPage />} />
+            <Route path="moderation-center" element={<AdminModerationCenterPage />} />
+            <Route path="badges" element={<AdminBadgeManagementPage />} />
+            <Route path="admin-approval" element={<AdminApprovalWorkflowPage />} />
+            <Route path="publishing" element={<AdminPublishingWorkflowPage />} />
+            <Route path="verification-review" element={<AdminVerificationReviewPage />} />
+            <Route path="verification-providers" element={<AdminVerificationProvidersPage />} />
+            <Route path="compliance-center" element={<AdminComplianceCenterPage />} />
+            <Route path="crm" element={<AdminCrmDashboardPage />} />
+            <Route path="customer-recovery" element={<AdminCustomerRecoveryPage />} />
+            <Route path="subscription-recovery" element={<AdminSubscriptionRecoveryPage />} />
+            <Route path="sales-operations" element={<AdminSalesOperationsPage />} />
+            <Route path="customer-care" element={<AdminCustomerCarePage />} />
+            <Route path="marketing-dashboard" element={<AdminMarketingDashboardPage />} />
+            <Route path="admin-performance" element={<AdminAdminPerformancePage />} />
+            <Route path="ai-insights" element={<AdminAiInsightsPage />} />
+            <Route path="integration-hub" element={<AdminIntegrationHubPage />} />
+            <Route path="integration-logs" element={<AdminIntegrationLogsPage />} />
+            <Route path="enterprise-analytics" element={<AdminEnterpriseAnalyticsPage />} />
+            <Route path="business-intelligence" element={<AdminBusinessIntelligencePage />} />
+            <Route path="reports-center" element={<AdminReportsCenterPage />} />
+            <Route path="customer-analytics" element={<AdminCustomerAnalyticsPage />} />
+            <Route path="affiliate-analytics" element={<AdminAffiliateAnalyticsPage />} />
+            <Route path="financial-analytics" element={<AdminFinancialAnalyticsPage />} />
+            <Route path="support-analytics" element={<AdminSupportAnalyticsPage />} />
+            <Route path="admin-performance-analytics" element={<AdminAdminPerformanceAnalyticsPage />} />
+          </Route>
+        </Routes>
+        </Suspense>
+      </BrowserRouter>
+      <Suspense fallback={null}>
+        <AIAssistant />
+      </Suspense>
+      <ToastContainer />
+    </AuthProvider>
+    </ErrorBoundary>
+  );
+}
+
+export default App;
