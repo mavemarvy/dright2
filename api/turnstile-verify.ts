@@ -1,8 +1,6 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
 const SUPABASE_URL = 'https://vtiardblxpaeekbfvhjo.supabase.co';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
