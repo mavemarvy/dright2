@@ -1,5 +1,3 @@
-import { supabase } from '../supabase';
-
 export type TurnstileAction =
   | 'registration' | 'signup' | 'login' | 'signin' | 'password_reset'
   | 'forgot_password' | 'contact_form' | 'guest_checkout'
