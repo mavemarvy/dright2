@@ -21,13 +21,35 @@ export function getTurnstileSiteKey(): string | null {
 }
 
 export async function verifyTurnstileToken(token: string, action: TurnstileAction, userId?: string): Promise<TurnstileResult> {
-  const { data, error } = await supabase.functions.invoke('turnstile-verify', {
-    body: { token, action, userId },
-  });
+  try {
+    const response = await fetch('/api/turnstile-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, action, userId }),
+    });
 
-  if (error) return { success: false, error: error.message };
-  if (!data || data.success === false) return { success: false, error: data?.error || 'Verification failed', remaining: data?.remaining };
-  return { success: true, action: data.action };
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data?.error || `Turnstile verification failed (${response.status})`,
+        remaining: data?.remaining,
+      };
+    }
+
+    if (!data || data.success === false) {
+      return { success: false, error: data?.error || 'Verification failed', remaining: data?.remaining };
+    }
+
+    return { success: true, action: data.action };
+  } catch (error) {
+    console.error('Turnstile verification request failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unable to reach verification service',
+    };
+  }
 }
 
 export function renderTurnstileWidget(containerId: string, action: TurnstileAction, onVerified: (token: string) => void, onError?: () => void): void {
