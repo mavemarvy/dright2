@@ -15,7 +15,8 @@ export interface TurnstileResult {
 }
 
 export function getTurnstileSiteKey(): string | null {
-  return import.meta.env.VITE_TURNSTILE_SITE_KEY || null;
+  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+  return typeof siteKey === 'string' && siteKey.trim() ? siteKey.trim() : null;
 }
 
 export async function verifyTurnstileToken(token: string, action: TurnstileAction, userId?: string): Promise<TurnstileResult> {
@@ -50,44 +51,76 @@ export async function verifyTurnstileToken(token: string, action: TurnstileActio
   }
 }
 
-export function renderTurnstileWidget(containerId: string, action: TurnstileAction, onVerified: (token: string) => void, onError?: () => void): void {
+export function renderTurnstileWidget(
+  containerId: string,
+  action: TurnstileAction,
+  onVerified: (token: string) => void,
+  onError?: (errorCode?: string) => void,
+): void {
   const siteKey = getTurnstileSiteKey();
   if (!siteKey) {
-    onError?.();
+    onError?.('site-key-missing');
     return;
   }
 
   const container = document.getElementById(containerId);
-  if (!container) return;
+  const turnstile = (window as any).turnstile;
+  if (!container || !turnstile?.render) {
+    onError?.('turnstile-not-ready');
+    return;
+  }
+
+  const previousWidgetId = (container as any)._turnstileWidgetId;
+  if (previousWidgetId !== undefined && turnstile.remove) {
+    try {
+      turnstile.remove(previousWidgetId);
+    } catch {
+      // Ignore cleanup errors and recreate the widget.
+    }
+  }
 
   container.innerHTML = '';
 
-  const widgetId = (window as any).turnstile?.render(container, {
-    sitekey: siteKey,
-    action,
-    callback: onVerified,
-    'error-callback': onError,
-    theme: 'auto',
-  });
+  try {
+    const widgetId = turnstile.render(container, {
+      sitekey: siteKey,
+      action,
+      callback: onVerified,
+      'error-callback': (code?: string) => onError?.(code),
+      'expired-callback': () => onError?.('expired'),
+      'timeout-callback': () => onError?.('timeout'),
+      theme: 'auto',
+    });
 
-  container.setAttribute('data-action', 'turnstile-spin-v2');
-  (container as any)._turnstileWidgetId = widgetId;
+    (container as any)._turnstileWidgetId = widgetId;
+  } catch (error) {
+    console.error('Turnstile widget render failed:', error);
+    onError?.('render-failed');
+  }
 }
 
 export function resetTurnstileWidget(containerId: string): void {
   const container = document.getElementById(containerId);
   if (!container) return;
   const widgetId = (container as any)._turnstileWidgetId;
-  if (widgetId !== undefined && (window as any).turnstile) {
-    (window as any).turnstile.reset(widgetId);
+  const turnstile = (window as any).turnstile;
+  if (widgetId !== undefined && turnstile) {
+    try {
+      turnstile.reset(widgetId);
+    } catch (error) {
+      console.warn('Turnstile reset failed:', error);
+    }
   }
 }
 
 export function loadTurnstileScript(): void {
+  if ((window as any).turnstile) return;
   if (document.getElementById('turnstile-script')) return;
+
   const script = document.createElement('script');
   script.id = 'turnstile-script';
   script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
   script.async = true;
+  script.defer = true;
   document.head.appendChild(script);
 }
