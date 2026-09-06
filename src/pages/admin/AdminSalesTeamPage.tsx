@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Users, Plus, Settings, UserPlus, Power, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+
 type Team={id:string;name:string;code:string;description:string|null;status:string;manager_id:string|null;created_at:string};
 type Member={id:string;sales_team_id:string;user_id:string;member_role:string;marketer_level:number;status:string;joined_at:string;user_email?:string;full_name?:string};
 type UserOption={id:string;email:string;full_name:string|null};
 type Settings={default_member_level:number;require_active_team_for_attribution:boolean;allow_product_specific_links:boolean;allow_campaign_links:boolean;max_active_teams_per_member:number};
-async function call(method:string,body?:unknown){const {data,error}=await supabase.functions.invoke('admin-sales-team',{method,body});if(error)throw error;if(data?.error)throw new Error(data.error);return data}
+type InvokeMethod='GET'|'POST'|'PATCH'|'DELETE'|'PUT';
+type InvokeBody=Record<string, unknown>;
+
+async function call(method:InvokeMethod,body?:InvokeBody){const {data,error}=await supabase.functions.invoke('admin-sales-team',{method,body});if(error)throw error;if(data?.error)throw new Error(data.error);return data}
+
 export default function AdminSalesTeamPage(){const[tab,setTab]=useState<'teams'|'members'|'settings'>('teams');const[teams,setTeams]=useState<Team[]>([]);const[members,setMembers]=useState<Member[]>([]);const[users,setUsers]=useState<UserOption[]>([]);const[settings,setSettings]=useState<Settings|null>(null);const[selected,setSelected]=useState('');const[loading,setLoading]=useState(true);const[error,setError]=useState('');const[name,setName]=useState('');const[code,setCode]=useState('');const[desc,setDesc]=useState('');const[userId,setUserId]=useState('');const[level,setLevel]=useState(3);const[role,setRole]=useState('member');
 const load=useCallback(async()=>{setLoading(true);setError('');try{const d=await call('GET');setTeams(d.teams||[]);setMembers(d.members||[]);setUsers(d.users||[]);setSettings(d.settings||null);if(!selected&&d.teams?.[0])setSelected(d.teams[0].id)}catch(e){setError(e instanceof Error?e.message:'Failed to load Sales Team setup')}finally{setLoading(false)}},[selected]);useEffect(()=>{load()},[load]);
 const createTeam=async()=>{if(!name.trim()||!code.trim())return;try{await call('POST',{action:'team_create',name:name.trim(),code:code.trim().toUpperCase(),description:desc.trim()||null});setName('');setCode('');setDesc('');await load()}catch(e){setError(e instanceof Error?e.message:'Create failed')}};
