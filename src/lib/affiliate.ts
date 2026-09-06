@@ -1,9 +1,40 @@
 import { supabase } from './supabase';
-import { trackPurchase } from './analyticsService';
 
 const COOKIE_NAME = 'affiliate_ref_code';
 const COOKIE_MAX_AGE_DAYS = 30;
+const ATTRIBUTION_KEY = 'dright_attribution';
 const REDIRECT_KEY = 'pending_redirect';
+const VISITOR_KEY = 'dright_visitor_id';
+const SESSION_KEY = 'dright_session_id';
+
+export interface TrackingAttribution {
+  linkId: string | null;
+  trackingCode: string;
+  ownerId: string | null;
+  productId: string | null;
+  sourceType: string;
+  sourceLevel: string | null;
+  campaignId: string | null;
+  salesTeamId: string | null;
+  teamMemberId: string | null;
+  teamLeadId: string | null;
+  capturedAt: string;
+}
+
+function getOrCreateBrowserId(key: string): string {
+  try {
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const value = crypto.randomUUID();
+    localStorage.setItem(key, value);
+    return value;
+  } catch {
+    return '';
+  }
+}
+
+export function getVisitorId(): string { return getOrCreateBrowserId(VISITOR_KEY); }
+export function getSessionId(): string { return getOrCreateBrowserId(SESSION_KEY); }
 
 export function setAffiliateCookie(refCode: string): void {
   const maxAge = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
@@ -13,72 +44,116 @@ export function setAffiliateCookie(refCode: string): void {
 export function getAffiliateCookie(): string | null {
   const cookies = document.cookie.split(';');
   for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === COOKIE_NAME) {
-      return decodeURIComponent(value);
-    }
+    const [name, ...rest] = cookie.trim().split('=');
+    if (name === COOKIE_NAME) return decodeURIComponent(rest.join('='));
   }
   return null;
 }
 
 export function clearAffiliateCookie(): void {
-  document.cookie = `${COOKIE_NAME}=;path=/;max-age=0`;
+  document.cookie = `${COOKIE_NAME}=;path=/;max-age=0;SameSite=Lax`;
+}
+
+export function setAttribution(attribution: TrackingAttribution): void {
+  try {
+    localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(attribution));
+  } catch { /* storage may be unavailable */ }
+}
+
+export function getAttribution(): TrackingAttribution | null {
+  try {
+    const raw = localStorage.getItem(ATTRIBUTION_KEY);
+    return raw ? JSON.parse(raw) as TrackingAttribution : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearAttribution(): void {
+  try { localStorage.removeItem(ATTRIBUTION_KEY); } catch { /* ignore */ }
 }
 
 export function setPendingRedirect(path: string): void {
-  sessionStorage.setItem(REDIRECT_KEY, path);
+  try { sessionStorage.setItem(REDIRECT_KEY, path); } catch { /* ignore */ }
 }
 
 export function getPendingRedirect(): string | null {
-  return sessionStorage.getItem(REDIRECT_KEY);
+  try { return sessionStorage.getItem(REDIRECT_KEY); } catch { return null; }
 }
 
 export function clearPendingRedirect(): void {
-  sessionStorage.removeItem(REDIRECT_KEY);
+  try { sessionStorage.removeItem(REDIRECT_KEY); } catch { /* ignore */ }
 }
 
 export function generateAffiliateLink(referralCode: string, productId?: string): string {
   const baseUrl = window.location.origin;
-  if (productId) {
-    return `${baseUrl}/ref?ref=${referralCode}&product=${productId}`;
+  const params = new URLSearchParams({ ref: referralCode });
+  if (productId) params.set('product', productId);
+  return `${baseUrl}/ref?${params.toString()}`;
+}
+
+export async function getOrCreateAffiliateLink(userId: string, productId?: string): Promise<string> {
+  const { data, error } = await supabase.rpc('get_or_create_tracking_link', {
+    p_user_id: userId,
+    p_product_id: productId || null,
+    p_source_type: 'affiliate',
+  });
+  if (error || !data?.[0]?.tracking_code) {
+    const { data: user } = await supabase.from('users').select('referral_code').eq('id', userId).maybeSingle();
+    if (!user?.referral_code) throw new Error('Unable to create affiliate link');
+    return generateAffiliateLink(user.referral_code, productId);
   }
-  return `${baseUrl}/ref?ref=${referralCode}`;
+  const params = new URLSearchParams({ ref: data[0].tracking_code });
+  if (productId) params.set('product', productId);
+  return `${window.location.origin}/ref?${params.toString()}`;
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
+  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }
 
-export async function resolveReferrer(refCode: string): Promise<{
-  id: string;
-  role: string;
-} | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, role')
-    .eq('referral_code', refCode)
-    .maybeSingle();
+export async function resolveReferrer(refCode: string): Promise<{ id: string; role: string } | null> {
+  const { data } = await supabase.from('users').select('id, role').eq('referral_code', refCode).maybeSingle();
+  return data ? { id: data.id, role: data.role } : null;
+}
 
-  if (error || !data) return null;
+export async function resolveAndRecordTracking(refCode: string, productId?: string): Promise<TrackingAttribution | null> {
+  const { data, error } = await supabase.rpc('record_tracking_click', {
+    p_code: refCode,
+    p_product_id: productId || null,
+    p_visitor_id: getVisitorId(),
+    p_session_id: getSessionId(),
+  });
+  if (error || !data?.[0]) return null;
 
-  return { id: data.id, role: data.role };
+  const row = data[0];
+  const attribution: TrackingAttribution = {
+    linkId: row.link_id,
+    trackingCode: refCode,
+    ownerId: row.owner_id,
+    productId: productId || null,
+    sourceType: row.source_type || 'affiliate',
+    sourceLevel: row.source_level || null,
+    campaignId: row.campaign_id || null,
+    salesTeamId: row.sales_team_id || null,
+    teamMemberId: row.team_member_id || null,
+    teamLeadId: row.team_lead_id || null,
+    capturedAt: new Date().toISOString(),
+  };
+  setAffiliateCookie(refCode);
+  setAttribution(attribution);
+  return attribution;
 }
 
 export async function recordClick(referrerId: string, productId?: string): Promise<void> {
-  try {
-    await supabase.from('affiliate_clicks').insert({
-      referrer_id: referrerId,
-      product_id: productId || null,
-    });
-    await supabase.rpc('increment_referral_clicks', { p_referrer_id: referrerId });
-  } catch (err) {
-    console.error('Error recording affiliate click:', err);
+  const refCode = getAffiliateCookie();
+  if (refCode) {
+    await resolveAndRecordTracking(refCode, productId);
+    return;
   }
+  try {
+    await supabase.from('affiliate_clicks').insert({ referrer_id: referrerId, product_id: productId || null });
+  } catch (err) { console.error('Error recording affiliate click:', err); }
 }
 
 export async function recordSaleWithReferrer(params: {
@@ -89,17 +164,9 @@ export async function recordSaleWithReferrer(params: {
   saleAmount: number;
   productId?: string;
 }): Promise<{ referrerId: string | null; referrerRole: string | null }> {
-  const refCode = getAffiliateCookie();
-  let referrerId: string | null = null;
-  let referrerRole: string | null = null;
-
-  if (refCode) {
-    const referrer = await resolveReferrer(refCode);
-    if (referrer) {
-      referrerId = referrer.id;
-      referrerRole = referrer.role;
-    }
-  }
+  const attribution = getAttribution();
+  const referrerId = attribution?.ownerId || null;
+  const referrerRole = attribution?.sourceType || null;
 
   await supabase.from('sales_records').insert({
     promoter_id: params.promoterId,
@@ -113,36 +180,10 @@ export async function recordSaleWithReferrer(params: {
     status: 'pending',
   });
 
-  trackPurchase(params.productId || '', params.promoterId, 0);
-
   if (referrerId) {
     await supabase.rpc('increment_referral_conversions', { p_referrer_id: referrerId });
-    await supabase.rpc('add_affiliate_earnings', {
-      p_user_id: referrerId,
-      p_amount: params.commissionAmount,
-    });
+    await supabase.rpc('add_affiliate_earnings', { p_user_id: referrerId, p_amount: params.commissionAmount });
   }
-
-  if (params.productId) {
-    const { data: product } = await supabase
-      .from('products')
-      .select('stock_quantity')
-      .eq('id', params.productId)
-      .maybeSingle();
-
-    if (product && product.stock_quantity !== null) {
-      const newStock = Math.max(0, product.stock_quantity - 1);
-      await supabase
-        .from('products')
-        .update({ stock_quantity: newStock })
-        .eq('id', params.productId);
-    }
-  }
-
-  if (refCode) {
-    clearAffiliateCookie();
-  }
-
   return { referrerId, referrerRole };
 }
 
@@ -155,88 +196,28 @@ export interface SalesAnalytics {
 
 export async function fetchSalesAnalytics(userId: string): Promise<{
   analytics: SalesAnalytics;
-  recentSales: Array<{
-    id: string;
-    product_name: string;
-    sale_amount: number;
-    sale_date: string;
-    buyer_name: string;
-    referrer_role: string | null;
-  }>;
+  recentSales: Array<{ id: string; product_name: string; sale_amount: number; sale_date: string; buyer_name: string; referrer_role: string | null }>;
 }> {
-  const { data, error } = await supabase
-    .from('sales_records')
+  const { data, error } = await supabase.from('sales_records')
     .select('id, product_name, sale_amount, sale_date, buyer_name, referrer_role')
-    .eq('referrer_id', userId)
-    .order('sale_date', { ascending: false })
-    .limit(20);
-
-  if (error || !data) {
-    return {
-      analytics: {
-        totalAffiliateSales: 0,
-        totalMarketerSales: 0,
-        totalAdvertiserSales: 0,
-        totalOverallSales: 0,
-      },
-      recentSales: [],
-    };
-  }
-
-  let totalAffiliateSales = 0;
-  let totalMarketerSales = 0;
-  let totalAdvertiserSales = 0;
-
+    .eq('referrer_id', userId).order('sale_date', { ascending: false }).limit(20);
+  if (error || !data) return { analytics: { totalAffiliateSales: 0, totalMarketerSales: 0, totalAdvertiserSales: 0, totalOverallSales: 0 }, recentSales: [] };
+  let totalAffiliateSales = 0, totalMarketerSales = 0, totalAdvertiserSales = 0;
   for (const sale of data) {
-    const role = sale.referrer_role;
-    if (role === 'affiliate' || role === 'admin') {
-      totalAffiliateSales++;
-    } else if (role === 'marketer') {
-      totalMarketerSales++;
-    } else if (role === 'advertiser') {
-      totalAdvertiserSales++;
-    }
+    if (sale.referrer_role === 'affiliate' || sale.referrer_role === 'admin') totalAffiliateSales++;
+    else if (sale.referrer_role === 'marketer') totalMarketerSales++;
+    else if (sale.referrer_role === 'advertiser') totalAdvertiserSales++;
   }
-
-  return {
-    analytics: {
-      totalAffiliateSales,
-      totalMarketerSales,
-      totalAdvertiserSales,
-      totalOverallSales: totalAffiliateSales + totalMarketerSales + totalAdvertiserSales,
-    },
-    recentSales: data,
-  };
+  return { analytics: { totalAffiliateSales, totalMarketerSales, totalAdvertiserSales, totalOverallSales: totalAffiliateSales + totalMarketerSales + totalAdvertiserSales }, recentSales: data };
 }
 
-export interface AffiliateStats {
-  totalClicks: number;
-  totalConversions: number;
-  totalEarnings: number;
-  conversionRate: number;
-}
+export interface AffiliateStats { totalClicks: number; totalConversions: number; totalEarnings: number; conversionRate: number; }
 
 export async function fetchAffiliateStats(userId: string): Promise<AffiliateStats> {
-  const { data } = await supabase
-    .from('referral_links')
-    .select('total_clicks, total_conversions')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  const { data: userData } = await supabase
-    .from('users')
-    .select('affiliate_earnings')
-    .eq('id', userId)
-    .maybeSingle();
-
+  const { data } = await supabase.from('referral_links').select('total_clicks, total_conversions').eq('user_id', userId).eq('source_type', 'affiliate').is('product_id', null).maybeSingle();
+  const { data: userData } = await supabase.from('users').select('affiliate_earnings').eq('id', userId).maybeSingle();
   const clicks = data?.total_clicks || 0;
   const conversions = data?.total_conversions || 0;
   const earnings = Number(userData?.affiliate_earnings || 0);
-
-  return {
-    totalClicks: clicks,
-    totalConversions: conversions,
-    totalEarnings: earnings,
-    conversionRate: clicks > 0 ? (conversions / clicks) * 100 : 0,
-  };
+  return { totalClicks: clicks, totalConversions: conversions, totalEarnings: earnings, conversionRate: clicks > 0 ? (conversions / clicks) * 100 : 0 };
 }
