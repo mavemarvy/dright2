@@ -22,7 +22,7 @@ Deno.serve(async req=>{
     if(adminError||!admin?.is_admin||String(admin.admin_status||'').toLowerCase()!=='active'||!allowedRoles.has(String(admin.admin_role||''))) return json({error:'Sales Team administration permission required'},403);
 
     if(req.method==='GET'){
-      const {data:pending,error}=await client.from('users').select('id,email,full_name,username,avatar_url,created_at,joined_at,location,profession,marketer_level,marketer_status,social_media_links,marketer_social_analysis,verification_status,is_verified,last_active_at').eq('marketer_status','pending').order('created_at',{ascending:false});
+      const {data:pending,error}=await client.from('users').select('id,email,full_name,username,avatar_url,created_at,joined_at,location,profession,marketer_level,marketer_status,social_media_links,marketer_social_analysis,marketer_deep_research,verification_status,is_verified,last_active_at').eq('marketer_status','pending').order('created_at',{ascending:false});
       if(error) throw error;
       const applications=pending||[];
       // Re-run analysis for the pending queue so old/stale analyzer results are never presented as current evidence.
@@ -30,7 +30,7 @@ Deno.serve(async req=>{
       await Promise.all(applications.slice(0,20).map((a:any)=>ensureAnalysis(a.id,a.social_media_links,auth)));
       let refreshed=applications;
       if(applications.length){
-        const {data:r}=await client.from('users').select('id,email,full_name,username,avatar_url,created_at,joined_at,location,profession,marketer_level,marketer_status,social_media_links,marketer_social_analysis,verification_status,is_verified,last_active_at').eq('marketer_status','pending').order('created_at',{ascending:false});
+        const {data:r}=await client.from('users').select('id,email,full_name,username,avatar_url,created_at,joined_at,location,profession,marketer_level,marketer_status,social_media_links,marketer_social_analysis,marketer_deep_research,verification_status,is_verified,last_active_at').eq('marketer_status','pending').order('created_at',{ascending:false});
         if(r) refreshed=r;
       }
       const {data:recent,error:recentError}=await client.from('marketer_application_review_audit').select('id,applicant_id,reviewer_id,decision,note,social_links_snapshot,created_at').order('created_at',{ascending:false}).limit(100);
@@ -43,14 +43,14 @@ Deno.serve(async req=>{
       if(body.action!=='review_marketer_application') return json({error:'Unknown action'},400);
       const applicantId=String(body.applicant_id||''), decision=String(body.decision||''), note=body.note==null?'':String(body.note).trim();
       if(!applicantId||!['approved','rejected','needs_changes'].includes(decision)) return json({error:'Applicant and valid decision are required'},400);
-      const {data:applicant,error:applicantError}=await client.from('users').select('id,email,full_name,marketer_level,marketer_status,social_media_links,marketer_social_analysis').eq('id',applicantId).single();
+      const {data:applicant,error:applicantError}=await client.from('users').select('id,email,full_name,marketer_level,marketer_status,social_media_links,marketer_social_analysis,marketer_deep_research').eq('id',applicantId).single();
       if(applicantError||!applicant) return json({error:'Applicant not found'},404);
       if(String(applicant.marketer_status||'').toLowerCase()!=='pending') return json({error:'This application is no longer pending review'},409);
       await ensureAnalysis(applicantId,applicant.social_media_links,auth);
       const nextStatus=decision==='approved'?'approved':decision==='rejected'?'rejected':'needs_changes';
       const update:any={marketer_status:nextStatus,updated_at:new Date().toISOString()};
       if(decision==='approved' && (applicant.marketer_level==null || Number(applicant.marketer_level)<0)) update.marketer_level=0;
-      const {data:updated,error:updateError}=await client.from('users').update(update).eq('id',applicantId).select('id,email,full_name,marketer_level,marketer_status,social_media_links,marketer_social_analysis').single();
+      const {data:updated,error:updateError}=await client.from('users').update(update).eq('id',applicantId).select('id,email,full_name,marketer_level,marketer_status,social_media_links,marketer_social_analysis,marketer_deep_research').single();
       if(updateError) throw updateError;
       const {error:auditError}=await client.from('marketer_application_review_audit').insert({applicant_id:applicantId,reviewer_id:user.id,decision,note,social_links_snapshot:applicant.social_media_links||[]});
       if(auditError) throw auditError;
