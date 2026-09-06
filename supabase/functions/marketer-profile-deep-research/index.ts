@@ -56,7 +56,7 @@ Applicant context: ${JSON.stringify({full_name:applicant.full_name,username:appl
 Evidence: ${JSON.stringify(evidence)}`;
 
    const aiUrl=`${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-proxy`;
-   const aiResponse=await fetch(aiUrl,{method:"POST",headers:{"Content-Type":"application/json","Authorization":auth,"apikey":Deno.env.get("SUPABASE_ANON_KEY")||""},body:JSON.stringify({feature:"marketer-profile-deep-research",prompt,useCache:false})});
+   const aiResponse=await fetch(aiUrl,{method:"POST",headers:{"Content-Type":"application/json","Authorization":auth,"apikey":Deno.env.get("SUPABASE_ANON_KEY")||""},body:JSON.stringify({feature:"generate-text",prompt,useCache:false})});
    const aiJson=await aiResponse.json().catch(()=>null);
    if(!aiResponse.ok||!aiJson?.success)throw new Error(aiJson?.error||"AI deep research provider is unavailable");
    const research=safeParse(String(aiJson.content||""));
