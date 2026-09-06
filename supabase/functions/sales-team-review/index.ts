@@ -25,10 +25,11 @@ Deno.serve(async req=>{
       const {data:pending,error}=await client.from('users').select('id,email,full_name,username,avatar_url,created_at,joined_at,location,profession,marketer_level,marketer_status,social_media_links,marketer_social_analysis,verification_status,is_verified,last_active_at').eq('marketer_status','pending').order('created_at',{ascending:false});
       if(error) throw error;
       const applications=pending||[];
-      // Existing pending applications submitted before the analyzer was added are analyzed automatically when the admin queue is opened.
-      await Promise.all(applications.filter((a:any)=>!Array.isArray(a.marketer_social_analysis)||a.marketer_social_analysis.length===0).slice(0,20).map((a:any)=>ensureAnalysis(a.id,a.social_media_links,auth)));
+      // Re-run analysis for the pending queue so old/stale analyzer results are never presented as current evidence.
+      // The analyzer itself returns confidence=0 and risk=UNKNOWN when authoritative metrics are unavailable.
+      await Promise.all(applications.slice(0,20).map((a:any)=>ensureAnalysis(a.id,a.social_media_links,auth)));
       let refreshed=applications;
-      if(applications.some((a:any)=>!Array.isArray(a.marketer_social_analysis)||a.marketer_social_analysis.length===0)){
+      if(applications.length){
         const {data:r}=await client.from('users').select('id,email,full_name,username,avatar_url,created_at,joined_at,location,profession,marketer_level,marketer_status,social_media_links,marketer_social_analysis,verification_status,is_verified,last_active_at').eq('marketer_status','pending').order('created_at',{ascending:false});
         if(r) refreshed=r;
       }
@@ -45,7 +46,7 @@ Deno.serve(async req=>{
       const {data:applicant,error:applicantError}=await client.from('users').select('id,email,full_name,marketer_level,marketer_status,social_media_links,marketer_social_analysis').eq('id',applicantId).single();
       if(applicantError||!applicant) return json({error:'Applicant not found'},404);
       if(String(applicant.marketer_status||'').toLowerCase()!=='pending') return json({error:'This application is no longer pending review'},409);
-      if(!Array.isArray(applicant.marketer_social_analysis)||applicant.marketer_social_analysis.length===0) await ensureAnalysis(applicantId,applicant.social_media_links,auth);
+      await ensureAnalysis(applicantId,applicant.social_media_links,auth);
       const nextStatus=decision==='approved'?'approved':decision==='rejected'?'rejected':'needs_changes';
       const update:any={marketer_status:nextStatus,updated_at:new Date().toISOString()};
       if(decision==='approved' && (applicant.marketer_level==null || Number(applicant.marketer_level)<0)) update.marketer_level=0;
