@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
 import {
   TrendingUp,
   Award,
@@ -16,6 +17,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MARKETER_WEEKLY_TARGETS, ADVERTISER_REQUIREMENTS } from '../lib/pricing';
+
+type ProgressionRule={stage_key:string;stage_label:string;weekly_target:number;required_success_streak:number;next_stage_key:string|null};
 
 interface Profile {
   id: string;
@@ -73,6 +76,9 @@ export default function SalesTeamSection({
   setAdvertiserSubmitting,
   refreshProfile,
 }: Props) {
+  const [progressionRules,setProgressionRules]=useState<ProgressionRule[]>([]);
+  useEffect(()=>{let live=true;supabase.from('sales_progression_rules').select('stage_key,stage_label,weekly_target,required_success_streak,next_stage_key').eq('active',true).then(({data})=>{if(live&&data)setProgressionRules(data as ProgressionRule[])});return()=>{live=false}},[]);
+  const ruleMap=useMemo(()=>Object.fromEntries(progressionRules.map(r=>[r.stage_key,r])),[progressionRules]);
   if (!profile) return null;
 
   const isMarketer = profile.marketer_status === 'approved';
@@ -81,10 +87,11 @@ export default function SalesTeamSection({
   const advertiserPending = profile.advertiser_status === 'pending';
 
   // Advertiser eligibility: L5 with 2+ consecutive weeks streak at 500/week
+  const l5Rule=ruleMap.marketer_5;
   const eligibleForAdvertiser =
     isMarketer &&
     profile.marketer_level === 5 &&
-    profile.consecutive_weeks_streak >= 2 &&
+    profile.consecutive_weeks_streak >= (l5Rule?.required_success_streak ?? 2) &&
     !isAdvertiser &&
     !advertiserPending;
 
@@ -399,13 +406,13 @@ export default function SalesTeamSection({
                     : 'bg-gray-200 text-gray-500'
                 }`}
               >
-                L{level}: {MARKETER_WEEKLY_TARGETS[level]}/wk
+                L{level}: {ruleMap[`marketer_${level}`]?.weekly_target ?? MARKETER_WEEKLY_TARGETS[level]}/wk
               </div>
             ))}
           </div>
           {profile.marketer_level === 5 && (
             <p className="text-xs text-gray-500">
-              Streak: {profile.consecutive_weeks_streak}/2 weeks needed for Advertiser eligibility
+              Streak: {profile.consecutive_weeks_streak}/{l5Rule?.required_success_streak ?? 2} weeks needed for Advertiser eligibility
             </p>
           )}
         </div>
@@ -422,7 +429,7 @@ export default function SalesTeamSection({
               {ADVERTISER_REQUIREMENTS[profile.advertiser_grade]?.totalSales || 'N/A'}
             </p>
             <p>
-              Weekly Target: {ADVERTISER_REQUIREMENTS[profile.advertiser_grade]?.weeklyTarget || 'N/A'} / week
+              Weekly Target: {ruleMap[`advertiser_${profile.advertiser_grade.toLowerCase()}`]?.weekly_target ?? ADVERTISER_REQUIREMENTS[profile.advertiser_grade]?.weeklyTarget ?? 'N/A'} / week
             </p>
           </div>
         </div>
