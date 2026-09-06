@@ -39,9 +39,24 @@ Deno.serve(async req => {
     if (String(profile.advertiser_status || "").toLowerCase() === "approved") return json({ error: "Your account is already approved as an Advertiser" }, 409);
     if (String(profile.marketer_status || "").toLowerCase() === "pending") return json({ error: "Your Marketer application is already pending review" }, 409);
     if (String(profile.marketer_status || "").toLowerCase() === "approved") return json({ error: "Your Marketer application is already approved" }, 409);
-    const { data: updated, error: updateError } = await client.from("users").update({ social_media_links: links, marketer_status: "pending" }).eq("id", user.id).select("id,marketer_status,social_media_links").single();
+    const { data: updated, error: updateError } = await client.from("users").update({ social_media_links: links, marketer_status: "pending", marketer_social_analysis: [] }).eq("id", user.id).select("id,marketer_status,social_media_links,marketer_social_analysis").single();
     if (updateError) throw updateError;
-    return json({ success: true, application: updated });
+
+    // Analyze the submitted profiles immediately. A blocked platform must not prevent the application itself from being submitted.
+    let analysisStatus = "pending";
+    try {
+      const analyzerUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/social-profile-analyzer`;
+      const analysisResponse = await fetch(analyzerUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": authHeader, "apikey": Deno.env.get("SUPABASE_ANON_KEY") || "" },
+        body: JSON.stringify({ applicant_id: user.id, links }),
+      });
+      analysisStatus = analysisResponse.ok ? "complete" : "unavailable";
+    } catch {
+      analysisStatus = "unavailable";
+    }
+
+    return json({ success: true, application: updated, analysis_status: analysisStatus });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "Failed to submit application" }, 400);
   }
