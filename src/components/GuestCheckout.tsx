@@ -4,8 +4,6 @@ import { X, ShoppingBag, Mail, User, MapPin, CheckCircle2, Lock, Tag, Loader2 } 
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { trackListingEvent } from '../lib/marketplaceAnalytics';
-import { trackPurchase } from '../lib/analyticsService';
 import TurnstileWidget from './TurnstileWidget';
 import { verifyTurnstileToken } from '../lib/security/turnstile';
 import type { GuestOrder } from '../lib/types';
@@ -88,48 +86,15 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
       })
       .select()
       .single();
+
     if (data) {
-      // Record the sale for analytics
-      try {
-        await supabase.from('sales_records').insert({
-          product_id: productId,
-          product_name: productName,
-          sale_amount: finalPrice,
-          commission_amount: 0,
-          status: 'completed',
-          sale_date: new Date().toISOString().slice(0, 10),
-          referrer_id: user?.id || null,
-          referrer_role: 'buyer',
-        });
+      // ST-1g: creating a guest order is not a verified conversion.
+      // Financial sale/commission rows and purchase analytics are written only by
+      // the existing server-side payment/order finalization pipeline after payment
+      // verification. This prevents duplicate or fabricated client-side conversions.
 
-        // Increment product total_sales and view tracking
-        trackPurchase(productId, '', Number(finalPrice));
-
-        // Track purchase event for analytics
-        await trackListingEvent({
-          listing_id: productId,
-          listing_type: 'product',
-          user_id: user?.id || null,
-          event_type: 'purchase',
-          metadata: { amount: finalPrice, order_id: data.id, original_price: productPrice, discount },
-        });
-      } catch (err) {
-        console.error('Error recording sale:', err);
-      }
-
-      // Redeem coupon if one was applied
-      if (discount > 0 && couponCode && user) {
-        try {
-          await supabase.rpc('redeem_coupon', {
-            p_code: couponCode,
-            p_user_id: user.id,
-            p_amount: productPrice,
-            p_listing_id: productId,
-          });
-        } catch (err) {
-          console.error('Coupon redemption error:', err);
-        }
-      }
+      // Coupon redemption must also remain tied to the authoritative purchase flow.
+      // At this stage the coupon is only validated and reflected in order context.
 
       setOrder(data);
       setStep('success');
@@ -168,7 +133,7 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-primary-600" />
-                  {step === 'form' ? 'Guest Checkout' : 'Order Confirmed'}
+                  {step === 'form' ? 'Guest Checkout' : 'Order Created'}
                 </h3>
                 <button onClick={reset} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
                   <X className="w-5 h-5" />
@@ -275,7 +240,7 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                   <div className="bg-gray-50 rounded-xl p-3 flex items-center gap-2">
                     <Lock className="w-4 h-4 text-gray-400 shrink-0" />
                     <p className="text-xs text-gray-500">
-                      No account needed. We'll email you a confirmation and track your order.
+                      No account needed. We'll create your order first; payment completion is confirmed separately by the secure payment flow.
                     </p>
                   </div>
 
@@ -293,7 +258,7 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                     disabled={submitting}
                     className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl py-3.5 disabled:opacity-50 transition-colors"
                   >
-                    {submitting ? 'Processing...' : `Buy Now — ${finalPrice.toFixed(2)}`}
+                    {submitting ? 'Creating order...' : `Continue — ${finalPrice.toFixed(2)}`}
                   </button>
                 </form>
               ) : (
@@ -306,12 +271,12 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                   >
                     <CheckCircle2 className="w-8 h-8 text-success" />
                   </motion.div>
-                  <h4 className="text-lg font-bold text-gray-900 mb-2">Purchase Successful!</h4>
+                  <h4 className="text-lg font-bold text-gray-900 mb-2">Order Created</h4>
                   <p className="text-sm text-gray-500 mb-1">
-                    Order for <span className="font-medium text-gray-700">{productName}</span> is confirmed.
+                    Your order for <span className="font-medium text-gray-700">{productName}</span> has been created.
                   </p>
                   <p className="text-xs text-gray-400 mb-6">
-                    A confirmation was sent to {order?.buyer_email}
+                    Order contact: {order?.buyer_email}. A sale is recorded only after verified payment completion.
                   </p>
 
                   <div className="bg-primary-50 rounded-xl p-4 mb-6 text-left">
