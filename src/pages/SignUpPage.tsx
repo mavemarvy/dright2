@@ -56,9 +56,10 @@ export default function SignUpPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      setSuccess(true);
-      setTimeout(() => navigate(getPendingRedirect() || '/'), 2000);
+      const redirect = getPendingRedirect() || '/';
       clearPendingRedirect();
+      setSuccess(true);
+      setTimeout(() => navigate(redirect), 2000);
     }
   };
 
@@ -80,7 +81,7 @@ export default function SignUpPage() {
               Account Created!
             </h2>
             <p className="text-gray-500 dark:text-gray-400">
-              Redirecting you to the dashboard...
+              Redirecting you to where you left off...
             </p>
           </motion.div>
         </div>
