@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Loader2, X, Check, AlertTriangle, ThumbsUp, ThumbsDown, DollarSign } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { validatePrompt } from '../lib/ai/safety';
+import { useCurrency } from '../contexts/CurrencyContext';
 import type { ComparisonProduct } from './marketplace/ProductComparison';
 
 interface AIComparisonAnalysisProps {
@@ -18,6 +19,7 @@ interface AIAnalysis {
 }
 
 export default function AIComparisonAnalysis({ products }: AIComparisonAnalysisProps) {
+  const { format } = useCurrency();
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [show, setShow] = useState(false);
@@ -29,7 +31,7 @@ export default function AIComparisonAnalysis({ products }: AIComparisonAnalysisP
     try {
       const productData = products.map(p => ({
         name: p.name,
-        price: p.is_free ? 'FREE' : `$${p.price}`,
+        price: p.is_free ? 'FREE' : format(p.price),
         rating: p.average_rating,
         reviews: p.total_reviews,
         sales: p.total_sales,
@@ -77,7 +79,7 @@ export default function AIComparisonAnalysis({ products }: AIComparisonAnalysisP
         };
       }
       setAnalysis(parsed);
-    } catch (err) {
+    } catch {
       setAnalysis({
         pros: {},
         cons: {},
@@ -88,7 +90,7 @@ export default function AIComparisonAnalysis({ products }: AIComparisonAnalysisP
     } finally {
       setLoading(false);
     }
-  }, [products]);
+  }, [products, format]);
 
   if (products.length < 2) return null;
 
@@ -129,7 +131,6 @@ export default function AIComparisonAnalysis({ products }: AIComparisonAnalysisP
 
               {analysis && !loading && (
                 <div className="space-y-4">
-                  {/* Pros and Cons grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {products.map(p => (
                       <div key={p.id} className="border border-gray-100 rounded-xl p-4">
@@ -185,7 +186,6 @@ export default function AIComparisonAnalysis({ products }: AIComparisonAnalysisP
                     ))}
                   </div>
 
-                  {/* Recommendation */}
                   {analysis.recommendation && (
                     <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100">
                       <p className="text-xs font-semibold text-purple-700 mb-1 flex items-center gap-1">
