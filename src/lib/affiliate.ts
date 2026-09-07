@@ -1,9 +1,14 @@
 import { supabase } from './supabase';
+import {
+  saveRedirectPath,
+  peekRedirectPath,
+  clearRedirectPath,
+} from './authContinuation';
 
 const COOKIE_NAME = 'affiliate_ref_code';
 const COOKIE_MAX_AGE_DAYS = 30;
 const ATTRIBUTION_KEY = 'dright_attribution';
-const REDIRECT_KEY = 'pending_redirect';
+const ATTRIBUTION_MAX_AGE_MS = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 const VISITOR_KEY = 'dright_visitor_id';
 const SESSION_KEY = 'dright_session_id';
 
@@ -63,8 +68,24 @@ export function setAttribution(attribution: TrackingAttribution): void {
 export function getAttribution(): TrackingAttribution | null {
   try {
     const raw = localStorage.getItem(ATTRIBUTION_KEY);
-    return raw ? JSON.parse(raw) as TrackingAttribution : null;
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as TrackingAttribution;
+    if (!parsed || typeof parsed.trackingCode !== 'string' || typeof parsed.capturedAt !== 'string') {
+      clearAttribution();
+      return null;
+    }
+
+    const capturedAt = new Date(parsed.capturedAt).getTime();
+    if (!Number.isFinite(capturedAt) || Date.now() - capturedAt > ATTRIBUTION_MAX_AGE_MS) {
+      clearAttribution();
+      clearAffiliateCookie();
+      return null;
+    }
+
+    return parsed;
   } catch {
+    clearAttribution();
     return null;
   }
 }
@@ -73,16 +94,18 @@ export function clearAttribution(): void {
   try { localStorage.removeItem(ATTRIBUTION_KEY); } catch { /* ignore */ }
 }
 
+// Compatibility wrappers retained for older tracked-link callers.
+// All auth continuation now uses the canonical authContinuation storage.
 export function setPendingRedirect(path: string): void {
-  try { sessionStorage.setItem(REDIRECT_KEY, path); } catch { /* ignore */ }
+  saveRedirectPath(path);
 }
 
 export function getPendingRedirect(): string | null {
-  try { return sessionStorage.getItem(REDIRECT_KEY); } catch { return null; }
+  return peekRedirectPath();
 }
 
 export function clearPendingRedirect(): void {
-  try { sessionStorage.removeItem(REDIRECT_KEY); } catch { /* ignore */ }
+  clearRedirectPath();
 }
 
 export function generateAffiliateLink(referralCode: string, productId?: string): string {
@@ -156,6 +179,11 @@ export async function recordClick(referrerId: string, productId?: string): Promi
   } catch (err) { console.error('Error recording affiliate click:', err); }
 }
 
+/**
+ * @deprecated Financial conversion authority belongs to the server-side order/payment
+ * finalization pipeline. This compatibility helper intentionally performs no sale,
+ * earnings, wallet, or commission mutation.
+ */
 export async function recordSaleWithReferrer(params: {
   promoterId: string;
   buyerName: string;
@@ -164,26 +192,15 @@ export async function recordSaleWithReferrer(params: {
   saleAmount: number;
   productId?: string;
 }): Promise<{ referrerId: string | null; referrerRole: string | null }> {
+  void params;
   const attribution = getAttribution();
   const referrerId = attribution?.ownerId || null;
   const referrerRole = attribution?.sourceType || null;
 
-  await supabase.from('sales_records').insert({
-    promoter_id: params.promoterId,
-    buyer_name: params.buyerName,
-    product_name: params.productName,
-    commission_amount: params.commissionAmount,
-    sale_amount: params.saleAmount,
-    product_id: params.productId || null,
-    referrer_id: referrerId,
-    referrer_role: referrerRole,
-    status: 'pending',
-  });
+  console.warn(
+    '[DRIGHT ST-1g] recordSaleWithReferrer is deprecated. Conversion and commission records are created only by the authoritative server payment/order finalization flow.',
+  );
 
-  if (referrerId) {
-    await supabase.rpc('increment_referral_conversions', { p_referrer_id: referrerId });
-    await supabase.rpc('add_affiliate_earnings', { p_user_id: referrerId, p_amount: params.commissionAmount });
-  }
   return { referrerId, referrerRole };
 }
 
