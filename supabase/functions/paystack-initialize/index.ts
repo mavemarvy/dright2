@@ -8,7 +8,7 @@ const corsHeaders = {
 
 const PAYSTACK_SECRET = Deno.env.get("PAYSTACK_SECRET_KEY") || "";
 const PAYSTACK_BASE = "https://api.paystack.co";
-const MIN_FUNDING_KOBO = 10_000; // NGN 100
+const MIN_FUNDING_MINOR = 10_000; // NGN 100
 
 const ALLOWED_PURPOSES = new Set([
   "wallet_funding",
@@ -18,6 +18,7 @@ const ALLOWED_PURPOSES = new Set([
   "subscription",
   "affiliate_subscription",
   "vendor_subscription",
+  "promotion_campaign",
 ]);
 
 const ALLOWED_CHANNELS = new Set([
@@ -97,7 +98,7 @@ Deno.serve(async (req: Request) => {
 
     const body = asObject(await req.json());
     const requestedPurpose = String(body.purpose || "wallet_funding");
-    const requestedAmountKobo = Number(body.amount);
+    const requestedAmountMinor = Number(body.amount);
     const requestedReferenceId = typeof body.reference_id === "string" && body.reference_id.trim()
       ? body.reference_id.trim()
       : null;
@@ -108,8 +109,9 @@ Deno.serve(async (req: Request) => {
     }
 
     let purpose = requestedPurpose;
-    let amountKobo = requestedAmountKobo;
+    let amountMinor = requestedAmountMinor;
     let referenceId = requestedReferenceId;
+    let paymentCurrency = "NGN";
     let canonicalMetadata: Record<string, unknown> = { ...requestedMetadata };
 
     // Marketplace purchases are bound to an existing server-side order. The browser
@@ -136,8 +138,8 @@ Deno.serve(async (req: Request) => {
         return json({ error: "This order does not require a Paystack payment" }, 400);
       }
 
-      amountKobo = Math.round(orderTotal * 100);
-      if (Number.isFinite(requestedAmountKobo) && Math.round(requestedAmountKobo) !== amountKobo) {
+      amountMinor = Math.round(orderTotal * 100);
+      if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) {
         return json({ error: "Payment amount does not match the current order total", amount: orderTotal }, 409);
       }
 
@@ -170,9 +172,10 @@ Deno.serve(async (req: Request) => {
 
       purpose = subscriptionPurpose(plan.plan_type);
       referenceId = plan.id;
-      amountKobo = Math.round(planAmount * 100);
+      amountMinor = Math.round(planAmount * 100);
+      paymentCurrency = planCurrency;
 
-      if (Number.isFinite(requestedAmountKobo) && Math.round(requestedAmountKobo) !== amountKobo) {
+      if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) {
         return json({ error: "Payment amount does not match the current subscription price", amount: planAmount }, 409);
       }
 
@@ -186,20 +189,82 @@ Deno.serve(async (req: Request) => {
         user_id: user.id,
         authoritative_amount: planAmount,
       };
+    } else if (purpose === "promotion_campaign") {
+      // ST-5B: the campaign row is the source of truth for seller, amount and currency.
+      // A browser may identify the campaign, but it cannot choose payable financial state.
+      if (!referenceId) return json({ error: "Promotion campaign reference is required" }, 400);
+
+      const { data: campaign, error: campaignError } = await supabase
+        .from("promotion_campaigns")
+        .select("id,seller_id,listing_id,listing_type,budget,billing_currency,status,payment_status,payment_id")
+        .eq("id", referenceId)
+        .maybeSingle();
+
+      if (campaignError) return json({ error: "Unable to validate promotion campaign" }, 500);
+      if (!campaign) return json({ error: "Promotion campaign not found" }, 404);
+      if (campaign.seller_id !== user.id) return json({ error: "Promotion campaign does not belong to authenticated user" }, 403);
+      if (campaign.status !== "pending" || campaign.payment_status !== "pending" || campaign.payment_id) {
+        return json({ error: "Promotion campaign is not awaiting payment" }, 409);
+      }
+
+      const campaignAmount = Number(campaign.budget);
+      const campaignCurrency = String(campaign.billing_currency || "").toUpperCase();
+      if (!Number.isFinite(campaignAmount) || campaignAmount <= 0) {
+        return json({ error: "Promotion campaign has an invalid payable amount" }, 409);
+      }
+      if (!campaignCurrency) {
+        return json({ error: "Promotion campaign billing currency is not configured" }, 409);
+      }
+
+      const { data: provider, error: providerError } = await supabase
+        .from("payment_providers")
+        .select("slug,status,supported_currencies")
+        .eq("slug", "paystack")
+        .maybeSingle();
+
+      if (providerError) return json({ error: "Unable to validate payment provider" }, 500);
+      if (!provider || provider.status !== "enabled") {
+        return json({ error: "Paystack is not enabled for promotion payments" }, 503);
+      }
+
+      const supportedCurrencies = Array.isArray(provider.supported_currencies)
+        ? provider.supported_currencies.map((value: unknown) => String(value).toUpperCase())
+        : [];
+      if (!supportedCurrencies.includes(campaignCurrency)) {
+        return json({ error: `Paystack does not support ${campaignCurrency} for this promotion` }, 409);
+      }
+
+      amountMinor = Math.round(campaignAmount * 100);
+      paymentCurrency = campaignCurrency;
+      referenceId = campaign.id;
+
+      if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) {
+        return json({ error: "Payment amount does not match the canonical campaign budget", amount: campaignAmount, currency: campaignCurrency }, 409);
+      }
+
+      canonicalMetadata = {
+        ...requestedMetadata,
+        campaign_id: campaign.id,
+        listing_id: campaign.listing_id,
+        listing_type: campaign.listing_type,
+        seller_id: user.id,
+        authoritative_amount: campaignAmount,
+        authoritative_currency: campaignCurrency,
+        provider: "paystack",
+      };
     } else {
-      // Wallet/advertiser funding is user-selected money, so the amount remains
-      // caller-selected but is strictly validated server-side in Paystack's kobo unit.
-      if (!Number.isSafeInteger(amountKobo) || amountKobo < MIN_FUNDING_KOBO) {
+      // Wallet/advertiser funding remains user-selected NGN money and is validated in minor units.
+      if (!Number.isSafeInteger(amountMinor) || amountMinor < MIN_FUNDING_MINOR) {
         return json({ error: "Minimum amount is 100 NGN" }, 400);
       }
       canonicalMetadata = {
         ...requestedMetadata,
         user_id: user.id,
-        authoritative_amount: amountKobo / 100,
+        authoritative_amount: amountMinor / 100,
       };
     }
 
-    if (!Number.isSafeInteger(amountKobo) || amountKobo <= 0) {
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
       return json({ error: "Invalid payment amount" }, 400);
     }
 
@@ -220,7 +285,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const reference = `DRG_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
-    const amountNgn = amountKobo / 100;
+    const amountMajor = amountMinor / 100;
     const callbackPath = safeCallbackPath(canonicalMetadata.custom_redirect);
     const appUrl = (Deno.env.get("APP_URL") || req.headers.get("origin") || "").replace(/\/$/, "");
     if (!appUrl) return json({ error: "Application URL is not configured" }, 503);
@@ -230,13 +295,14 @@ Deno.serve(async (req: Request) => {
       user_id: user.id,
       purpose,
       reference_id: referenceId,
-      currency: "NGN",
+      currency: paymentCurrency,
       source: "dright_server",
     };
 
     log("INFO", "Initialize authoritative payment", {
       userId: user.id,
-      amount: amountNgn,
+      amount: amountMajor,
+      currency: paymentCurrency,
       purpose,
       reference_id: referenceId,
     });
@@ -246,8 +312,8 @@ Deno.serve(async (req: Request) => {
     const { error: insertErr } = await supabase.from("paystack_transactions").insert({
       user_id: user.id,
       reference,
-      amount: amountNgn,
-      currency: "NGN",
+      amount: amountMajor,
+      currency: paymentCurrency,
       purpose,
       reference_id: referenceId,
       status: "initialized",
@@ -269,8 +335,8 @@ Deno.serve(async (req: Request) => {
       user_id: user.id,
       reference,
       provider: "paystack",
-      amount: amountNgn,
-      currency: "NGN",
+      amount: amountMajor,
+      currency: paymentCurrency,
       status: "initialized",
       purpose,
       ip_address: clientInfo.ip,
@@ -291,8 +357,8 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         email,
-        amount: amountKobo,
-        currency: "NGN",
+        amount: amountMinor,
+        currency: paymentCurrency,
         reference,
         callback_url: `${appUrl}${callbackPath}?reference=${encodeURIComponent(reference)}`,
         channels: normalizeChannels(body.channels),
@@ -331,8 +397,8 @@ Deno.serve(async (req: Request) => {
       authorization_url: paystackData.data.authorization_url,
       access_code: paystackData.data.access_code,
       reference,
-      amount: amountNgn,
-      currency: "NGN",
+      amount: amountMajor,
+      currency: paymentCurrency,
       purpose,
       reference_id: referenceId,
     });
