@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { getPendingRedirect, clearPendingRedirect } from '../lib/affiliate';
 
 export default function VerifyOtpPage() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -71,14 +72,16 @@ export default function VerifyOtpPage() {
     const { error } = await verifyOtp(phone, otpString);
     if (error) {
       if (error.message.includes('successful')) {
-        // Mock success - redirect to sign in
+        // Mock success - redirect to sign in while preserving the pending destination.
         navigate('/sign-in', { state: { message: error.message } });
       } else {
         setError(error.message);
         setLoading(false);
       }
     } else {
-      navigate('/');
+      const redirect = getPendingRedirect() || '/';
+      clearPendingRedirect();
+      navigate(redirect);
     }
   };
 
