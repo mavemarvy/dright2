@@ -104,16 +104,25 @@ Deno.serve(async (req: Request) => {
 
       if (updateError) return json({ error: "Unable to record verified payment" }, 500);
 
-      const { data: processed, error: processError } = await db.rpc("process_paystack_payment", {
-        p_reference: ref,
-        p_user_id: tx.user_id,
-        p_amount: expectedAmount,
-        p_purpose: tx.purpose,
-        p_reference_id: tx.reference_id,
-        p_metadata: tx.metadata,
-      });
+      const processor = tx.purpose === "promotion_campaign"
+        ? await db.rpc("process_verified_promotion_payment", {
+          p_reference: ref,
+          p_user_id: tx.user_id,
+          p_amount: expectedAmount,
+          p_currency: expectedCurrency,
+          p_provider: "paystack",
+        })
+        : await db.rpc("process_paystack_payment", {
+          p_reference: ref,
+          p_user_id: tx.user_id,
+          p_amount: expectedAmount,
+          p_purpose: tx.purpose,
+          p_reference_id: tx.reference_id,
+          p_metadata: tx.metadata,
+        });
 
-      if (processError) return json({ error: "Payment processing failed" }, 500);
+      if (processor.error) return json({ error: "Payment processing failed" }, 500);
+      const processed = processor.data;
       if (processed?.success === false) return json({ error: processed.error || "Payment processing failed" }, 500);
 
       await db.from("paystack_transactions")
@@ -122,7 +131,7 @@ Deno.serve(async (req: Request) => {
         .is("processed_at", null);
 
       if (processed?.idempotent !== true) {
-        await sendPaymentNotification(db, tx, expectedAmount, ref, verified.data.channel);
+        await sendPaymentNotification(db, tx, expectedAmount, expectedCurrency, ref, verified.data.channel);
       }
 
       await db.from("analytics_events").insert({
@@ -136,6 +145,7 @@ Deno.serve(async (req: Request) => {
           amount: expectedAmount,
           currency: expectedCurrency,
           purpose: tx.purpose,
+          campaign_id: tx.purpose === "promotion_campaign" ? tx.reference_id : null,
           channel: verified.data.channel,
           source: "paystack_webhook",
         },
@@ -217,19 +227,30 @@ async function sendPaymentNotification(
     reference_id: string | null;
   },
   amount: number,
+  currency: string,
   reference: string,
   channel: string,
 ) {
   const funding = tx.purpose === "wallet_funding" || tx.purpose === "advertiser_funding";
+  const promotion = tx.purpose === "promotion_campaign";
   await db.from("notifications").insert({
     user_id: tx.user_id,
     notification_type: "payment_success",
-    title: funding ? "Wallet Funded Successfully" : "Payment Successful",
-    message: funding
+    title: promotion ? "Promotion Payment Successful" : funding ? "Wallet Funded Successfully" : "Payment Successful",
+    message: promotion
+      ? `Your promotion payment of ${amount.toLocaleString()} ${currency} was verified and the campaign was activated.`
+      : funding
       ? `Your wallet has been credited with ${amount.toLocaleString()} via ${channel}.`
       : `Your payment of ${amount.toLocaleString()} was successful. Reference: ${reference}`,
     priority: "high",
-    metadata: { reference, amount, purpose: tx.purpose, channel },
+    metadata: {
+      reference,
+      amount,
+      currency,
+      purpose: tx.purpose,
+      campaign_id: promotion ? tx.reference_id : null,
+      channel,
+    },
   }).catch(() => {});
 
   if ((tx.purpose === "product_purchase" || tx.purpose === "escrow") && tx.reference_id) {
