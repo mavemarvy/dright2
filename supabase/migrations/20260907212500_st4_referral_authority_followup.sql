@@ -22,7 +22,10 @@ BEGIN
   IF TG_OP = 'INSERT' THEN
     -- Permanent referral codes are generated server-side for normal browser
     -- profile creation. Internal/service jobs may preserve an explicit code.
-    IF auth.uid() IS NOT NULL OR NEW.referral_code IS NULL OR btrim(NEW.referral_code) = '' THEN
+    IF v_auth_role IN ('authenticated', 'anon')
+       OR auth.uid() IS NOT NULL
+       OR NEW.referral_code IS NULL
+       OR btrim(NEW.referral_code) = '' THEN
       LOOP
         v_candidate := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
         EXIT WHEN NOT EXISTS (
