@@ -1,4 +1,5 @@
 import type { PaymentProvider } from './paymentProviders';
+import { getCurrencySymbol } from './currency';
 
 // Country to preferred gateway mapping
 const COUNTRY_GATEWAY_PRIORITY: Record<string, string[]> = {
@@ -60,29 +61,20 @@ const COUNTRIES: Record<string, CountryInfo> = {
   EG: { code: 'EG', name: 'Egypt', currency: 'EGP', flag: '🇪🇬' },
 };
 
-// Supported currencies for multi-currency architecture
+// Legacy exports retained for compatibility. Currency display options themselves
+// now come from lib/currency.ts and its runtime ISO/rate registry.
 export const SUPPORTED_CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'KES', 'GHS', 'ZAR'] as const;
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
-export const CURRENCY_SYMBOLS: Record<string, string> = {
-  NGN: '₦',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  KES: 'KSh',
-  GHS: '₵',
-  ZAR: 'R',
-};
-
-// Currency formatting is centralized in lib/currency.ts — import from there.
-// Use CurrencyContext.useCurrency().format() for display-currency conversion in components.
+export const CURRENCY_SYMBOLS: Record<string, string> = Object.fromEntries(
+  SUPPORTED_CURRENCIES.map(code => [code, getCurrencySymbol(code)]),
+);
 
 let detectedCountry: string | null = null;
 
 export async function detectCountry(): Promise<string> {
   if (detectedCountry) return detectedCountry;
 
-  // Try localStorage cache first
   try {
     const cached = localStorage.getItem('dright_detected_country');
     if (cached && COUNTRIES[cached]) {
@@ -93,7 +85,6 @@ export async function detectCountry(): Promise<string> {
     // ignore
   }
 
-  // Try browser timezone detection
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const tzToCountry: Record<string, string> = {
@@ -134,7 +125,6 @@ export async function detectCountry(): Promise<string> {
     // ignore
   }
 
-  // Default to Nigeria
   detectedCountry = 'NG';
   return detectedCountry;
 }
