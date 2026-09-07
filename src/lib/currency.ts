@@ -38,6 +38,17 @@ function runtimeLocale(): string {
   return 'en-US';
 }
 
+function runtimeCurrencyCodes(): string[] {
+  try {
+    return Array.from(new Set([
+      ...DEFAULT_CURRENCY_CODES,
+      ...Intl.supportedValuesOf('currency'),
+    ]));
+  } catch {
+    return Array.from(DEFAULT_CURRENCY_CODES);
+  }
+}
+
 function currencyDisplayName(code: string): string {
   try {
     const names = new Intl.DisplayNames(['en'], { type: 'currency' });
@@ -79,7 +90,7 @@ export function getCurrencySymbol(code: string): string {
 
 export function buildSupportedCurrencies(rateCodes?: Iterable<string>): CurrencyInfo[] {
   const codes = new Set<string>();
-  const source = rateCodes ? Array.from(rateCodes) : Array.from(DEFAULT_CURRENCY_CODES);
+  const source = rateCodes ? Array.from(rateCodes) : runtimeCurrencyCodes();
 
   for (const value of source) {
     const code = normalizeCurrencyCode(value);
@@ -96,8 +107,9 @@ export function buildSupportedCurrencies(rateCodes?: Iterable<string>): Currency
     });
 }
 
-// Backwards-compatible static list. CurrencyContext replaces this with the live
-// exchange-rate currency set when rates are available.
+// Backwards-compatible static list. It now covers every ISO currency supported
+// by the user's runtime. CurrencyContext narrows this to currencies with a live
+// exchange rate when it exposes its own supportedCurrencies collection.
 export const SUPPORTED_CURRENCIES: CurrencyInfo[] = buildSupportedCurrencies();
 
 export function getSelectedDisplayCurrency(): string {
