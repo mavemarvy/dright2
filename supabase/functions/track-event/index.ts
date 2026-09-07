@@ -3,16 +3,34 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...corsHeaders, "Content-Type": "application/json" },
+});
+
 const BOT_KEYWORDS = [
-  "bot", "crawler", "spider", "slurp", "bingpreview", "facebookexternalhit",
-  "twitterbot", "linkedinbot", "whatsapp", "telegrambot", "googlebot",
-  "monitor", "uptime", "healthcheck", "curl", "wget", "python-requests",
-  "node-fetch", "axios", "postman", "headless",
+  "googlebot", "bingbot", "bingpreview", "crawler", "spider", "slurp",
+  "facebookexternalhit", "twitterbot", "linkedinbot", "telegrambot",
+  "uptimebot", "healthcheck", "headlesschrome",
 ];
+
+const ENTITY_TYPES = new Set([
+  "product", "service", "job", "course", "digital_download", "profile", "platform",
+  "campaign", "promotion", "affiliate", "referral", "order", "payment", "wallet",
+]);
+
+const SOURCES = new Set([
+  "marketplace", "affiliate", "search", "profile", "store", "recommendation", "direct",
+  "referral", "social", "external", "qr_code", "campaign", "advertisement", "checkout",
+  "payment", "system",
+]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EVENT_RE = /^[a-z0-9][a-z0-9_:-]{0,79}$/i;
 
 function isBot(userAgent: string): boolean {
   const ua = userAgent.toLowerCase();
@@ -20,99 +38,144 @@ function isBot(userAgent: string): boolean {
 }
 
 function hashString(input: string): string {
-  // Simple hash for device fingerprinting (not crypto-grade, just for dedup)
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
+    hash = (hash << 5) - hash + input.charCodeAt(i);
     hash |= 0;
   }
   return Math.abs(hash).toString(36);
 }
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+function cleanUuid(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const text = String(value);
+  return UUID_RE.test(text) ? text : null;
+}
+
+function cleanText(value: unknown, max: number): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text ? text.slice(0, max) : null;
+}
+
+async function resolveOwner(
+  admin: ReturnType<typeof createClient>,
+  entityType: string,
+  entityId: string | null,
+  sellerHint: string | null,
+): Promise<string | null> {
+  if (!entityId) return sellerHint;
+
+  if (["product", "service", "course", "digital_download"].includes(entityType)) {
+    const { data } = await admin.from("products").select("uploaded_by").eq("id", entityId).maybeSingle();
+    return cleanUuid(data?.uploaded_by) || sellerHint;
   }
 
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  if (entityType === "job") {
+    const { data } = await admin.from("jobs").select("employer_id").eq("id", entityId).maybeSingle();
+    return cleanUuid(data?.employer_id) || sellerHint;
   }
+
+  if (entityType === "profile") return entityId;
+  return sellerHint;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
+  if (req.method !== "POST") return json({ success: false, error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 
   try {
-    const body = await req.json();
-    const {
-      event_type,
-      entity_type = "product",
-      entity_id = null,
-      seller_id = null,
-      session_id = null,
-      source = "direct",
-      metadata = {},
-    } = body;
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return json({ success: false, error: { code: "INVALID_BODY", message: "Valid JSON body required" } }, 400);
+    }
 
-    if (!event_type) {
-      return new Response(JSON.stringify({ error: "event_type is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const eventType = cleanText((body as any).event_type, 80);
+    if (!eventType || !EVENT_RE.test(eventType)) {
+      return json({ success: false, error: { code: "INVALID_EVENT_TYPE", message: "Valid event_type is required" } }, 400);
+    }
+
+    const entityTypeRaw = cleanText((body as any).entity_type, 40) || "platform";
+    const entityType = ENTITY_TYPES.has(entityTypeRaw) ? entityTypeRaw : "platform";
+    const entityId = cleanUuid((body as any).entity_id);
+    if ((body as any).entity_id && !entityId) {
+      return json({ success: false, error: { code: "INVALID_ENTITY_ID", message: "entity_id must be a UUID" } }, 400);
+    }
+
+    const sessionId = cleanText((body as any).session_id, 160);
+    if (!sessionId) {
+      return json({ success: false, error: { code: "MISSING_SESSION", message: "session_id is required" } }, 400);
+    }
+
+    const metadata = (body as any).metadata && typeof (body as any).metadata === "object" && !Array.isArray((body as any).metadata)
+      ? (body as any).metadata
+      : {};
+    if (JSON.stringify(metadata).length > 16_384) {
+      return json({ success: false, error: { code: "METADATA_TOO_LARGE", message: "Analytics metadata is too large" } }, 413);
     }
 
     const userAgent = req.headers.get("User-Agent") || "";
-    const botDetected = isBot(userAgent);
+    if (isBot(userAgent)) return json({ success: true, tracked: false, reason: "bot" });
 
-    if (botDetected) {
-      return new Response(JSON.stringify({ tracked: false, reason: "bot" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    if (!supabaseUrl || !anonKey || !serviceKey) {
+      return json({ success: false, error: { code: "CONFIGURATION_ERROR", message: "Analytics service is not configured" } }, 500);
     }
 
-    const device_hash = hashString(userAgent + (session_id || ""));
-
-    // Use the service role client to call the RPC (bypasses RLS for the SECURITY DEFINER function)
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
-    // Extract the user's JWT if present (for viewer_id)
     const authHeader = req.headers.get("Authorization");
-    const token = authHeader ? authHeader.replace("Bearer ", "") : null;
+    const admin = createClient(supabaseUrl, serviceKey);
+    const rpcClient = createClient(supabaseUrl, anonKey, authHeader ? {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    } : {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
-    // Call the track_analytics_event RPC
-    const { data, error } = await supabase.rpc("track_analytics_event", {
-      p_event_type: event_type,
-      p_entity_type: entity_type,
-      p_entity_id: entity_id,
-      p_seller_id: seller_id,
-      p_session_id: session_id,
-      p_device_hash: device_hash,
-      p_browser: userAgent.slice(0, 100),
-      p_referrer: req.headers.get("Referer") || null,
+    const sellerHint = cleanUuid((body as any).seller_id);
+    const sellerId = await resolveOwner(admin, entityType, entityId, sellerHint);
+    const sourceRaw = cleanText((body as any).source, 80) || "direct";
+    const source = SOURCES.has(sourceRaw) ? sourceRaw : "direct";
+
+    const country = cleanText(req.headers.get("cf-ipcountry") || req.headers.get("x-country-code") || (body as any).country, 100);
+    const city = cleanText(req.headers.get("x-city") || (body as any).city, 100);
+    const referrer = cleanText(req.headers.get("Referer") || (body as any).referrer, 1000);
+    const deviceHash = hashString(`${userAgent}|${sessionId}`);
+
+    const { data, error } = await rpcClient.rpc("track_analytics_event", {
+      p_event_type: eventType,
+      p_entity_type: entityType,
+      p_entity_id: entityId,
+      p_seller_id: sellerId,
+      p_session_id: sessionId,
+      p_device_hash: deviceHash,
+      p_browser: userAgent.slice(0, 255),
+      p_country: country,
+      p_city: city,
+      p_referrer: referrer,
       p_source: source,
       p_metadata: metadata,
-      p_is_bot: botDetected,
+      p_is_bot: false,
+      p_device_type: cleanText((body as any).device_type, 30),
+      p_os: cleanText((body as any).os, 60),
+      p_browser_name: cleanText((body as any).browser_name, 60),
+      p_state: cleanText((body as any).state, 100),
+      p_language: cleanText((body as any).language, 30),
+      p_timezone: cleanText((body as any).timezone, 100),
+      p_session_duration: Number.isInteger((body as any).session_duration) ? Math.max(0, Math.min((body as any).session_duration, 86_400)) : null,
+      p_is_bounce: Boolean((body as any).is_bounce),
+      p_keywords: cleanText((body as any).keywords, 500),
     });
 
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("[track-event] ingestion failure", error.code || "RPC_ERROR");
+      return json({ success: false, error: { code: "ANALYTICS_INGESTION_FAILED", message: "Event could not be recorded" } }, 500);
     }
 
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ success: true, ...(data || { tracked: false }) });
+  } catch (error) {
+    console.error("[track-event] unhandled", error instanceof Error ? error.message : String(error));
+    return json({ success: false, error: { code: "INTERNAL_ERROR", message: "Event could not be recorded" } }, 500);
   }
 });
