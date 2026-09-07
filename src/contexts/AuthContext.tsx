@@ -190,9 +190,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string, phone?: string, asAdmin?: boolean, location?: string, preferredCurrency?: string) => {
     const normalizedEmail = email.trim().toLowerCase();
-    const { data, error } = await supabase.auth.signUp({ email: normalizedEmail, password, options: { data: { full_name: fullName, wants_admin: asAdmin || false } } });
+    const refCode = getAffiliateCookie();
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          wants_admin: asAdmin || false,
+          signup_referral_code: refCode || null,
+        },
+      },
+    });
     if (!error && data.user) {
-      const refCode = getAffiliateCookie(); let referredBy: string | null = null;
+      let referredBy: string | null = null;
       if (refCode) { const referrer = await resolveReferrer(refCode); if (referrer) referredBy = referrer.id; }
       const result = await createProfileAndReferralLink(data.user.id, normalizedEmail, fullName, phone, asAdmin, referredBy, location, preferredCurrency);
       if (result.error) return { error: result.error as unknown as AuthError };
