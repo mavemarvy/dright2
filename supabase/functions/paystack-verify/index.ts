@@ -125,20 +125,29 @@ Deno.serve(async (req: Request) => {
 
       if (updateError) return json({ error: "Unable to record verified payment" }, 500);
 
-      const { data: result, error: rpcError } = await db.rpc("process_paystack_payment", {
-        p_reference: reference,
-        p_user_id: tx.user_id,
-        p_amount: expectedAmount,
-        p_purpose: tx.purpose,
-        p_reference_id: tx.reference_id,
-        p_metadata: tx.metadata,
-      });
+      const processor = tx.purpose === "promotion_campaign"
+        ? await db.rpc("process_verified_promotion_payment", {
+          p_reference: reference,
+          p_user_id: tx.user_id,
+          p_amount: expectedAmount,
+          p_currency: expectedCurrency,
+          p_provider: "paystack",
+        })
+        : await db.rpc("process_paystack_payment", {
+          p_reference: reference,
+          p_user_id: tx.user_id,
+          p_amount: expectedAmount,
+          p_purpose: tx.purpose,
+          p_reference_id: tx.reference_id,
+          p_metadata: tx.metadata,
+        });
 
-      if (rpcError) return json({ error: "Payment processing failed" }, 500);
+      if (processor.error) return json({ error: "Payment processing failed" }, 500);
+      const result = processor.data;
       if (result?.success === false) return json({ error: result.error || "Payment processing failed" }, 500);
 
-      // process_paystack_payment is the authoritative idempotent processor and
-      // records processed_at. This update is only a compatibility safeguard.
+      // Both authoritative processors are idempotent and record processed_at.
+      // This update remains only as a compatibility safeguard.
       await db.from("paystack_transactions")
         .update({ processed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("reference", reference)
@@ -148,13 +157,17 @@ Deno.serve(async (req: Request) => {
         await db.from("notifications").insert({
           user_id: tx.user_id,
           notification_type: "payment_success",
-          title: "Payment Successful",
-          message: `Your payment of ${expectedAmount.toLocaleString()} was successful. Reference: ${reference}`,
+          title: tx.purpose === "promotion_campaign" ? "Promotion Payment Successful" : "Payment Successful",
+          message: tx.purpose === "promotion_campaign"
+            ? `Your promotion payment of ${expectedAmount.toLocaleString()} ${expectedCurrency} was verified and the campaign was activated.`
+            : `Your payment of ${expectedAmount.toLocaleString()} was successful. Reference: ${reference}`,
           priority: "high",
           metadata: {
             reference,
             amount: expectedAmount,
+            currency: expectedCurrency,
             purpose: tx.purpose,
+            campaign_id: tx.purpose === "promotion_campaign" ? tx.reference_id : undefined,
             channel: verified.data.channel,
           },
         }).catch(() => {});
@@ -164,7 +177,9 @@ Deno.serve(async (req: Request) => {
         success: true,
         status: "success",
         amount: expectedAmount,
+        currency: expectedCurrency,
         purpose: tx.purpose,
+        campaign_id: tx.purpose === "promotion_campaign" ? tx.reference_id : undefined,
         channel: verified.data.channel,
         reference,
       });
