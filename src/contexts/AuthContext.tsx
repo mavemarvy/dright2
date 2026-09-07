@@ -168,13 +168,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (profileError) { console.error('Error creating profile:', profileError); return { error: profileError }; }
 
     // Referral identity is assigned by the database from auth signup metadata.
-    // Read the canonical result only for a best-effort user notification; never
-    // use browser-resolved sponsor identity as referral authority.
+    // Read the canonical result only; never use browser-resolved sponsor identity
+    // or a browser-generated referral code as referral authority.
     const { data: canonicalProfile } = await supabase
       .from('users')
-      .select('referred_by, full_name, email')
+      .select('referred_by, referral_code, full_name, email')
       .eq('id', userId)
       .maybeSingle();
+
+    // Compatibility bridge: until the ST-4D migration is confirmed live, make
+    // sure the existing generic link exists using only the DB-generated code.
+    // Once the server trigger is live it creates the row first, making this a
+    // no-op. This does not choose sponsor identity or commission state.
+    if ((!shouldBeAdmin || adminStatus === 'pending') && canonicalProfile?.referral_code) {
+      const { data: existingLinks } = await supabase
+        .from('referral_links')
+        .select('id, source_type')
+        .eq('user_id', userId)
+        .is('product_id', null)
+        .is('campaign_id', null)
+        .is('sales_team_id', null);
+      const hasGenericAffiliateLink = existingLinks?.some((link) => !link.source_type || link.source_type === 'affiliate') ?? false;
+      if (!hasGenericAffiliateLink) {
+        const { error: referralLinkError } = await supabase.from('referral_links').insert({
+          user_id: userId,
+          unique_code: canonicalProfile.referral_code,
+          source_type: 'affiliate',
+        });
+        if (referralLinkError) console.error('Error ensuring canonical referral link:', referralLinkError);
+      }
+    }
+
     if (canonicalProfile?.referred_by) {
       const referralName = canonicalProfile.full_name || canonicalProfile.email || 'Someone';
       try {
