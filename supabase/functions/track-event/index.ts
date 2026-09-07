@@ -124,14 +124,24 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: { code: "CONFIGURATION_ERROR", message: "Analytics service is not configured" } }, 500);
     }
 
-    const authHeader = req.headers.get("Authorization");
-    const admin = createClient(supabaseUrl, serviceKey);
-    const rpcClient = createClient(supabaseUrl, anonKey, authHeader ? {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    } : {
+    const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+
+    let viewerId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.slice(7).trim();
+      // Supabase clients may send the anonymous project key when no user is signed in.
+      // Only non-anon tokens are treated as user credentials, and they must validate.
+      if (token && token !== anonKey) {
+        const { data: authData, error: authError } = await admin.auth.getUser(token);
+        if (authError || !authData.user) {
+          return json({ success: false, error: { code: "UNAUTHORIZED", message: "Invalid analytics user session" } }, 401);
+        }
+        viewerId = authData.user.id;
+      }
+    }
 
     const sellerHint = cleanUuid((body as any).seller_id);
     const sellerId = await resolveOwner(admin, entityType, entityId, sellerHint);
@@ -143,7 +153,7 @@ Deno.serve(async (req: Request) => {
     const referrer = cleanText(req.headers.get("Referer") || (body as any).referrer, 1000);
     const deviceHash = hashString(`${userAgent}|${sessionId}`);
 
-    const { data, error } = await rpcClient.rpc("track_analytics_event", {
+    const { data, error } = await admin.rpc("track_analytics_event", {
       p_event_type: eventType,
       p_entity_type: entityType,
       p_entity_id: entityId,
@@ -155,7 +165,7 @@ Deno.serve(async (req: Request) => {
       p_city: city,
       p_referrer: referrer,
       p_source: source,
-      p_metadata: metadata,
+      p_metadata: { ...metadata, _verified_viewer_id: viewerId },
       p_is_bot: false,
       p_device_type: cleanText((body as any).device_type, 30),
       p_os: cleanText((body as any).os, 60),
