@@ -7,6 +7,12 @@ export interface CurrencyInfo {
 
 export type CurrencyRates = Record<string, number>;
 
+export interface CurrencyFormatOptions {
+  minimumFractionDigits?: number;
+  maximumFractionDigits?: number;
+  notation?: 'standard' | 'compact';
+}
+
 export const BASE_CURRENCY = 'USD';
 export const RATES_CACHE_KEY = 'dright_exchange_rates';
 export const CURRENCY_PREF_KEY = 'dright_selected_currency';
@@ -155,7 +161,11 @@ export function tryConvertCurrency(
   return (safeAmount / fromRate) * toRate;
 }
 
-export function formatCurrencyValue(amount: number, currencyCode: string): string {
+export function formatCurrencyValue(
+  amount: number,
+  currencyCode: string,
+  options: CurrencyFormatOptions = {},
+): string {
   const info = getCurrencyInfo(currencyCode);
   const safeAmount = Number.isFinite(Number(amount)) ? Number(amount) : 0;
   try {
@@ -163,10 +173,29 @@ export function formatCurrencyValue(amount: number, currencyCode: string): strin
       style: 'currency',
       currency: info.code,
       currencyDisplay: 'narrowSymbol',
+      ...options,
     }).format(safeAmount);
   } catch {
     return `${info.symbol}${safeAmount.toLocaleString()}`;
   }
+}
+
+/**
+ * Format any source-currency amount in the user's selected display currency.
+ * The original ledger/order value is never mutated. If no safe FX rate exists,
+ * the amount stays visibly labelled in its source currency instead of being
+ * falsely relabelled as the selected currency.
+ */
+export function formatDisplayCurrency(
+  amount: number,
+  sourceCurrency: string = BASE_CURRENCY,
+  options: CurrencyFormatOptions = {},
+): string {
+  const source = normalizeCurrencyCode(sourceCurrency);
+  const displayCurrency = getSelectedDisplayCurrency();
+  const converted = tryConvertCurrency(amount, source, displayCurrency);
+  if (converted === null) return formatCurrencyValue(amount, source, options);
+  return formatCurrencyValue(converted, displayCurrency, options);
 }
 
 /**
@@ -182,11 +211,7 @@ export function formatCurrencyValue(amount: number, currencyCode: string): strin
  */
 export function formatCurrency(amount: number, currencyCode?: string): string {
   if (currencyCode) return formatCurrencyValue(amount, currencyCode);
-
-  const displayCurrency = getSelectedDisplayCurrency();
-  const converted = tryConvertCurrency(amount, BASE_CURRENCY, displayCurrency);
-  if (converted === null) return formatCurrencyValue(amount, BASE_CURRENCY);
-  return formatCurrencyValue(converted, displayCurrency);
+  return formatDisplayCurrency(amount, BASE_CURRENCY);
 }
 
 export function formatSalaryRange(
