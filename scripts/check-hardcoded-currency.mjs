@@ -25,7 +25,7 @@ function walk(dir) {
 }
 
 function literalText(node) {
-  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)) return node.text;
   return null;
 }
 
@@ -48,11 +48,13 @@ for (const file of walk(ROOT)) {
   function inspectText(text, node) {
     if (!text || !MONEY_SYMBOL_PATTERN.test(text)) return;
     const location = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+    const sourceLine = (sourceLines[location.line] || '').trim().replace(/\s+/g, ' ').slice(0, 220);
+    if (sourceLine.includes('currency-audit-ignore')) return;
     findings.push({
       file: relative.replaceAll('\\', '/'),
       line: location.line + 1,
       text: text.replace(/\s+/g, ' ').trim().slice(0, 140),
-      sourceLine: (sourceLines[location.line] || '').trim().replace(/\s+/g, ' ').slice(0, 220),
+      sourceLine,
     });
   }
 
