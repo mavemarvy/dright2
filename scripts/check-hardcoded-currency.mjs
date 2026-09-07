@@ -36,6 +36,7 @@ for (const file of walk(ROOT)) {
   if (ALLOWLIST.has(relative)) continue;
 
   const source = fs.readFileSync(file, 'utf8');
+  const sourceLines = source.split(/\r?\n/);
   const sourceFile = ts.createSourceFile(
     file,
     source,
@@ -51,6 +52,7 @@ for (const file of walk(ROOT)) {
       file: relative.replaceAll('\\', '/'),
       line: location.line + 1,
       text: text.replace(/\s+/g, ' ').trim().slice(0, 140),
+      sourceLine: (sourceLines[location.line] || '').trim().replace(/\s+/g, ' ').slice(0, 220),
     });
   }
 
@@ -76,6 +78,7 @@ if (!QUIET) {
     console.warn(`[currency-audit] Found ${findings.length} hard-coded monetary currency string(s):`);
     for (const item of findings) {
       console.warn(`  ${item.file}:${item.line}  ${JSON.stringify(item.text)}`);
+      console.warn(`    ${item.sourceLine}`);
     }
     console.warn('[currency-audit] Monetary UI must use useCurrency().format(amount, sourceCurrency) or the shared currency helpers.');
   }
