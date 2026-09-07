@@ -97,40 +97,145 @@ export function useStoreFollow(userId: string | undefined) {
   return { followingIds, toggleFollow, followerCounts, fetchFollowerCount, refetch: fetchFollowing };
 }
 
+const RECENTLY_VIEWED_STORAGE_KEY = 'dright_recently_viewed_ids';
+const RECENTLY_VIEWED_ACCOUNT_LIMIT = 12;
+const RECENTLY_VIEWED_BROWSER_LIMIT = 20;
+
+function getLocalRecentlyViewedIds(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return Array.from(new Set(parsed.filter((id): id is string => typeof id === 'string' && id.length > 0)));
+  } catch {
+    return [];
+  }
+}
+
+function setLocalRecentlyViewedIds(ids: string[]): void {
+  try {
+    localStorage.setItem(
+      RECENTLY_VIEWED_STORAGE_KEY,
+      JSON.stringify(Array.from(new Set(ids)).slice(0, RECENTLY_VIEWED_BROWSER_LIMIT)),
+    );
+  } catch {
+    // Browser storage can be unavailable in private/restricted contexts.
+  }
+}
+
+async function mergeGuestRecentlyViewed(userId: string): Promise<void> {
+  const guestIds = getLocalRecentlyViewedIds().slice(0, RECENTLY_VIEWED_ACCOUNT_LIMIT);
+  if (guestIds.length === 0) return;
+
+  // Only merge products that still exist and are currently browseable. A stale local
+  // ID must not create a broken account-history record.
+  const { data: validProducts, error: productError } = await supabase
+    .from('products')
+    .select('id')
+    .in('id', guestIds)
+    .eq('is_active', true)
+    .eq('is_hidden', false)
+    .eq('approval_status', 'approved');
+
+  if (productError) return;
+
+  const validIdSet = new Set((validProducts || []).map((product: { id: string }) => product.id));
+  const validGuestIds = guestIds.filter(id => validIdSet.has(id));
+  if (validGuestIds.length === 0) return;
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from('recently_viewed')
+    .select('id, product_id, viewed_at, view_count')
+    .eq('user_id', userId)
+    .in('product_id', validGuestIds);
+
+  if (existingError) return;
+
+  const existingByProduct = new Map(
+    (existingRows || []).map((row: { id: string; product_id: string; viewed_at: string; view_count: number }) => [row.product_id, row]),
+  );
+
+  // Local IDs are stored newest-first. Preserve that ordering while making the
+  // account-side rows canonical. Do not emit product-view analytics here: this is
+  // an identity-state merge, not a new view event.
+  const baseTime = Date.now();
+  for (let index = 0; index < validGuestIds.length; index += 1) {
+    const productId = validGuestIds[index];
+    const viewedAt = new Date(baseTime - index).toISOString();
+    const existing = existingByProduct.get(productId);
+
+    if (existing) {
+      await supabase
+        .from('recently_viewed')
+        .update({ viewed_at: viewedAt })
+        .eq('id', existing.id)
+        .eq('user_id', userId);
+    } else {
+      await supabase
+        .from('recently_viewed')
+        .insert({ user_id: userId, product_id: productId, viewed_at: viewedAt, view_count: 1 });
+    }
+  }
+}
+
 export function useRecentlyViewed(userId: string | undefined) {
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
 
   const fetchRecentlyViewed = useCallback(async () => {
     if (!userId) {
-      const local = localStorage.getItem('dright_recently_viewed_ids');
-      if (local) { try { setRecentlyViewed(JSON.parse(local)); } catch { /* ignore */ } }
+      setRecentlyViewed(getLocalRecentlyViewedIds().slice(0, RECENTLY_VIEWED_ACCOUNT_LIMIT));
       return;
     }
-    const { data } = await supabase.from('recently_viewed').select('product_id').eq('user_id', userId).order('viewed_at', { ascending: false }).limit(12);
-    setRecentlyViewed((data || []).map((r: { product_id: string }) => r.product_id));
+
+    // ST-1g: merge this browser's anonymous history into the existing authenticated
+    // history before reading it. The operation updates existing rows or inserts only
+    // missing rows, so repeated login/session restoration is idempotent.
+    await mergeGuestRecentlyViewed(userId);
+
+    const { data } = await supabase
+      .from('recently_viewed')
+      .select('product_id')
+      .eq('user_id', userId)
+      .order('viewed_at', { ascending: false })
+      .limit(RECENTLY_VIEWED_ACCOUNT_LIMIT);
+
+    const accountIds = (data || []).map((row: { product_id: string }) => row.product_id);
+    setRecentlyViewed(accountIds);
+
+    // Keep one browser history as the local continuity/fallback store. This also
+    // means signing out does not erase products the person just viewed while signed in.
+    setLocalRecentlyViewedIds([...accountIds, ...getLocalRecentlyViewedIds()]);
   }, [userId]);
 
-  useEffect(() => { fetchRecentlyViewed(); }, [fetchRecentlyViewed]);
+  useEffect(() => { void fetchRecentlyViewed(); }, [fetchRecentlyViewed]);
 
   const recordView = useCallback(async (productId: string) => {
     if (userId) {
-      const { data: existing } = await supabase.from('recently_viewed').select('id, view_count').eq('user_id', userId).eq('product_id', productId).maybeSingle();
+      const { data: existing } = await supabase
+        .from('recently_viewed')
+        .select('id, view_count')
+        .eq('user_id', userId)
+        .eq('product_id', productId)
+        .maybeSingle();
+
       if (existing) {
-        await supabase.from('recently_viewed').update({ viewed_at: new Date().toISOString(), view_count: (existing as { view_count: number }).view_count + 1 }).eq('id', (existing as { id: string }).id);
+        await supabase
+          .from('recently_viewed')
+          .update({
+            viewed_at: new Date().toISOString(),
+            view_count: (existing as { view_count: number }).view_count + 1,
+          })
+          .eq('id', (existing as { id: string }).id);
       } else {
         await supabase.from('recently_viewed').insert({ user_id: userId, product_id: productId });
       }
     }
 
-    try {
-      const local = localStorage.getItem('dright_recently_viewed_ids');
-      const ids: string[] = local ? JSON.parse(local) : [];
-      const updated = [productId, ...ids.filter(id => id !== productId)].slice(0, 20);
-      localStorage.setItem('dright_recently_viewed_ids', JSON.stringify(updated));
-    } catch { /* ignore */ }
+    setLocalRecentlyViewedIds([productId, ...getLocalRecentlyViewedIds().filter(id => id !== productId)]);
 
     // Canonical analytics path; the server mirrors this into legacy product_views.
-    trackProductView(productId, null, 'marketplace');
+    void trackProductView(productId, null, 'marketplace');
   }, [userId]);
 
   return { recentlyViewed, recordView, refetch: fetchRecentlyViewed };
