@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabase';
 import { emitEvent } from './notificationEvents';
+import { trackEvent, trackProductView } from './analyticsService';
 
 export interface WishlistItem {
   id: string;
@@ -18,33 +19,28 @@ export function useWishlist(userId: string | undefined) {
   const fetchWishlist = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('wishlist')
-      .select('product_id')
-      .eq('user_id', userId);
+    const { data } = await supabase.from('wishlist').select('product_id').eq('user_id', userId);
     setWishlistIds(new Set((data || []).map((w: { product_id: string }) => w.product_id)));
     setLoading(false);
   }, [userId]);
 
-  useEffect(() => {
-    fetchWishlist();
-  }, [fetchWishlist]);
+  useEffect(() => { fetchWishlist(); }, [fetchWishlist]);
 
   const toggleWishlist = useCallback(async (productId: string): Promise<boolean> => {
     if (!userId) return false;
     if (wishlistIds.has(productId)) {
-      await supabase.from('wishlist').delete().eq('user_id', userId).eq('product_id', productId);
-      setWishlistIds(prev => {
-        const next = new Set(prev);
-        next.delete(productId);
-        return next;
-      });
+      const { error } = await supabase.from('wishlist').delete().eq('user_id', userId).eq('product_id', productId);
+      if (error) return true;
+      setWishlistIds(prev => { const next = new Set(prev); next.delete(productId); return next; });
+      void trackEvent({ event_type: 'wishlist_remove', entity_type: 'product', entity_id: productId, source: 'marketplace' });
       return false;
-    } else {
-      await supabase.from('wishlist').insert({ user_id: userId, product_id: productId });
-      setWishlistIds(prev => new Set(prev).add(productId));
-      return true;
     }
+
+    const { error } = await supabase.from('wishlist').insert({ user_id: userId, product_id: productId });
+    if (error) return false;
+    setWishlistIds(prev => new Set(prev).add(productId));
+    void trackEvent({ event_type: 'wishlist_add', entity_type: 'product', entity_id: productId, source: 'marketplace' });
+    return true;
   }, [userId, wishlistIds]);
 
   return { wishlistIds, toggleWishlist, loading, refetch: fetchWishlist };
@@ -56,64 +52,45 @@ export function useStoreFollow(userId: string | undefined) {
 
   const fetchFollowing = useCallback(async () => {
     if (!userId) return;
-    const { data } = await supabase
-      .from('store_followers')
-      .select('store_id')
-      .eq('follower_id', userId);
+    const { data } = await supabase.from('store_followers').select('store_id').eq('follower_id', userId);
     setFollowingIds(new Set((data || []).map((f: { store_id: string }) => f.store_id)));
   }, [userId]);
 
-  useEffect(() => {
-    fetchFollowing();
-  }, [fetchFollowing]);
+  useEffect(() => { fetchFollowing(); }, [fetchFollowing]);
 
   const toggleFollow = useCallback(async (storeId: string): Promise<boolean> => {
     if (!userId) return false;
     if (followingIds.has(storeId)) {
-      await supabase.from('store_followers').delete().eq('follower_id', userId).eq('store_id', storeId);
-      setFollowingIds(prev => {
-        const next = new Set(prev);
-        next.delete(storeId);
-        return next;
-      });
+      const { error } = await supabase.from('store_followers').delete().eq('follower_id', userId).eq('store_id', storeId);
+      if (error) return true;
+      setFollowingIds(prev => { const next = new Set(prev); next.delete(storeId); return next; });
       setFollowerCounts(prev => ({ ...prev, [storeId]: Math.max(0, (prev[storeId] || 1) - 1) }));
+      void trackEvent({ event_type: 'button_click', entity_type: 'profile', entity_id: storeId, source: 'store', metadata: { action: 'unfollow_store' } });
       return false;
-    } else {
-      await supabase.from('store_followers').insert({ follower_id: userId, store_id: storeId });
-      // Emit new_follower notification to store owner
-      const { data: store } = await supabase
-        .from('products')
-        .select('uploaded_by')
-        .eq('id', storeId)
-        .maybeSingle();
-      if (store?.uploaded_by) {
-        const { data: follower } = await supabase
-          .from('users')
-          .select('full_name, avatar_url')
-          .eq('id', userId)
-          .maybeSingle();
-        await emitEvent({
-          module: 'store',
-          eventType: 'new_follower',
-          recipientIds: store.uploaded_by,
-          actorId: userId,
-          metadata: {
-            followerName: follower?.full_name || 'Someone',
-            followerAvatar: follower?.avatar_url || null,
-          },
-        });
-      }
-      setFollowingIds(prev => new Set(prev).add(storeId));
-      setFollowerCounts(prev => ({ ...prev, [storeId]: (prev[storeId] || 0) + 1 }));
-      return true;
     }
+
+    const { error } = await supabase.from('store_followers').insert({ follower_id: userId, store_id: storeId });
+    if (error) return false;
+
+    const { data: store } = await supabase.from('products').select('uploaded_by').eq('id', storeId).maybeSingle();
+    if (store?.uploaded_by) {
+      const { data: follower } = await supabase.from('users').select('full_name, avatar_url').eq('id', userId).maybeSingle();
+      await emitEvent({
+        module: 'store',
+        eventType: 'new_follower',
+        recipientIds: store.uploaded_by,
+        actorId: userId,
+        metadata: { followerName: follower?.full_name || 'Someone', followerAvatar: follower?.avatar_url || null },
+      });
+    }
+    setFollowingIds(prev => new Set(prev).add(storeId));
+    setFollowerCounts(prev => ({ ...prev, [storeId]: (prev[storeId] || 0) + 1 }));
+    void trackEvent({ event_type: 'button_click', entity_type: 'profile', entity_id: storeId, source: 'store', metadata: { action: 'follow_store' } });
+    return true;
   }, [userId, followingIds]);
 
   const fetchFollowerCount = useCallback(async (storeId: string) => {
-    const { count } = await supabase
-      .from('store_followers')
-      .select('*', { count: 'exact', head: true })
-      .eq('store_id', storeId);
+    const { count } = await supabase.from('store_followers').select('*', { count: 'exact', head: true }).eq('store_id', storeId);
     setFollowerCounts(prev => ({ ...prev, [storeId]: count || 0 }));
   }, []);
 
@@ -126,51 +103,34 @@ export function useRecentlyViewed(userId: string | undefined) {
   const fetchRecentlyViewed = useCallback(async () => {
     if (!userId) {
       const local = localStorage.getItem('dright_recently_viewed_ids');
-      if (local) {
-        try { setRecentlyViewed(JSON.parse(local)); } catch { /* ignore */ }
-      }
+      if (local) { try { setRecentlyViewed(JSON.parse(local)); } catch { /* ignore */ } }
       return;
     }
-    const { data } = await supabase
-      .from('recently_viewed')
-      .select('product_id')
-      .eq('user_id', userId)
-      .order('viewed_at', { ascending: false })
-      .limit(12);
+    const { data } = await supabase.from('recently_viewed').select('product_id').eq('user_id', userId).order('viewed_at', { ascending: false }).limit(12);
     setRecentlyViewed((data || []).map((r: { product_id: string }) => r.product_id));
   }, [userId]);
 
-  useEffect(() => {
-    fetchRecentlyViewed();
-  }, [fetchRecentlyViewed]);
+  useEffect(() => { fetchRecentlyViewed(); }, [fetchRecentlyViewed]);
 
   const recordView = useCallback(async (productId: string) => {
     if (userId) {
-      const { data: existing } = await supabase
-        .from('recently_viewed')
-        .select('id, view_count')
-        .eq('user_id', userId)
-        .eq('product_id', productId)
-        .maybeSingle();
-
+      const { data: existing } = await supabase.from('recently_viewed').select('id, view_count').eq('user_id', userId).eq('product_id', productId).maybeSingle();
       if (existing) {
-        await supabase
-          .from('recently_viewed')
-          .update({ viewed_at: new Date().toISOString(), view_count: (existing as { view_count: number }).view_count + 1 })
-          .eq('id', (existing as { id: string }).id);
+        await supabase.from('recently_viewed').update({ viewed_at: new Date().toISOString(), view_count: (existing as { view_count: number }).view_count + 1 }).eq('id', (existing as { id: string }).id);
       } else {
         await supabase.from('recently_viewed').insert({ user_id: userId, product_id: productId });
       }
     }
-    // Always update local storage for guests and logged-in users
+
     try {
       const local = localStorage.getItem('dright_recently_viewed_ids');
       const ids: string[] = local ? JSON.parse(local) : [];
       const updated = [productId, ...ids.filter(id => id !== productId)].slice(0, 20);
       localStorage.setItem('dright_recently_viewed_ids', JSON.stringify(updated));
     } catch { /* ignore */ }
-    // Also record analytics view
-    await supabase.from('product_views').insert({ product_id: productId, user_id: userId || null });
+
+    // Canonical analytics path; the server mirrors this into legacy product_views.
+    trackProductView(productId, null, 'marketplace');
   }, [userId]);
 
   return { recentlyViewed, recordView, refetch: fetchRecentlyViewed };
