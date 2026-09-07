@@ -48,6 +48,16 @@ function isSourceType(value: unknown): value is SourceType {
   ].includes(String(value));
 }
 
+function usesAttributedTaskPool(sourceType: SourceType | null): boolean {
+  return sourceType !== null && [
+    "sales_team",
+    "advertiser",
+    "pro_advertiser",
+    "super_advertiser",
+    "partnership",
+  ].includes(sourceType);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
@@ -273,11 +283,13 @@ Deno.serve(async (req: Request) => {
 
     if (!isFree) {
       const subtotal = basePrice + tierPrice + customizationPrice;
-      affiliateCommissionAmount = sourceType === "affiliate" ? (basePrice * affiliateCommPercent) / 100 : 0;
-      const effectiveTaskPct = salesTeamPct > 0 ? salesTeamPct : adminTaskPct;
+      const attributedTaskPool = usesAttributedTaskPool(sourceType) && salesTeamPct > 0;
+      const effectiveTaskPct = attributedTaskPool ? salesTeamPct : adminTaskPct;
       const taskAmount = (basePrice * effectiveTaskPct) / 100;
-      adminTaskAmount = salesTeamPct > 0 ? 0 : taskAmount;
-      salesTeamTaskAmount = sourceType === "sales_team" && salesTeamPct > 0 ? taskAmount : 0;
+
+      affiliateCommissionAmount = sourceType === "affiliate" ? (basePrice * affiliateCommPercent) / 100 : 0;
+      adminTaskAmount = attributedTaskPool ? 0 : taskAmount;
+      salesTeamTaskAmount = attributedTaskPool ? taskAmount : 0;
       finalPrice = subtotal + taskAmount;
       sellerEarnings = basePrice - affiliateCommissionAmount;
     }
