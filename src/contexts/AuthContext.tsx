@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { getAffiliateCookie, resolveReferrer } from '../lib/affiliate';
+import { getAffiliateCookie } from '../lib/affiliate';
 import { emitEvent } from '../lib/notificationEvents';
 import type { StoreTheme } from '../lib/storeThemes';
 import { logger, ErrorCategory } from '../lib/logger';
@@ -64,12 +64,6 @@ interface Profile {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function generateReferralCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = '';
-  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
-}
-
 function generateUsername(email: string, userId: string): string {
   const local = (email.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 18) || 'user';
   return `${local}_${userId.replace(/-/g, '').slice(0, 8)}`.slice(0, 30);
@@ -114,7 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       is_admin: false,
       admin_status: 'active',
       balance: 0,
-      referral_code: generateReferralCode(),
       preferred_currency: 'USD',
       username: generateUsername(email, authUser.id),
     });
@@ -157,8 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { subscription.unsubscribe(); window.removeEventListener('storage', handleStorageChange); clearInterval(sessionCheck); };
   }, []);
 
-  const createProfileAndReferralLink = async (userId: string, email: string, fullName?: string, phone?: string, asAdmin?: boolean,
-    referredBy?: string | null, location?: string, preferredCurrency?: string) => {
+  const createProfile = async (userId: string, email: string, fullName?: string, phone?: string, asAdmin?: boolean,
+    location?: string, preferredCurrency?: string) => {
     let shouldBeAdmin = false; let adminStatus = 'active'; let adminRoleValue: AdminRole | null = null;
     if (asAdmin) {
       const { data: existingAdmins } = await supabase.from('users').select('id').eq('is_admin', true).limit(1);
@@ -169,22 +162,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error: profileError } = await supabase.from('users').insert({
       id: userId, email: normalizedEmail, full_name: fullName || null, phone: phone || null,
       role: shouldBeAdmin ? 'admin' : 'affiliate', is_admin: shouldBeAdmin, admin_status: adminStatus,
-      admin_role: adminRoleValue, balance: 0, referral_code: generateReferralCode(), referred_by: referredBy || null,
+      admin_role: adminRoleValue, balance: 0,
       location: location || null, preferred_currency: preferredCurrency || 'USD', username: generateUsername(normalizedEmail, userId),
     });
     if (profileError) { console.error('Error creating profile:', profileError); return { error: profileError }; }
-    if (!shouldBeAdmin || adminStatus === 'pending') {
-      const refCode = generateReferralCode(); const { error: referralError } = await supabase.from('referral_links').insert({ user_id: userId, unique_code: refCode });
-      if (referralError) console.error('Error creating referral link:', referralError);
+
+    // Referral identity is assigned by the database from auth signup metadata.
+    // Read the canonical result only for a best-effort user notification; never
+    // use browser-resolved sponsor identity as referral authority.
+    const { data: canonicalProfile } = await supabase
+      .from('users')
+      .select('referred_by, full_name, email')
+      .eq('id', userId)
+      .maybeSingle();
+    if (canonicalProfile?.referred_by) {
+      const referralName = canonicalProfile.full_name || canonicalProfile.email || 'Someone';
+      try {
+        await emitEvent({
+          module: 'referral',
+          eventType: 'referral_joined',
+          recipientIds: canonicalProfile.referred_by,
+          actorId: userId,
+          metadata: { referralName },
+        });
+      } catch { /* non-critical */ }
     }
-    if (referredBy) {
-      await supabase.rpc('increment_referral_conversions', { p_referrer_id: referredBy });
-      const refCode = getAffiliateCookie();
-      if (refCode) await supabase.from('referrals').insert({ referrer_id: referredBy, referred_user_id: userId, referral_code: refCode, is_successful: true });
-      const { data: newUserData } = await supabase.from('users').select('full_name, email').eq('id', userId).maybeSingle();
-      const referrerName = newUserData?.full_name || newUserData?.email || 'Someone';
-      await emitEvent({ module: 'referral', eventType: 'referral_joined', recipientIds: referredBy, actorId: userId, metadata: { referralName: referrerName } });
-    }
+
     return { error: null, isAdminPending: adminStatus === 'pending', isFirstAdmin: shouldBeAdmin && adminStatus === 'active' };
   };
 
@@ -203,9 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     if (!error && data.user) {
-      let referredBy: string | null = null;
-      if (refCode) { const referrer = await resolveReferrer(refCode); if (referrer) referredBy = referrer.id; }
-      const result = await createProfileAndReferralLink(data.user.id, normalizedEmail, fullName, phone, asAdmin, referredBy, location, preferredCurrency);
+      const result = await createProfile(data.user.id, normalizedEmail, fullName, phone, asAdmin, location, preferredCurrency);
       if (result.error) return { error: result.error as unknown as AuthError };
     }
     return { error };
