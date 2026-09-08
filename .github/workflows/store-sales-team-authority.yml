@@ -1,0 +1,59 @@
+name: Store sales team authority
+
+on:
+  push:
+    branches: [store-sales-team-authority]
+    paths:
+      - 'scripts/apply-store-sales-team-authority.mjs'
+      - '.github/workflows/store-sales-team-authority.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout authority branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: store-sales-team-authority
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply Store sales team authority repair
+        run: node scripts/apply-store-sales-team-authority.mjs
+
+      - name: Assert legacy browser contract mutation is gone
+        run: |
+          ! grep -q "from('sales_team_contracts').insert" src/pages/StorePage.tsx
+          ! grep -q "getTaskPercentForTier" src/pages/StorePage.tsx
+          ! grep -q "function getExpiryDate" src/pages/StorePage.tsx
+          grep -q "create_sales_team_contract_request" src/pages/StorePage.tsx
+          grep -q "sales-team-contract-initialize" src/pages/StorePage.tsx
+
+      - name: Strict currency audit
+        run: node scripts/check-hardcoded-currency.mjs --strict
+
+      - name: TypeScript and Vite build
+        run: npm run build
+
+      - name: Commit verified Store authority repair
+        run: |
+          if git diff --quiet; then
+            echo "No Store sales team authority source changes required."
+            exit 0
+          fi
+          git config user.name "DRIGHT Authority Repair"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/StorePage.tsx
+          git commit -m "Fix Store sales team contract authority [store-sales-team-authority-output]"
+          git push origin HEAD:store-sales-team-authority
