@@ -70,7 +70,7 @@ export type PaymentPurpose =
 
 export interface PaymentInitParams {
   amount?: number;
-  purpose?: PaymentPurpose;
+  purpose?: PaymentPurpose | string;
   reference_id?: string;
   metadata?: Record<string, any>;
   channels?: string[];
