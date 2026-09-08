@@ -4,6 +4,7 @@ on:
   push:
     branches: [currency-cleanup]
     paths:
+      - 'scripts/apply-currency-hardening-prep.mjs'
       - 'scripts/apply-currency-hardening.mjs'
       - 'scripts/apply-currency-hardening-leftovers.mjs'
       - '.github/workflows/currency-hardening.yml'
@@ -33,6 +34,7 @@ jobs:
 
       - name: Apply currency hardening
         run: |
+          node scripts/apply-currency-hardening-prep.mjs
           node scripts/apply-currency-hardening.mjs
           node scripts/apply-currency-hardening-leftovers.mjs
 
