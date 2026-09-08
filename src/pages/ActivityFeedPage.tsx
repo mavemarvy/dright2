@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useActivityFeed, type ActivityFeedItem, type EventModule } from '../lib/notificationEvents';
 import { notificationRelativeTime } from '../lib/notificationHooks';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 
 const MODULE_ICON: Record<EventModule, LucideIcon> = {
   marketplace: ShoppingCart,
@@ -194,6 +195,8 @@ export default function ActivityFeedPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 pb-24 md:pb-8">
+        <SponsoredPlacementCard placement="feed" variant="feed" className="mb-4" heading="Sponsored for your activity feed" />
+
         {loading ? (
           <ActivityFeedSkeleton />
         ) : filteredItems.length === 0 ? (

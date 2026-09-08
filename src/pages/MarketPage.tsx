@@ -343,6 +343,17 @@ export default function MarketPage() {
 
   const isBrowsing = !searchQuery && filters.category === 'All';
 
+  const contextualPlacement =
+    searchQuery.trim()
+      ? 'search'
+      : filters.productType?.toUpperCase() === 'COURSE'
+        ? 'course_feed'
+        : filters.productType?.toUpperCase() === 'SERVICE'
+          ? 'service_feed'
+          : filters.category !== 'All'
+            ? 'category'
+            : null;
+
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
       <SeoHead
@@ -445,6 +456,10 @@ export default function MarketPage() {
           filterState={filterState}
           onFilterChange={handleFilterChange}
         />
+
+        {contextualPlacement && (
+          <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />
+        )}
 
         {loading && (
           <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'} gap-3 sm:gap-5 mt-6`}>

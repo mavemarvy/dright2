@@ -14,6 +14,7 @@ import { TrustScoreBadge } from '../components/trust/TrustScoreBadge';
 void _ProfilePreviewCard;
 import { MarketplaceScoreCard, AIBusinessAdvisor } from '../components/analytics/AdvancedAnalytics';
 import { AnalyticsLoading, AnalyticsNoData } from '../components/analytics/AnalyticsState';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import {
   MapPin, Calendar, Users, Package, CheckCircle, Eye,
   Activity, MessageSquare, Heart,
@@ -181,6 +182,10 @@ export default function PublicProfilePage() {
 
       {/* Tab Content */}
       <div className="max-w-5xl mx-auto px-4 py-6">
+        {!isOwner && (
+          <SponsoredPlacementCard placement="profile_discovery" variant="compact" className="mb-6" />
+        )}
+
         {tab === 'overview' && <OverviewTab profile={profile} products={products} followers={followers} following={following} friends={friends} profileViews={profileStats?.total_views as number | undefined} />}
         {tab === 'about' && <AboutTab profile={profile} isOwner={isOwner} />}
         {tab === 'products' && <ProductsTab products={products} />}

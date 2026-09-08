@@ -14,6 +14,7 @@ import {
   type StoreTheme,
 } from '../lib/storeThemes';
 import { formatCurrency } from '../lib/currency';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 
 interface StoreInfo {
   id: string;
@@ -255,6 +256,8 @@ export default function PublicStorePage() {
             </Link>
           )}
         </div>
+
+        <SponsoredPlacementCard placement="store" variant="compact" className="mt-6" />
 
         {/* Tabs */}
         {jobs.length > 0 && (
