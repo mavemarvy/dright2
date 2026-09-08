@@ -4,6 +4,7 @@ import { X, ShoppingBag, Mail, User, MapPin, CheckCircle2, Lock, Tag, Loader2 } 
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import TurnstileWidget from './TurnstileWidget';
 import { verifyTurnstileToken } from '../lib/security/turnstile';
 import type { GuestOrder } from '../lib/types';
@@ -18,6 +19,7 @@ interface GuestCheckoutProps {
 
 export default function GuestCheckout({ productId, productName, productPrice, trigger }: GuestCheckoutProps) {
   const { user } = useAuth();
+  const { format } = useCurrency();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [formData, setFormData] = useState({ email: '', name: '', address: '' });
@@ -151,11 +153,11 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                       <div className="flex items-center gap-2">
                         {discount > 0 ? (
                           <>
-                            <span className="text-sm text-gray-400 line-through">${productPrice.toFixed(2)}</span>
-                            <span className="text-lg font-bold text-primary-600">${finalPrice.toFixed(2)}</span>
+                            <span className="text-sm text-gray-400 line-through">{format(productPrice, 'USD')}</span>
+                            <span className="text-lg font-bold text-primary-600">{format(finalPrice, 'USD')}</span>
                           </>
                         ) : (
-                          <span className="text-lg font-bold text-primary-600">${productPrice.toFixed(2)}</span>
+                          <span className="text-lg font-bold text-primary-600">{format(productPrice, 'USD')}</span>
                         )}
                       </div>
                     </div>
@@ -184,9 +186,9 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                       )}
                       {discount > 0 && (
                         <div className="mt-2 bg-green-50 rounded-lg p-2 text-xs text-green-600">
-                          <div className="flex justify-between"><span>Original:</span><span>${productPrice.toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>Discount:</span><span>-${discount.toFixed(2)}</span></div>
-                          <div className="flex justify-between font-bold"><span>Final:</span><span>${finalPrice.toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>Original:</span><span>{format(productPrice, 'USD')}</span></div>
+                          <div className="flex justify-between"><span>Discount:</span><span>-{format(discount, 'USD')}</span></div>
+                          <div className="flex justify-between font-bold"><span>Final:</span><span>{format(finalPrice, 'USD')}</span></div>
                         </div>
                       )}
                     </div>
@@ -258,7 +260,7 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                     disabled={submitting}
                     className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl py-3.5 disabled:opacity-50 transition-colors"
                   >
-                    {submitting ? 'Creating order...' : `Continue — ${finalPrice.toFixed(2)}`}
+                    {submitting ? 'Creating order...' : `Continue — ${format(finalPrice, 'USD')}`}
                   </button>
                 </form>
               ) : (
