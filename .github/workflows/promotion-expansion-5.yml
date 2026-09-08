@@ -1,0 +1,51 @@
+name: Promotion expansion 5
+
+on:
+  push:
+    branches: [promotion-expansion-5]
+    paths:
+      - 'scripts/apply-promotion-expansion-5.mjs'
+      - '.github/workflows/promotion-expansion-5.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout promotion branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: promotion-expansion-5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply remaining promotion consumers
+        run: node scripts/apply-promotion-expansion-5.mjs
+
+      - name: Strict currency audit
+        run: node scripts/check-hardcoded-currency.mjs --strict
+
+      - name: TypeScript and Vite build
+        run: npm run build
+
+      - name: Commit verified source wiring
+        run: |
+          if git diff --quiet; then
+            echo "No promotion expansion 5 source changes required."
+            exit 0
+          fi
+          git config user.name "DRIGHT Promotion Expansion"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/ActivityFeedPage.tsx src/pages/PublicStorePage.tsx src/pages/PublicProfilePage.tsx src/pages/MarketPage.tsx
+          git commit -m "Promotion: wire feed store profile and contextual discovery [promotion-expansion-5-output]"
+          git push origin HEAD:promotion-expansion-5
