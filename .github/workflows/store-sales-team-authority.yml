@@ -34,9 +34,18 @@ jobs:
 
       - name: Assert legacy browser contract mutation is gone
         run: |
-          ! grep -q "from('sales_team_contracts').insert" src/pages/StorePage.tsx
-          ! grep -q "getTaskPercentForTier" src/pages/StorePage.tsx
-          ! grep -q "function getExpiryDate" src/pages/StorePage.tsx
+          if grep -n "sales_team_contracts.*insert" src/pages/StorePage.tsx; then
+            echo "Legacy sales team contract insert remains in StorePage"
+            exit 1
+          fi
+          if grep -n "getTaskPercentForTier" src/pages/StorePage.tsx; then
+            echo "Legacy client task-percent mutation helper remains in StorePage"
+            exit 1
+          fi
+          if grep -n "getExpiryDate" src/pages/StorePage.tsx; then
+            echo "Legacy client expiry helper remains in StorePage"
+            exit 1
+          fi
           grep -q "create_sales_team_contract_request" src/pages/StorePage.tsx
           grep -q "sales-team-contract-initialize" src/pages/StorePage.tsx
 
