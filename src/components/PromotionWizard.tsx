@@ -4,7 +4,7 @@ import {
   X, Eye, MousePointerClick, ShoppingCart, MessageSquare,
   Briefcase, GraduationCap, Globe, MapPin, Tag, Heart, Users,
   Calendar, DollarSign, TrendingUp, Target, Check, ChevronRight,
-  ChevronLeft, Sparkles, Loader2, Zap,
+  ChevronLeft, Sparkles, Loader2, Zap, CreditCard,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePricing, usePackages, useCreateCampaign } from '../lib/promotionHooks';
@@ -12,6 +12,7 @@ import {
   type CampaignGoal, type AudienceType, type PromotionPackage,
   calculateReach, calculateFromAudienceSize,
 } from '../lib/promotionEngine';
+import { initializePayment } from '../lib/paystackService';
 import { formatCurrency } from '../lib/currency';
 
 interface PromotionWizardProps {
@@ -48,7 +49,7 @@ export default function PromotionWizard({
   listingId, listingType, listingName, listingCategory, onClose, onCampaignCreated,
 }: PromotionWizardProps) {
   const { user } = useAuth();
-    const { pricing, loading: pricingLoading } = usePricing();
+  const { pricing, loading: pricingLoading } = usePricing();
   const { packages, loading: packagesLoading } = usePackages();
   const { create, creating } = useCreateCampaign();
 
@@ -65,7 +66,8 @@ export default function PromotionWizard({
   const [useCustomBudget, setUseCustomBudget] = useState(false);
   const [targetAudienceSize, setTargetAudienceSize] = useState(2000);
   const [createdCampaignId, setCreatedCampaignId] = useState<string | null>(null);
-
+  const [startingPayment, setStartingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const actualDuration = customDuration ? customDays : duration;
   const actualBudget = selectedPackage && !useCustomBudget ? selectedPackage.price : budget;
@@ -85,6 +87,7 @@ export default function PromotionWizard({
 
   const handleCreate = async () => {
     if (!user || !pricing) return;
+    setPaymentError(null);
     const campaign = await create(user.id, {
       listing_id: listingId,
       listing_type: listingType,
@@ -99,6 +102,34 @@ export default function PromotionWizard({
     if (campaign) {
       setCreatedCampaignId(campaign.id);
       onCampaignCreated?.(campaign.id);
+    }
+  };
+
+  const handleStartPayment = async () => {
+    if (!createdCampaignId || startingPayment) return;
+    setStartingPayment(true);
+    setPaymentError(null);
+
+    try {
+      const result = await initializePayment({
+        purpose: 'promotion_campaign',
+        reference_id: createdCampaignId,
+        metadata: {
+          campaign_id: createdCampaignId,
+          custom_redirect: '/payment/callback',
+        },
+      });
+
+      if ('error' in result) {
+        setPaymentError(result.error);
+        return;
+      }
+
+      window.location.assign(result.authorization_url);
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Unable to start promotion payment');
+    } finally {
+      setStartingPayment(false);
     }
   };
 
@@ -157,11 +188,33 @@ export default function PromotionWizard({
                 <Check className="w-8 h-8 text-success" />
               </motion.div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">Campaign Created!</h3>
-              <p className="text-sm text-gray-500 mb-4">Your campaign has been created and is pending payment.</p>
-              <p className="text-xs text-gray-400 mb-6">Campaign ID: {createdCampaignId.slice(0, 8)}</p>
-              <button onClick={onClose} className="px-6 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors">
-                Done
-              </button>
+              <p className="text-sm text-gray-500 mb-2">Your campaign is pending payment and will activate only after the payment is verified.</p>
+              <p className="text-xs text-gray-400 mb-5">Campaign ID: {createdCampaignId.slice(0, 8)}</p>
+
+              {paymentError && (
+                <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-left text-sm text-red-700">
+                  {paymentError}
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={handleStartPayment}
+                  disabled={startingPayment}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-xl font-semibold hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                >
+                  {startingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                  {startingPayment ? 'Starting Payment...' : 'Continue to Secure Payment'}
+                </button>
+                <button
+                  onClick={onClose}
+                  disabled={startingPayment}
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                >
+                  Pay Later
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-4">The payment amount and currency are reloaded from the campaign on the server before checkout.</p>
             </div>
           ) : (
             <AnimatePresence mode="wait">
@@ -384,7 +437,7 @@ export default function PromotionWizard({
                   </div>
                   <div className="bg-amber-50 rounded-xl p-3 mt-4 flex items-start gap-2">
                     <Zap className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-gray-600">Campaign will be created as pending. It activates automatically after payment is confirmed.</p>
+                    <p className="text-xs text-gray-600">Campaign will be created as pending. It activates automatically only after a server-verified payment is bound to this campaign.</p>
                   </div>
                 </motion.div>
               )}
