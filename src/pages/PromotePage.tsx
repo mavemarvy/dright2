@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, BarChart3, Check, CircleHelp, CreditCard, Eye, Gauge,
   Loader2, Megaphone, MousePointerClick, Package, Pause, Play, Search,
-  Settings2, Sparkles, Target, Trash2,
+  Settings2, Target, Trash2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrencyValue } from '../lib/currency';
