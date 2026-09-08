@@ -6,7 +6,7 @@ let text = fs.readFileSync(file, 'utf8');
 const original = text;
 
 function replaceRequired(from, to, label) {
-  if (text.includes(to)) return;
+  if (to && text.includes(to)) return;
   if (!text.includes(from)) throw new Error(`[store-sales-team-authority] Missing anchor: ${label}`);
   text = text.replace(from, to);
 }
