@@ -29,7 +29,7 @@ type NavEntry = {
 };
 
 const navLabel = (item: NavEntry, t: (key: TranslationKey) => string): string =>
-  item.label ?? (item.labelKey ? navLabel(item, t) : item.path);
+  item.label ?? (item.labelKey ? t(item.labelKey) : item.path);
 
 const primaryNav: NavEntry[] = [
   { path: '/', labelKey: 'dashboard', icon: LayoutDashboard },
