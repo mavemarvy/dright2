@@ -58,6 +58,47 @@ export interface EscrowPayment {
   refund_amount: number | null;
 }
 
+export type PaymentPurpose =
+  | 'wallet_funding'
+  | 'product_purchase'
+  | 'escrow'
+  | 'subscription'
+  | 'advertiser_funding'
+  | 'affiliate_subscription'
+  | 'vendor_subscription'
+  | 'promotion_campaign';
+
+export interface PaymentInitParams {
+  amount?: number;
+  purpose?: PaymentPurpose;
+  reference_id?: string;
+  metadata?: Record<string, any>;
+  channels?: string[];
+}
+
+export interface PaymentInitResult {
+  authorization_url: string;
+  reference: string;
+  amount?: number;
+  currency?: string;
+  purpose?: string;
+  reference_id?: string;
+}
+
+export interface PaymentVerificationResult {
+  success: boolean;
+  status: string;
+  amount?: number;
+  currency?: string;
+  purpose?: string;
+  campaign_id?: string;
+  channel?: string;
+  reference?: string;
+  idempotent?: boolean;
+  already_verified?: boolean;
+  message?: string;
+}
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 export const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '';
@@ -72,23 +113,26 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
-export async function initializePayment(params: {
-  amount: number;
-  purpose?: string;
-  reference_id?: string;
-  metadata?: Record<string, any>;
-  channels?: string[];
-}): Promise<{ authorization_url: string; reference: string } | { error: string }> {
+export async function initializePayment(
+  params: PaymentInitParams,
+): Promise<PaymentInitResult | { error: string }> {
+  const payload: Record<string, unknown> = {
+    purpose: params.purpose || 'wallet_funding',
+    reference_id: params.reference_id,
+    metadata: params.metadata || {},
+    channels: params.channels,
+  };
+
+  // Some flows (notably promotion_campaign) are fully priced by the server.
+  // Only send a browser amount when the caller actually supplied one.
+  if (typeof params.amount === 'number' && Number.isFinite(params.amount)) {
+    payload.amount = params.amount * 100;
+  }
+
   const res = await fetch(`${SUPABASE_URL}/functions/v1/paystack-initialize`, {
     method: 'POST',
     headers: await getAuthHeaders(),
-    body: JSON.stringify({
-      amount: params.amount * 100,
-      purpose: params.purpose || 'wallet_funding',
-      reference_id: params.reference_id,
-      metadata: params.metadata || {},
-      channels: params.channels,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
@@ -98,17 +142,44 @@ export async function initializePayment(params: {
 
   const data = await res.json();
   if (data.error) return { error: data.error };
-  return { authorization_url: data.authorization_url, reference: data.reference };
+  return {
+    authorization_url: data.authorization_url,
+    reference: data.reference,
+    amount: data.amount,
+    currency: data.currency,
+    purpose: data.purpose,
+    reference_id: data.reference_id,
+  };
 }
 
-export async function verifyPayment(reference: string): Promise<{ success: boolean; status: string; amount?: number; message?: string }> {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/paystack-verify?reference=${reference}`, {
+export async function verifyPayment(reference: string): Promise<PaymentVerificationResult> {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/paystack-verify?reference=${encodeURIComponent(reference)}`, {
     headers: await getAuthHeaders(),
   });
 
-  if (!res.ok) return { success: false, status: 'failed', message: 'Verification request failed' };
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Verification request failed' }));
+    return {
+      success: false,
+      status: 'failed',
+      message: err.error || err.message || 'Verification request failed',
+    };
+  }
+
   const data = await res.json();
-  return { success: data.success, status: data.status, amount: data.amount, message: data.message };
+  return {
+    success: Boolean(data.success),
+    status: data.status,
+    amount: data.amount,
+    currency: data.currency,
+    purpose: data.purpose,
+    campaign_id: data.campaign_id,
+    channel: data.channel,
+    reference: data.reference,
+    idempotent: data.idempotent,
+    already_verified: data.already_verified,
+    message: data.message,
+  };
 }
 
 export function usePaymentTransactions(userId: string | undefined, limit: number = 20) {
@@ -236,6 +307,7 @@ export const PAYMENT_PURPOSES = {
   advertiser_funding: 'Advertiser Funding',
   affiliate_subscription: 'Affiliate Subscription',
   vendor_subscription: 'Vendor Subscription',
+  promotion_campaign: 'Promotion Campaign',
 } as const;
 
 export const TX_STATUS_COLORS: Record<string, string> = {
