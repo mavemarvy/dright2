@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState, useEffect } from 'react';
 import {
   Sparkles, Loader2, TrendingUp, FileText, AlertTriangle,
@@ -190,7 +191,7 @@ export default function AdminAIPage() {
         <div className="grid grid-cols-3 gap-3">
           <div className="text-center"><p className="text-2xl font-bold text-gray-900">{usage.totalRequests}</p><p className="text-xs text-gray-400">Total Requests</p></div>
           <div className="text-center"><p className="text-2xl font-bold text-gray-900">{usage.totalTokens.toLocaleString()}</p><p className="text-xs text-gray-400">Tokens Used</p></div>
-          <div className="text-center"><p className="text-2xl font-bold text-gray-900">${usage.estimatedCost.toFixed(4)}</p><p className="text-xs text-gray-400">Est. Cost</p></div>
+          <div className="text-center"><p className="text-2xl font-bold text-gray-900">{formatDisplayCurrency(usage.estimatedCost, 'USD', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p><p className="text-xs text-gray-400">Est. Cost</p></div>
         </div>
       </div>
 

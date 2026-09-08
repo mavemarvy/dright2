@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
@@ -112,7 +113,7 @@ export default function CampaignDetailPage() {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-            <StatBox icon={DollarSign} label="Reward" value={`$${reward.toFixed(2)}`} color="text-green-600" />
+            <StatBox icon={DollarSign} label="Reward" value={`${formatDisplayCurrency(Number(reward.toFixed(2)))}`} color="text-green-600" />
             <StatBox icon={Users} label="Workers" value={`${campaign.workers_count}${campaign.max_workers ? `/${campaign.max_workers}` : ''}`} color="text-blue-600" />
             <StatBox icon={Clock} label="Est. Time" value={campaign.estimated_completion_time || '—'} color="text-purple-600" />
             <StatBox icon={Flag} label="Ends In" value={daysLeft !== null ? (daysLeft >= 0 ? `${daysLeft}d` : 'Ended') : 'No limit'} color={daysLeft !== null && daysLeft <= 3 ? 'text-red-500' : 'text-gray-600'} />

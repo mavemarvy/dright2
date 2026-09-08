@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -157,7 +158,7 @@ export default function SalesAnalyticsSection({ userId }: Props) {
                       {sale.product_name}
                     </td>
                     <td className="py-2.5 px-3 text-gray-900 font-semibold">
-                      ${Number(sale.sale_amount).toFixed(2)}
+                      {formatDisplayCurrency(Number(Number(sale.sale_amount).toFixed(2)))}
                     </td>
                     <td className="py-2.5 px-3 text-gray-500">
                       {new Date(sale.sale_date).toLocaleDateString('en-US', {

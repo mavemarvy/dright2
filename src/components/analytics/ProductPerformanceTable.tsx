@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 // ─────────────────────────────────────────────────────────────────────────────
 // DRIGHT Product Performance Table — Comprehensive BI dashboard
 // ─────────────────────────────────────────────────────────────────────────────
@@ -581,7 +582,7 @@ function AIForecast({ data }: { data: Record<string, unknown> }) {
         </div>
         <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
           <p className="text-xs text-gray-500 dark:text-gray-400">Projected Monthly Revenue</p>
-          <p className="text-2xl font-bold text-green-500">${projectedRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+          <p className="text-2xl font-bold text-green-500">{formatDisplayCurrency(projectedRevenue)}</p>
           <p className="text-xs text-gray-400">at current conversion rate</p>
         </div>
         <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">

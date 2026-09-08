@@ -306,7 +306,7 @@ export default function AdminSystemSettingsPage() {
           {ADVERTISER_GRADES.map((grade) => (
             <div key={grade}>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {grade} ($/week)
+                {grade} (USD/week)
               </label>
               <input
                 type="number"
@@ -320,7 +320,7 @@ export default function AdminSystemSettingsPage() {
         </div>
         <p className="text-xs text-gray-500">
           Note: 2-week duration = 2x base price, 1-month duration = 4x base price.
-          Partnership range: $200-$500 (use $350 as default mid-point).
+          Partnership range: USD 200-USD 500 (use USD 350 as default mid-point).
         </p>
       </div>
     </div>

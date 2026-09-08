@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -36,7 +37,7 @@ export default function CreatorDashboardPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatCard icon={TrendingUp} label="Active Campaigns" value={String(activeCampaigns.length)} color="from-blue-400 to-blue-600" />
-        <StatCard icon={DollarSign} label="In Escrow" value={`$${totalSpent.toFixed(2)}`} color="from-amber-400 to-amber-600" />
+        <StatCard icon={DollarSign} label="In Escrow" value={`${formatDisplayCurrency(Number(totalSpent.toFixed(2)))}`} color="from-amber-400 to-amber-600" />
         <StatCard icon={CheckCircle2} label="Approved" value={String(totalApproved)} color="from-green-400 to-green-600" />
         <StatCard icon={Clock} label="Pending Review" value={String(totalPending)} color="from-purple-400 to-purple-600" />
       </div>
@@ -60,7 +61,7 @@ export default function CreatorDashboardPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${c.status === 'active' ? 'bg-green-50 text-green-600' : c.status === 'draft' ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-600'}`}>{c.status}</span>
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                    <span className="text-green-600 font-medium">${Number(c.reward_per_completion).toFixed(2)}</span>
+                    <span className="text-green-600 font-medium">{formatDisplayCurrency(Number(Number(c.reward_per_completion).toFixed(2)))}</span>
                     <span>{c.workers_count}{c.max_workers ? `/${c.max_workers}` : ''} workers</span>
                     <span>{c.completed_count} approved</span>
                     <span className={c.pending_count > 0 ? 'text-amber-600 font-medium' : ''}>{c.pending_count} pending</span>

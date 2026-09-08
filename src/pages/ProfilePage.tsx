@@ -258,7 +258,7 @@ export default function ProfilePage() {
           actorId: user?.id,
           metadata: {
             amount: amount,
-            currency: '$',
+            currency: 'USD',
             reference: `withdrawal-${Date.now()}`,
           },
         });

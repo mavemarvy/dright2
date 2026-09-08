@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -47,7 +48,7 @@ export default function CreatorCampaignsPage() {
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatCard icon={Trophy} label="Your Level" value={workerProfile ? `${LEVEL_ICONS[workerProfile.level as WorkerLevel]} ${workerProfile.level.charAt(0).toUpperCase() + workerProfile.level.slice(1)}` : '—'} color={workerProfile ? LEVEL_COLORS[workerProfile.level as WorkerLevel] : 'from-gray-300 to-gray-400'} />
-        <StatCard icon={DollarSign} label="Total Earnings" value={workerProfile ? `$${Number(workerProfile.total_earnings).toFixed(2)}` : formatCurrency(0)} color="from-green-400 to-green-600" />
+        <StatCard icon={DollarSign} label="Total Earnings" value={workerProfile ? `${formatDisplayCurrency(Number(Number(workerProfile.total_earnings).toFixed(2)))}` : formatCurrency(0)} color="from-green-400 to-green-600" />
         <StatCard icon={BarChart3} label="Completed" value={workerProfile ? String(workerProfile.completed_tasks) : '0'} color="from-blue-400 to-blue-600" />
         <StatCard icon={Sparkles} label="Success Rate" value={workerProfile ? `${Number(workerProfile.success_rate).toFixed(0)}%` : '—'} color="from-purple-400 to-purple-600" />
       </div>
@@ -201,7 +202,7 @@ function CampaignCard({ campaign }: { campaign: import('../lib/campaignTypes').C
 
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
           <div>
-            <p className="text-lg font-bold text-green-600">${reward.toFixed(2)}</p>
+            <p className="text-lg font-bold text-green-600">{formatDisplayCurrency(Number(reward.toFixed(2)))}</p>
             <p className="text-xs text-gray-400">per task</p>
           </div>
           <div className="text-right">

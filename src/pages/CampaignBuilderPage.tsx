@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -271,7 +272,7 @@ export default function CampaignBuilderPage() {
           <div className="space-y-4">
             <Field label="Reward Per Completion">
               <div className="flex flex-wrap gap-2 mb-2">
-                {REWARD_PRESETS.map(r => <button key={r} onClick={() => setReward(r)} className={`px-3 py-1.5 rounded-xl text-sm font-medium ${reward === r ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'}`}>${r}</button>)}
+                {REWARD_PRESETS.map(r => <button key={r} onClick={() => setReward(r)} className={`px-3 py-1.5 rounded-xl text-sm font-medium ${reward === r ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'}`}>{formatDisplayCurrency(Number(r))}</button>)}
               </div>
               <div className="flex items-center gap-2">
                 <DollarSign className="w-4 h-4 text-gray-400" />
@@ -288,11 +289,11 @@ export default function CampaignBuilderPage() {
 
             {/* Budget Calculator */}
             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-gray-500">Reward per user</span><span className="font-medium text-gray-900">${reward.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-gray-500">Reward per user</span><span className="font-medium text-gray-900">{formatDisplayCurrency(Number(reward.toFixed(2)))}</span></div>
               <div className="flex justify-between text-sm"><span className="text-gray-500">Max workers</span><span className="font-medium text-gray-900">{maxWorkers === 999999 ? 'Unlimited' : maxWorkers}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-gray-500">Campaign budget</span><span className="font-medium text-gray-900">${totalBudget.toFixed(2)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-gray-500">Platform fee ({platformFee}%)</span><span className="font-medium text-gray-900">${feeAmount.toFixed(2)}</span></div>
-              <div className="flex justify-between text-base pt-2 border-t border-gray-200"><span className="font-bold text-gray-900">Total deposit required</span><span className="font-bold text-primary-600">${totalDeposit.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-gray-500">Campaign budget</span><span className="font-medium text-gray-900">{formatDisplayCurrency(Number(totalBudget.toFixed(2)))}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-gray-500">Platform fee ({platformFee}%)</span><span className="font-medium text-gray-900">{formatDisplayCurrency(Number(feeAmount.toFixed(2)))}</span></div>
+              <div className="flex justify-between text-base pt-2 border-t border-gray-200"><span className="font-bold text-gray-900">Total deposit required</span><span className="font-bold text-primary-600">{formatDisplayCurrency(Number(totalDeposit.toFixed(2)))}</span></div>
             </div>
           </div>
         )}
@@ -324,10 +325,10 @@ export default function CampaignBuilderPage() {
               <ReviewRow label="Category" value={categories.find(c => c.id === categoryId)?.name || '—'} />
               <ReviewRow label="Task Type" value={taskType.replace(/_/g, ' ')} />
               <ReviewRow label="Difficulty" value={difficulty} />
-              <ReviewRow label="Reward" value={`$${reward.toFixed(2)}`} />
+              <ReviewRow label="Reward" value={`${formatDisplayCurrency(Number(reward.toFixed(2)))}`} />
               <ReviewRow label="Max Workers" value={maxWorkers === 999999 ? 'Unlimited' : String(maxWorkers)} />
-              <ReviewRow label="Total Budget" value={`$${totalBudget.toFixed(2)}`} />
-              <ReviewRow label="Total Deposit" value={`$${totalDeposit.toFixed(2)}`} />
+              <ReviewRow label="Total Budget" value={`${formatDisplayCurrency(Number(totalBudget.toFixed(2)))}`} />
+              <ReviewRow label="Total Deposit" value={`${formatDisplayCurrency(Number(totalDeposit.toFixed(2)))}`} />
               <ReviewRow label="Verification" value={verificationType} />
               <ReviewRow label="Evidence" value={evidenceTypes.join(', ').replace(/_/g, ' ') || '—'} />
               <ReviewRow label="Media" value={`${uploadedMedia.length} files`} />

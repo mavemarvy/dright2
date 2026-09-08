@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from './currency';
 // ─────────────────────────────────────────────────────────────────────────────
 // DRIGHT AI Intelligence Engine
 // Listing quality scoring, pricing intelligence, SEO generation,
@@ -207,7 +208,7 @@ function generateSuggestions(
   if (title < 70) suggestions.push('Improve your title: aim for 30-60 characters with key features and category keywords');
   if (desc < 70) suggestions.push('Expand your description: aim for 150+ words covering benefits, features, and specifications');
   if (image < 60) suggestions.push('Add a high-quality product image — listings with images get 3x more views');
-  if (pricing < 60) suggestions.push('Review your pricing: competitive pricing within $5-$50 range converts best');
+  if (pricing < 60) suggestions.push(`Review your pricing: competitive pricing within ${formatDisplayCurrency(5)}-${formatDisplayCurrency(50)} range converts best`);
   if (keywords < 60) suggestions.push(`Add more relevant tags — currently ${data.tags?.length || 0} tags, aim for 5+ tags`);
   if (engagement < 60) suggestions.push('Boost engagement: encourage satisfied customers to leave reviews');
   if (conversion < 50) suggestions.push('Improve conversion: ensure clear pricing, fast response times, and quality images');
@@ -253,10 +254,10 @@ export async function getPricingIntelligence(
     const suggestedOptimal = avgPrice * (demandLevel === 'high' ? 1.1 : 0.95);
 
     const recommendation = currentPrice > avgPrice * 1.3
-      ? `Your price is above the category average ($${avgPrice.toFixed(2)}). Consider lowering to $${suggestedOptimal.toFixed(2)} for better conversion.`
+      ? `Your price is above the category average (${formatDisplayCurrency(avgPrice)}). Consider lowering to ${formatDisplayCurrency(suggestedOptimal)} for better conversion.`
       : currentPrice < avgPrice * 0.5
-      ? `Your price is below market value. You could increase to $${suggestedOptimal.toFixed(2)} without losing sales.`
-      : `Your price is competitive. The optimal range is $${suggestedMin.toFixed(2)}-$${suggestedMax.toFixed(2)}.`;
+      ? `Your price is below market value. You could increase to ${formatDisplayCurrency(suggestedOptimal)} without losing sales.`
+      : `Your price is competitive. The optimal range is ${formatDisplayCurrency(suggestedMin)}-${formatDisplayCurrency(suggestedMax)}.`;
 
     return {
       suggested_min: Math.round(suggestedMin * 100) / 100,
@@ -344,7 +345,7 @@ export async function getPromotionAdvice(
     estimated_reach: estimatedReach,
     estimated_clicks: estimatedClicks,
     estimated_conversions: Math.max(estimatedConversions, 1),
-    reasoning: `Based on your listing's current performance (${currentViews} views, ${conversionRate.toFixed(1)}% conversion), I recommend a $${suggestedBudget} budget over ${suggestedDuration} days. Your ${conversionRate > 3 ? 'high' : 'moderate'} conversion rate suggests a ${suggestedObjective}-focused campaign with ${suggestedAudience} targeting would maximize ROI.`,
+    reasoning: `Based on your listing's current performance (${currentViews} views, ${conversionRate.toFixed(1)}% conversion), I recommend a ${formatDisplayCurrency(suggestedBudget)} budget over ${suggestedDuration} days. Your ${conversionRate > 3 ? 'high' : 'moderate'} conversion rate suggests a ${suggestedObjective}-focused campaign with ${suggestedAudience} targeting would maximize ROI.`,
   };
 }
 

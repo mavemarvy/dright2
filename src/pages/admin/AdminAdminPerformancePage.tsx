@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState } from 'react';
 import { useAdminPerformance } from '../../lib/crmHooks';
 import { PERIOD_TYPES } from '../../lib/crmTypes';
@@ -49,7 +50,7 @@ export default function AdminAdminPerformancePage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <StatCard icon={<Trophy className="w-5 h-5" />} label="Total Admins" value={sorted.length.toString()} color="bg-primary-50 text-primary-600" />
         <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Avg Score" value={avgScore.toFixed(1)} color="bg-blue-50 text-blue-600" />
-        <StatCard icon={<DollarSign className="w-5 h-5" />} label="Revenue Influenced" value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}`} color="bg-green-50 text-green-600" />
+        <StatCard icon={<DollarSign className="w-5 h-5" />} label="Revenue Influenced" value={formatDisplayCurrency(totalRevenue, 'USD', { maximumFractionDigits: 0 })} color="bg-green-50 text-green-600" />
         <StatCard icon={<Star className="w-5 h-5" />} label="Avg Satisfaction" value={`${avgSatisfaction.toFixed(2)}/5`} color="bg-amber-50 text-amber-600" />
       </div>
 
@@ -135,7 +136,7 @@ export default function AdminAdminPerformancePage() {
                     {r.marketing_recoveries + r.subscription_renewals_recovered}
                   </td>
                   <td className="px-4 py-3 hidden xl:table-cell text-gray-700 text-xs">
-                    ${Number(r.revenue_influenced).toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                    {formatDisplayCurrency(Number(r.revenue_influenced), 'USD', { maximumFractionDigits: 0 })}
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell text-gray-700">{r.compliance_reviews_completed}</td>
                   <td className="px-4 py-3 text-right">

@@ -14,7 +14,7 @@ const DAY_LABELS: Record<string, string> = {
   thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
 };
 
-const PRICE_RANGES = ['$', '$$', '$$$', '$$$$'];
+const PRICE_RANGES /* currency-audit-ignore: local SEO price-level taxonomy */ = ['$', '$$', '$$$', '$$$$'];
 
 export default function AdminLocalSeoPage() {
   const [settings, setSettings] = useState<BusinessSettings | null>(null);

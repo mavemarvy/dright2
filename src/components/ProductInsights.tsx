@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect, useCallback } from 'react';
 import {
   Eye, ShoppingBag, Heart, TrendingUp, DollarSign, Star,
@@ -133,7 +134,7 @@ function generateOverallAnalysis(stats: AggregatedStats, productCount: number): 
   }
 
   if (stats.totalRevenue > 0) {
-    insights.push(`Total revenue of $${stats.totalRevenue.toFixed(2)} across ${productCount} products. ${stats.totalRevenue / productCount > 50 ? 'Strong per-product average.' : 'Consider pricing optimization.'}`);
+    insights.push(`Total revenue of ${formatDisplayCurrency(Number(stats.totalRevenue.toFixed(2)))} across ${productCount} products. ${stats.totalRevenue / productCount > 50 ? 'Strong per-product average.' : 'Consider pricing optimization.'}`);
   }
 
   if (stats.topPerforming && stats.leastPerforming && stats.topPerforming.view_count > stats.leastPerforming.view_count * 3) {
@@ -247,7 +248,7 @@ export default function ProductInsights() {
   const statCards = [
     { label: 'Total Views', value: stats?.totalViews.toLocaleString() || '0', icon: Eye, color: 'bg-blue-500' },
     { label: 'Total Sales', value: stats?.totalSales.toLocaleString() || '0', icon: ShoppingBag, color: 'bg-green-500' },
-    { label: 'Revenue', value: `$${(stats?.totalRevenue || 0).toFixed(2)}`, icon: DollarSign, color: 'bg-amber-500' },
+    { label: 'Revenue', value: `${formatDisplayCurrency(Number((stats?.totalRevenue || 0).toFixed(2)))}`, icon: DollarSign, color: 'bg-amber-500' },
     { label: 'Wishlist Adds', value: stats?.totalWishlist.toLocaleString() || '0', icon: Heart, color: 'bg-pink-500' },
     { label: 'Avg Conversion', value: `${(stats?.avgConversion || 0).toFixed(1)}%`, icon: TrendingUp, color: 'bg-purple-500' },
     { label: 'Impressions', value: stats?.totalImpressions.toLocaleString() || '0', icon: Sparkles, color: 'bg-cyan-500' },
@@ -444,7 +445,7 @@ function ProductRow({
         </td>
         <td className="px-4 py-3 text-right text-gray-600">{product.view_count || 0}</td>
         <td className="px-4 py-3 text-right text-gray-600">{product.total_sales || 0}</td>
-        <td className="px-4 py-3 text-right font-medium text-gray-900">{product.is_free ? '—' : `$${product.revenue.toFixed(2)}`}</td>
+        <td className="px-4 py-3 text-right font-medium text-gray-900">{product.is_free ? '—' : `${formatDisplayCurrency(Number(product.revenue.toFixed(2)))}`}</td>
         <td className="px-4 py-3 text-right text-gray-600">{product.wishlist_count}</td>
         <td className="px-4 py-3 text-right">
           {product.average_rating > 0 ? (
@@ -546,7 +547,7 @@ function ProductRow({
                   <p className="text-xs text-gray-400">Conversion</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-gray-900">{product.is_free ? '—' : `$${product.revenue.toFixed(2)}`}</p>
+                  <p className="text-lg font-bold text-gray-900">{product.is_free ? '—' : `${formatDisplayCurrency(Number(product.revenue.toFixed(2)))}`}</p>
                   <p className="text-xs text-gray-400">Revenue</p>
                 </div>
               </div>

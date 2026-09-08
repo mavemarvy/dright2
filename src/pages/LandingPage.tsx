@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useInView, useMotionValue, useTransform, animate } from 'framer-motion';
@@ -400,7 +401,7 @@ function ContinueBrowsingSection() {
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{product.name}</p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{product.category}</p>
                   <span className="text-sm font-bold text-gray-900 dark:text-gray-100 mt-1.5 block">
-                    {product.is_free ? 'FREE' : `$${Number(product.price).toFixed(2)}`}
+                    {product.is_free ? 'FREE' : `${formatDisplayCurrency(Number(Number(product.price).toFixed(2)))}`}
                   </span>
                 </div>
               </Link>
@@ -478,7 +479,7 @@ function RecommendationPreview({ user }: { user: any }) {
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{product.category}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {product.is_free ? 'FREE' : `$${Number(product.price).toFixed(2)}`}
+                      {product.is_free ? 'FREE' : `${formatDisplayCurrency(Number(Number(product.price).toFixed(2)))}`}
                     </span>
                     {(product.average_rating ?? 0) > 0 && (
                       <div className="flex items-center gap-0.5">

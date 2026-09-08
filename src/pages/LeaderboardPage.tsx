@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { Trophy, Crown, Medal } from 'lucide-react';
 import { useLeaderboard } from '../lib/campaignHooks';
 import { LEVEL_ICONS, LEVEL_COLORS, type WorkerLevel } from '../lib/campaignTypes';
@@ -29,7 +30,7 @@ export default function LeaderboardPage() {
                   <div className="absolute -top-1 -right-1">{icon}</div>
                 </div>
                 <p className="text-sm font-bold text-gray-900 mt-2 truncate max-w-full">{e.username || `Worker`}</p>
-                <p className="text-xs text-green-600 font-medium">${Number(e.total_earnings).toFixed(2)}</p>
+                <p className="text-xs text-green-600 font-medium">{formatDisplayCurrency(Number(Number(e.total_earnings).toFixed(2)))}</p>
                 <p className="text-xs text-gray-400">{e.completed_tasks} tasks</p>
               </div>
             );
@@ -63,7 +64,7 @@ export default function LeaderboardPage() {
                 <p className="text-xs text-gray-400">{e.completed_tasks} tasks completed • {e.level || 'bronze'}</p>
               </div>
               <div className="text-right">
-                <p className="font-bold text-green-600">${Number(e.total_earnings).toFixed(2)}</p>
+                <p className="font-bold text-green-600">{formatDisplayCurrency(Number(Number(e.total_earnings).toFixed(2)))}</p>
                 <p className="text-xs text-gray-400">earned</p>
               </div>
             </div>

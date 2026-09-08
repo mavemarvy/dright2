@@ -347,7 +347,7 @@ export default function PromotionWizard({
                     <div>
                       <label className="text-sm text-gray-500 block mb-2">Budget ({pricing?.currency || 'USD'})</label>
                       <div className="flex items-center gap-3 mb-4">
-                        <span className="text-2xl font-bold text-gray-400">{pricing?.currency === 'USD' ? '$' : ''}</span>
+                        <span className="text-2xl font-bold text-gray-400">{pricing?.currency || 'USD'}</span>
                         <input type="number" min={pricing?.daily_minimum_budget || 1} max={pricing?.maximum_campaign_budget || 5000} step={1} value={budget} onChange={e => setBudget(Math.max(pricing?.daily_minimum_budget || 1, Number(e.target.value)))} className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-lg font-bold focus:outline-none focus:border-primary-500" />
                       </div>
 

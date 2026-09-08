@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState, useMemo } from 'react';
 import { useMarketingCampaigns, usePromotionStatistics, updateMarketingCampaign } from '../../lib/crmHooks';
 import { CAMPAIGN_TYPES, CAMPAIGN_STATUS_LABELS } from '../../lib/crmTypes';
@@ -55,7 +56,7 @@ export default function AdminMarketingDashboardPage() {
             <StatCard icon={<Eye className="w-5 h-5" />} label="Total Impressions" value={totalImpressions.toLocaleString()} color="bg-blue-50 text-blue-600" />
             <StatCard icon={<MousePointer className="w-5 h-5" />} label="Total Clicks" value={totalClicks.toLocaleString()} color="bg-primary-50 text-primary-600" />
             <StatCard icon={<Target className="w-5 h-5" />} label="Conversions" value={totalConversions.toLocaleString()} color="bg-green-50 text-green-600" />
-            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Revenue" value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}`} color="bg-amber-50 text-amber-600" />
+            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Revenue" value={formatDisplayCurrency(totalRevenue, 'USD', { maximumFractionDigits: 0 })} color="bg-amber-50 text-amber-600" />
           </div>
 
           {/* Filters */}
@@ -114,8 +115,8 @@ export default function AdminMarketingDashboardPage() {
                         <td className="px-4 py-3 hidden xl:table-cell text-gray-600">{ctr}%</td>
                         <td className="px-4 py-3 hidden xl:table-cell text-gray-600">{conversions}</td>
                         <td className="px-4 py-3 hidden md:table-cell">
-                          <p className="text-gray-700">${Number(c.budget).toLocaleString(undefined, { minimumFractionDigits: 0 })}</p>
-                          <p className="text-xs text-gray-400">${remaining.toLocaleString(undefined, { minimumFractionDigits: 0 })} left</p>
+                          <p className="text-gray-700">{formatDisplayCurrency(Number(c.budget), 'USD', { maximumFractionDigits: 0 })}</p>
+                          <p className="text-xs text-gray-400">{formatDisplayCurrency(remaining, 'USD', { maximumFractionDigits: 0 })} left</p>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs border ${
@@ -144,7 +145,7 @@ export default function AdminMarketingDashboardPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
             <StatCard icon={<MousePointer className="w-5 h-5" />} label="Avg CTR" value={`${avgCTR.toFixed(2)}%`} color="bg-primary-50 text-primary-600" />
             <StatCard icon={<Target className="w-5 h-5" />} label="Conversion Rate" value={`${avgConversionRate.toFixed(2)}%`} color="bg-green-50 text-green-600" />
-            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}`} color="bg-amber-50 text-amber-600" />
+            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={formatDisplayCurrency(totalRevenue, 'USD', { maximumFractionDigits: 0 })} color="bg-amber-50 text-amber-600" />
             <StatCard icon={<TrendingUp className="w-5 h-5" />} label="ROI" value={`${roi.toFixed(1)}%`} color={roi >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'} />
           </div>
 
@@ -193,7 +194,7 @@ export default function AdminMarketingDashboardPage() {
 
             <div className="space-y-3 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">Owner</span><span className="text-gray-800">{selectedCampaign.owner?.email ?? '—'}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Budget / Spent</span><span className="text-gray-800">${Number(selectedCampaign.budget).toLocaleString()} / ${Number(selectedCampaign.spent).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Budget / Spent</span><span className="text-gray-800">{formatDisplayCurrency(Number(Number(selectedCampaign.budget).toLocaleString()))} / ${Number(selectedCampaign.spent).toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Status</span><span className="text-gray-800">{CAMPAIGN_STATUS_LABELS[selectedCampaign.status] ?? selectedCampaign.status}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">End Date</span><span className="text-gray-800">{selectedCampaign.end_date ? new Date(selectedCampaign.end_date).toLocaleDateString() : '—'}</span></div>
             </div>

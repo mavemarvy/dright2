@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -173,7 +174,7 @@ export default function AdminProductEditsPage() {
 
   const formatValue = (key: string, value: unknown): string => {
     if (value === null || value === undefined) return '—';
-    if (key === 'price') return `$${Number(value).toFixed(2)}`;
+    if (key === 'price') return `${formatDisplayCurrency(Number(Number(value).toFixed(2)))}`;
     if (Array.isArray(value)) return value.join(', ');
     return String(value);
   };

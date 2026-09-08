@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useRef, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -765,7 +766,7 @@ export default function UploadProductPage() {
             <div className="flex items-center justify-between p-4 bg-gradient-to-r from-success-muted to-green-50 rounded-xl border border-success/20">
               <div className="flex items-center gap-3">
                 <Gift className="w-5 h-5 text-success" />
-                <div><p className="text-sm font-semibold text-gray-900">Free Product</p><p className="text-xs text-gray-500">Price = $0. Sales still count toward weekly streaks.</p></div>
+                <div><p className="text-sm font-semibold text-gray-900">Free Product</p><p className="text-xs text-gray-500">Price is free. Sales still count toward weekly streaks.</p></div>
               </div>
               <button type="button" onClick={() => setIsFree(!isFree)}
                 className={`relative w-12 h-7 rounded-full transition-colors ${isFree ? 'bg-success' : 'bg-gray-300'}`}>
@@ -1243,7 +1244,7 @@ export default function UploadProductPage() {
                         <div className="border-t border-gray-200 pt-2 mt-2">
                           <div className="flex justify-between items-center">
                             <span className="font-semibold text-gray-900">Buyer Pays</span>
-                            <span className="text-xl font-bold text-primary-600">${pricing.finalPrice.toFixed(2)}</span>
+                            <span className="text-xl font-bold text-primary-600">{formatDisplayCurrency(Number(pricing.finalPrice.toFixed(2)))}</span>
                           </div>
                         </div>
                       </div>
@@ -1319,7 +1320,7 @@ export default function UploadProductPage() {
 function PriceRow({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
   return (
     <div className={`flex justify-between ${muted ? 'text-gray-500' : 'text-gray-700'}`}>
-      <span>{label}</span><span>${value.toFixed(2)}</span>
+      <span>{label}</span><span>{formatDisplayCurrency(Number(value.toFixed(2)))}</span>
     </div>
   );
 }

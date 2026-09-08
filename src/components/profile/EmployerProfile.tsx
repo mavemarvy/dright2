@@ -122,7 +122,7 @@ export function EmployerProfile({ jobs, companyName, storeDescription, storeLoca
                       </div>
                       {(job.salary_min || job.salary_max) && (
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                          Salary: {job.salary_currency || '$'}
+                          Salary currency: {job.salary_currency || 'USD'}
                           {job.salary_min ? job.salary_min.toLocaleString() : '—'}
                           {job.salary_max && ` - ${job.salary_max.toLocaleString()}`}
                         </p>

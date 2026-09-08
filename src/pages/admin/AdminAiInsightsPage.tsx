@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState } from 'react';
 import { useAiInsights, dismissInsight, createAiInsight } from '../../lib/crmHooks';
 import { INSIGHT_TYPES, SEVERITY_LABELS } from '../../lib/crmTypes';
@@ -58,7 +59,7 @@ export default function AdminAiInsightsPage() {
           insight_type: 'churn_risk',
           insight_category: 'retention',
           title: '3 high-value customers showing churn signals',
-          description: 'Users with lifetime value > $500 have not logged in for 14+ days and have abandoned recent carts.',
+          description: `Users with lifetime value > ${formatDisplayCurrency(500)} have not logged in for 14+ days and have abandoned recent carts.`,
           severity: 'high',
           confidence_score: 0.82,
           recommended_action: 'Assign to customer success team for personalized outreach with retention offer.',

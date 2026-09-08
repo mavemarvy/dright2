@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 // ─────────────────────────────────────────────────────────────────────────────
 // DRIGHT Advanced Analytics Components — Scores, Trending, Predictions,
 // Promotion, Affiliate Deep, Campaign V2, Referral Intelligence,
@@ -716,7 +717,7 @@ export function AIBusinessAdvisor({ sellerId }: { sellerId?: string }) {
     'Why did my sales drop?',
     'Which products should I promote?',
     'Which country should I target?',
-    'How do I reach $5,000 this month?',
+    `How do I reach ${formatDisplayCurrency(5000)} this month?`,
     'Which affiliate should I increase commission for?',
     'Why isn\'t my service converting?',
     'What is my weakest-performing product?',
@@ -763,7 +764,7 @@ export function AIBusinessAdvisor({ sellerId }: { sellerId?: string }) {
       return 'Not enough geographic data yet. As you get more views, I\'ll be able to recommend the best countries to target.';
     }
 
-    if (qLower.includes('reach') && (qLower.includes('$') || qLower.includes('revenue') || qLower.includes('money'))) {
+    if (qLower.includes('reach') && (qLower.includes('revenue') || qLower.includes('money') || qLower.includes('income') || qLower.includes('sales'))) {
       const revenue = num(d, 'revenue');
       const avgDaily = revenue / 30;
       const targetMatch = q.match(/\$?([\d,]+)/);

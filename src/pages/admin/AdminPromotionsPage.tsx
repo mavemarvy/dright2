@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState, useMemo } from 'react';
 import {
   TrendingUp, Eye, MousePointerClick, DollarSign, Loader2, Search,
@@ -186,13 +187,13 @@ function PricingEditor() {
   };
 
   const fields: { key: keyof PromotionPricing; label: string; prefix?: string }[] = [
-    { key: 'cost_per_impression', label: 'Cost per Impression', prefix: '$' },
-    { key: 'cost_per_100_impressions', label: 'Cost per 100 Impressions', prefix: '$' },
-    { key: 'cost_per_1000_impressions', label: 'Cost per 1,000 Impressions (CPM)', prefix: '$' },
-    { key: 'cost_per_click', label: 'Cost per Click (CPC)', prefix: '$' },
-    { key: 'cost_per_reach', label: 'Cost per Reach', prefix: '$' },
-    { key: 'daily_minimum_budget', label: 'Daily Minimum Budget', prefix: '$' },
-    { key: 'maximum_campaign_budget', label: 'Maximum Campaign Budget', prefix: '$' },
+    { key: 'cost_per_impression', label: 'Cost per Impression', prefix: 'USD' },
+    { key: 'cost_per_100_impressions', label: 'Cost per 100 Impressions', prefix: 'USD' },
+    { key: 'cost_per_1000_impressions', label: 'Cost per 1,000 Impressions (CPM)', prefix: 'USD' },
+    { key: 'cost_per_click', label: 'Cost per Click (CPC)', prefix: 'USD' },
+    { key: 'cost_per_reach', label: 'Cost per Reach', prefix: 'USD' },
+    { key: 'daily_minimum_budget', label: 'Daily Minimum Budget', prefix: 'USD' },
+    { key: 'maximum_campaign_budget', label: 'Maximum Campaign Budget', prefix: 'USD' },
     { key: 'default_ctr', label: 'Default CTR (0-1)' },
     { key: 'default_conversion_rate', label: 'Default Conversion Rate (0-1)' },
   ];
@@ -261,7 +262,7 @@ function PackagesEditor() {
                 <p className="font-bold text-gray-900">{pkg.name} {!pkg.is_active && <span className="text-xs text-gray-400">(inactive)</span>}</p>
                 <p className="text-xs text-gray-400">{pkg.description}</p>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">${pkg.price}</span>
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{formatDisplayCurrency(Number(pkg.price))}</span>
                   <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{pkg.estimated_reach.toLocaleString()} reach</span>
                   <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{pkg.duration_days} days</span>
                 </div>

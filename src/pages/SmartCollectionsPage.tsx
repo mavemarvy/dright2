@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -114,7 +115,7 @@ export default function SmartCollectionsPage() {
         },
       },
       {
-        id: 'budget_friendly', title: 'Budget Friendly', subtitle: 'Great products under $50',
+        id: 'budget_friendly', title: 'Budget Friendly', subtitle: `Great products under ${formatDisplayCurrency(50)}`,
         icon: 'Wallet', color: 'bg-teal-500',
         query: async () => {
           const { data } = await baseQuery().lte('price', 50).gt('price', 0).order('price', { ascending: true }).limit(12);
@@ -122,7 +123,7 @@ export default function SmartCollectionsPage() {
         },
       },
       {
-        id: 'premium', title: 'Premium Products', subtitle: 'High-end products $100+',
+        id: 'premium', title: 'Premium Products', subtitle: `High-end products ${formatDisplayCurrency(100)}+`,
         icon: 'Crown', color: 'bg-purple-500',
         query: async () => {
           const { data } = await baseQuery().gte('price', 100).order('price', { ascending: false }).limit(12);

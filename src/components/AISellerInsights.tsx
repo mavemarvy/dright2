@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState } from 'react';
 import {
   Sparkles, Loader2, TrendingUp, DollarSign, Tag, Lightbulb,
@@ -142,20 +143,20 @@ export default function AISellerInsights({ product }: Props) {
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-gray-50 rounded-xl p-3 text-center">
                 <p className="text-xs text-gray-400">Min</p>
-                <p className="text-lg font-bold text-gray-900">${pricing.suggested_min}</p>
+                <p className="text-lg font-bold text-gray-900">{formatDisplayCurrency(Number(pricing.suggested_min))}</p>
               </div>
               <div className="bg-primary-50 rounded-xl p-3 text-center">
                 <p className="text-xs text-primary-400">Optimal</p>
-                <p className="text-lg font-bold text-primary-600">${pricing.suggested_optimal}</p>
+                <p className="text-lg font-bold text-primary-600">{formatDisplayCurrency(Number(pricing.suggested_optimal))}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 text-center">
                 <p className="text-xs text-gray-400">Max</p>
-                <p className="text-lg font-bold text-gray-900">${pricing.suggested_max}</p>
+                <p className="text-lg font-bold text-gray-900">{formatDisplayCurrency(Number(pricing.suggested_max))}</p>
               </div>
             </div>
             <div className="flex items-center gap-4 text-sm">
               <span className="text-gray-500">Competitors: <strong className="text-gray-900">{pricing.competitor_count}</strong></span>
-              <span className="text-gray-500">Avg Price: <strong className="text-gray-900">${pricing.avg_competitor_price}</strong></span>
+              <span className="text-gray-500">Avg Price: <strong className="text-gray-900">{formatDisplayCurrency(Number(pricing.avg_competitor_price))}</strong></span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                 pricing.demand_level === 'high' ? 'bg-green-50 text-green-600' : pricing.demand_level === 'medium' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-500'
               }`}>{pricing.demand_level} demand</span>
@@ -198,7 +199,7 @@ export default function AISellerInsights({ product }: Props) {
         {activeTab === 'promotion' && advice && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Suggested Budget</p><p className="text-lg font-bold text-gray-900">${advice.suggested_budget}</p></div>
+              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Suggested Budget</p><p className="text-lg font-bold text-gray-900">{formatDisplayCurrency(Number(advice.suggested_budget))}</p></div>
               <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Duration</p><p className="text-lg font-bold text-gray-900">{advice.suggested_duration} days</p></div>
               <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Est. Reach</p><p className="text-lg font-bold text-gray-900">{advice.estimated_reach.toLocaleString()}</p></div>
               <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Est. Clicks</p><p className="text-lg font-bold text-gray-900">{advice.estimated_clicks.toLocaleString()}</p></div>

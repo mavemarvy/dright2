@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from './currency';
 // ─────────────────────────────────────────────────────────────────────────────
 // DRIGHT AI Provider Abstraction Layer (SECURE)
 //
@@ -293,7 +294,7 @@ function getRankingAdvice(): string {
 }
 
 function getPromotionAdvice(): string {
-  return `Here's how to choose the right promotion:\n\n**Starter ($5, 3 days)** — Best for testing. Expect ~1,000 impressions, ~40 clicks. Good for new listings.\n\n**Growth ($15, 7 days)** — Best for established listings. Expect ~2,500 impressions, ~100 clicks. Launch Tuesday-Thursday for peak traffic.\n\n**Premium ($30, 14 days)** — Best for scaling. Expect ~5,000 impressions, ~200 clicks. Use targeted audience for higher conversion.\n\n**Tips:**\n• Launch mid-week when traffic peaks\n• Use targeted audience if your conversion rate is above 3%\n• Use broad audience if you're building awareness\n• Monitor performance daily and adjust budget allocation\n• Combine with a coupon for maximum conversion impact`;
+  return `Here's how to choose the right promotion:\n\n**Starter (${formatDisplayCurrency(5)}, 3 days)** — Best for testing. Expect ~1,000 impressions, ~40 clicks. Good for new listings.\n\n**Growth (${formatDisplayCurrency(15)}, 7 days)** — Best for established listings. Expect ~2,500 impressions, ~100 clicks. Launch Tuesday-Thursday for peak traffic.\n\n**Premium (${formatDisplayCurrency(30)}, 14 days)** — Best for scaling. Expect ~5,000 impressions, ~200 clicks. Use targeted audience for higher conversion.\n\n**Tips:**\n• Launch mid-week when traffic peaks\n• Use targeted audience if your conversion rate is above 3%\n• Use broad audience if you're building awareness\n• Monitor performance daily and adjust budget allocation\n• Combine with a coupon for maximum conversion impact`;
 }
 
 async function getPricingAdvice(): Promise<string> {
@@ -315,7 +316,7 @@ async function getPricingAdvice(): Promise<string> {
     const max = Math.max(...prices);
     const median = prices.sort((a, b) => a - b)[Math.floor(prices.length / 2)];
 
-    return `Based on ${data.length} active paid listings on DRIGHT:\n\n• **Average price**: ${avg.toFixed(2)}\n• **Median price**: ${median.toFixed(2)}\n• **Price range**: ${min.toFixed(2)} - ${max.toFixed(2)}\n\n**Pricing tips:**\n• New sellers: Start 10-15% below category average to build reviews and traction\n• Established sellers: Price at or slightly above average if your rating is 4.5+★\n• Premium positioning works if your listing quality score is 80+\n• Test different price points — a $2-3 difference can change conversion by 30%\n• Consider bundling or adding bonuses instead of discounting price directly`;
+    return `Based on ${data.length} active paid listings on DRIGHT:\n\n• **Average price**: ${formatDisplayCurrency(avg)}\n• **Median price**: ${formatDisplayCurrency(median)}\n• **Price range**: ${formatDisplayCurrency(min)} - ${formatDisplayCurrency(max)}\n\n**Pricing tips:**\n• New sellers: Start 10-15% below category average to build reviews and traction\n• Established sellers: Price at or slightly above average if your rating is 4.5+★\n• Premium positioning works if your listing quality score is 80+\n• Test different price points — a ${formatDisplayCurrency(2)}-${formatDisplayCurrency(3)} difference can change conversion by 30%\n• Consider bundling or adding bonuses instead of discounting price directly`;
   } catch {
     return "I'm having trouble fetching pricing data right now. As a general rule, research what similar products charge and price competitively.";
   }

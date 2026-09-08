@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Send, X, Loader2, Bot, User, ShoppingBag, MessageSquare, Lightbulb, Star, TrendingUp } from 'lucide-react';
@@ -248,7 +249,7 @@ export default function UniversalAIAssistant({ type = 'shopping', contextData = 
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-medium text-gray-800 truncate">{p.name}</p>
-                              <p className="text-xs text-primary-600">${p.price}</p>
+                              <p className="text-xs text-primary-600">{formatDisplayCurrency(Number(p.price))}</p>
                             </div>
                           </Link>
                         ))}

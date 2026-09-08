@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, Mic, TrendingUp, Clock, Trash2, ArrowRight, Package, Flame, Sparkles, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -333,7 +334,7 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
                         <p className="text-xs text-gray-400">{typeLabel(r.type)}{r.category ? ` · ${r.category}` : ''}</p>
                       </div>
                       {r.price !== undefined && (
-                        <span className="text-sm font-semibold text-gray-900 shrink-0">${r.price.toFixed(2)}</span>
+                        <span className="text-sm font-semibold text-gray-900 shrink-0">{formatDisplayCurrency(Number(r.price.toFixed(2)))}</span>
                       )}
                     </Link>
                   );

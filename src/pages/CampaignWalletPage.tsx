@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState } from 'react';
 import { Wallet, ArrowDownToLine, ArrowUpFromLine, History, Lock } from 'lucide-react';
 import { useCampaignWallet } from '../lib/campaignHooks';
@@ -36,21 +37,21 @@ export default function CampaignWalletPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-gradient-to-br from-primary-500 to-blue-600 rounded-2xl p-6 text-white">
           <div className="flex items-center gap-2 mb-2"><Wallet className="w-5 h-5" /><span className="text-sm text-white/80">Available Balance</span></div>
-          <p className="text-3xl font-bold">${balance.toFixed(2)}</p>
+          <p className="text-3xl font-bold">{formatDisplayCurrency(Number(balance.toFixed(2)))}</p>
           <p className="text-xs text-white/60 mt-1">Available for new campaigns</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-2"><Lock className="w-5 h-5 text-amber-500" /><span className="text-sm text-gray-500">Escrow Balance</span></div>
-          <p className="text-3xl font-bold text-amber-600">${escrow.toFixed(2)}</p>
+          <p className="text-3xl font-bold text-amber-600">{formatDisplayCurrency(Number(escrow.toFixed(2)))}</p>
           <p className="text-xs text-gray-400 mt-1">Locked in active campaigns</p>
         </div>
       </div>
 
       {/* Totals */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="bg-white rounded-xl border border-gray-100 p-3 text-center"><p className="text-sm font-bold text-gray-900">${Number(wallet?.total_deposited || 0).toFixed(2)}</p><p className="text-xs text-gray-400">Deposited</p></div>
-        <div className="bg-white rounded-xl border border-gray-100 p-3 text-center"><p className="text-sm font-bold text-gray-900">${Number(wallet?.total_withdrawn || 0).toFixed(2)}</p><p className="text-xs text-gray-400">Withdrawn</p></div>
-        <div className="bg-white rounded-xl border border-gray-100 p-3 text-center"><p className="text-sm font-bold text-gray-900">${Number(wallet?.total_paid_out || 0).toFixed(2)}</p><p className="text-xs text-gray-400">Paid Out</p></div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 text-center"><p className="text-sm font-bold text-gray-900">{formatDisplayCurrency(Number(Number(wallet?.total_deposited || 0).toFixed(2)))}</p><p className="text-xs text-gray-400">Deposited</p></div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 text-center"><p className="text-sm font-bold text-gray-900">{formatDisplayCurrency(Number(Number(wallet?.total_withdrawn || 0).toFixed(2)))}</p><p className="text-xs text-gray-400">Withdrawn</p></div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 text-center"><p className="text-sm font-bold text-gray-900">{formatDisplayCurrency(Number(Number(wallet?.total_paid_out || 0).toFixed(2)))}</p><p className="text-xs text-gray-400">Paid Out</p></div>
       </div>
 
       {/* Actions */}
@@ -95,7 +96,7 @@ export default function CampaignWalletPage() {
                   <p className="text-xs text-gray-400">{new Date(tx.created_at).toLocaleString()}{tx.description ? ` • ${tx.description}` : ''}</p>
                 </div>
                 <span className={`text-sm font-bold ${Number(tx.amount) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  {Number(tx.amount) >= 0 ? '+' : ''}${Number(tx.amount).toFixed(2)}
+                  {Number(tx.amount) >= 0 ? `+${formatDisplayCurrency(Number(tx.amount))}` : formatDisplayCurrency(Number(tx.amount))}
                 </span>
               </div>
             ))}

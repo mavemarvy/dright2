@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useCallback,useEffect,useMemo,useState } from 'react';
 import { AlertTriangle,CheckCircle,ChevronDown,ChevronUp,ExternalLink,Loader2,Microscope,RefreshCw,Search,ShieldAlert,Trophy,XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -12,7 +13,7 @@ type Marketer={id:string;email:string;full_name:string|null;username:string|null
 const text=(v:any)=>v===null||v===undefined||v===''?'UNKNOWN':String(v);
 const score=(v:any,suffix='')=>typeof v==='number'&&Number.isFinite(v)?`${Number(v.toFixed(1))}${suffix}`:'UNKNOWN';
 const number=(v:any)=>typeof v==='number'&&Number.isFinite(v)?v.toLocaleString():'UNKNOWN';
-const money=(v:any)=>typeof v==='number'&&Number.isFinite(v)?`$${v.toLocaleString(undefined,{maximumFractionDigits:2})}`:'UNKNOWN';
+const money=(v:any)=>typeof v==='number'&&Number.isFinite(v)?formatDisplayCurrency(v):'UNKNOWN';
 const date=(v:any)=>v?new Date(v).toLocaleString():'UNKNOWN';
 const call=async(method:'GET'|'POST',body?:any)=>{const{data,error}=await supabase.functions.invoke('sales-team-review',{method,body});if(error||data?.error)throw new Error(data?.error||error?.message||'Sales Team request failed');return data};
 

@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -587,7 +588,7 @@ export default function MarketPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Estimated Subscription</span>
                     <span className="font-bold text-gray-900 dark:text-gray-100">
-                      ${calculateSubscriptionTotal(selectedTier, selectedDuration, systemConfig).toFixed(2)}
+                      {formatDisplayCurrency(Number(calculateSubscriptionTotal(selectedTier, selectedDuration, systemConfig).toFixed(2)))}
                     </span>
                   </div>
                   <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">The server confirms the final price and eligible team member before payment.</p>

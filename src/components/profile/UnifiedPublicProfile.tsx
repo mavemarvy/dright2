@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -206,7 +207,7 @@ export default function UnifiedPublicProfile() {
                         ) : null}
                       </div>
                       <p className="text-sm font-medium text-gray-900 dark:text-white mt-1 truncate">{p.name}</p>
-                      <p className="text-sm text-indigo-500">{p.is_free ? 'Free' : `$${Number(p.price || 0).toFixed(2)}`}</p>
+                      <p className="text-sm text-indigo-500">{p.is_free ? 'Free' : `${formatDisplayCurrency(Number(Number(p.price || 0).toFixed(2)))}`}</p>
                     </Link>
                   ))}
                 </div>

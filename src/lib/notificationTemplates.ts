@@ -233,10 +233,10 @@ export function getTemplateVariables(templateKey: string): string[] {
 
 // ─── Localization-Ready Formatting ────────────────────────────────────────────────
 
-export function formatCurrency(amount: number, currency = '$', locale = 'en-US'): string {
+export function formatCurrency(amount: number, currency = 'USD', locale = 'en-US'): string {
   return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: currency === '$' ? 'USD' : currency,
+    currency: /^[A-Z]{3}$/i.test(currency) ? currency.toUpperCase() : 'USD',
     minimumFractionDigits: 2,
   }).format(amount);
 }

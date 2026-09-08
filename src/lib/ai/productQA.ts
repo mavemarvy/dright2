@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../currency';
 import { supabase } from '../supabase';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ export function buildProductQASystemPrompt(ctx: ProductQAContext): string {
     '',
     `Product: ${ctx.productName}`,
     `Category: ${ctx.category}`,
-    `Price: ${ctx.isFree ? 'Free' : '$' + ctx.price.toFixed(2)}`,
+    `Price: ${ctx.isFree ? 'Free' : formatDisplayCurrency(ctx.price)}`,
     `Seller: ${ctx.sellerName}`,
     '',
     'Description:',

@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState, useMemo } from 'react';
 import { useCrmCustomers, useCrmCustomer, useCustomerTimeline, updateCrmCustomer } from '../../lib/crmHooks';
 import { PageHeader, LoadingBar } from '../../components/admin/RbacComponents';
@@ -31,7 +32,7 @@ export default function AdminCrmDashboardPage() {
       {/* Stats Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <StatCard icon={<Users className="w-5 h-5" />} label="Total Customers" value={filtered.length.toString()} color="primary" />
-        <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Lifetime Value" value={`$${totalLTV.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} color="green" />
+        <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Lifetime Value" value={formatDisplayCurrency(totalLTV, 'USD', { maximumFractionDigits: 0 })} color="green" />
         <StatCard icon={<ShoppingBag className="w-5 h-5" />} label="Total Purchases" value={totalPurchases.toString()} color="blue" />
         <StatCard icon={<Star className="w-5 h-5" />} label="Avg Rating" value={avgRating.toFixed(2)} color="amber" />
       </div>
@@ -86,7 +87,7 @@ export default function AdminCrmDashboardPage() {
                       'bg-amber-50 text-amber-700 border-amber-200'
                     }`}>{c.customer_status}</span>
                   </td>
-                  <td className="px-4 py-3 hidden lg:table-cell text-gray-700">${Number(c.lifetime_value).toLocaleString(undefined, { minimumFractionDigits: 0 })}</td>
+                  <td className="px-4 py-3 hidden lg:table-cell text-gray-700">{formatDisplayCurrency(Number(c.lifetime_value), 'USD', { maximumFractionDigits: 0 })}</td>
                   <td className="px-4 py-3 hidden lg:table-cell text-gray-700">{c.total_purchases}</td>
                   <td className="px-4 py-3 hidden xl:table-cell">
                     {Number(c.avg_rating) > 0 ? (
@@ -244,12 +245,12 @@ function CustomerDetailDrawer({ userId, onClose, onRefetch }: { userId: string; 
             {/* Financials Tab */}
             {tab === 'financials' && (
               <Section title="Financial Summary">
-                <DataRow label="Wallet Balance" value={`$${Number(customer.wallet_balance).toLocaleString()}`} />
-                <DataRow label="Total Earnings" value={`$${Number(customer.total_earnings).toLocaleString()}`} />
-                <DataRow label="Total Withdrawals" value={`$${Number(customer.total_withdrawals).toLocaleString()}`} />
-                <DataRow label="Pending Withdrawals" value={`$${Number(customer.pending_withdrawals).toLocaleString()}`} />
+                <DataRow label="Wallet Balance" value={`${formatDisplayCurrency(Number(Number(customer.wallet_balance).toLocaleString()))}`} />
+                <DataRow label="Total Earnings" value={`${formatDisplayCurrency(Number(Number(customer.total_earnings).toLocaleString()))}`} />
+                <DataRow label="Total Withdrawals" value={`${formatDisplayCurrency(Number(Number(customer.total_withdrawals).toLocaleString()))}`} />
+                <DataRow label="Pending Withdrawals" value={`${formatDisplayCurrency(Number(Number(customer.pending_withdrawals).toLocaleString()))}`} />
                 <DataRow label="Total Purchases" value={customer.total_purchases.toString()} />
-                <DataRow label="Lifetime Value" value={`$${Number(customer.lifetime_value).toLocaleString()}`} />
+                <DataRow label="Lifetime Value" value={`${formatDisplayCurrency(Number(Number(customer.lifetime_value).toLocaleString()))}`} />
               </Section>
             )}
 

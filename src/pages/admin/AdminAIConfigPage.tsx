@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../../lib/currency';
 import { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Brain, Zap, CheckCircle,
@@ -212,7 +213,7 @@ function UsageAnalytics() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard icon={Activity} label="Total Requests" value={total.toLocaleString()} color="purple" />
         <StatCard icon={Hash} label="Tokens Used" value={tokens.toLocaleString()} color="blue" />
-        <StatCard icon={DollarSign} label="Est. Cost" value={`$${cost.toFixed(4)}`} color="green" />
+        <StatCard icon={DollarSign} label="Est. Cost" value={formatDisplayCurrency(cost, 'USD', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} color="green" />
         <StatCard icon={TrendingUp} label="Unique Users" value={users.toString()} color="orange" />
         <StatCard icon={CheckCircle} label="Success Rate" value={`${successRate}%`} color="green" />
         <StatCard icon={Clock} label="Avg Latency" value={`${avgLatency}ms`} color="blue" />

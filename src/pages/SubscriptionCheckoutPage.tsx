@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
@@ -352,7 +353,7 @@ export default function SubscriptionCheckoutPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Amount</span>
-                  <span className="font-bold text-primary-600">₦{plan.amount.toLocaleString()}</span>
+                  <span className="font-bold text-primary-600">{formatDisplayCurrency(Number(plan.amount), 'NGN')}</span>
                 </div>
               </div>
 
@@ -379,7 +380,7 @@ export default function SubscriptionCheckoutPage() {
             <div className="bg-white rounded-2xl border border-gray-100 p-5">
               <div className="flex justify-between items-center mb-3">
                 <span className="font-bold text-gray-900">Total</span>
-                <span className="text-xl font-bold text-primary-600">₦{plan.amount.toLocaleString()}</span>
+                <span className="text-xl font-bold text-primary-600">{formatDisplayCurrency(Number(plan.amount), 'NGN')}</span>
               </div>
               <p className="text-xs text-gray-400">Billed {plan.interval}. Cancel anytime.</p>
             </div>

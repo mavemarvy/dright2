@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -920,7 +921,7 @@ export default function StorePage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Total Subscription</span>
                     <span className="font-bold text-gray-900">
-                      ${calculateSubscriptionTotal(selectedTier, selectedDuration, systemConfig).toFixed(2)}
+                      {formatDisplayCurrency(Number(calculateSubscriptionTotal(selectedTier, selectedDuration, systemConfig).toFixed(2)))}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">

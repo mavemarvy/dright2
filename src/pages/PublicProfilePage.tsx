@@ -1,3 +1,4 @@
+import { formatDisplayCurrency } from '../lib/currency';
 // ─────────────────────────────────────────────────────────────────────────────
 // DRIGHT Public Profile Page — Universal social profile with tabs
 // ─────────────────────────────────────────────────────────────────────────────
@@ -232,7 +233,7 @@ function OverviewTab({ profile, products, followers, following, friends, profile
                   {p.image_url ? <img src={p.image_url as string} alt={p.name as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Package className="w-8 h-8 text-gray-400 m-auto mt-1/2" />}
                 </div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white mt-1 truncate">{p.name as string}</p>
-                <p className="text-sm text-indigo-500">${Number(p.price || 0).toFixed(2)}</p>
+                <p className="text-sm text-indigo-500">{formatDisplayCurrency(Number(Number(p.price || 0).toFixed(2)))}</p>
               </a>
             ))}
           </div>
@@ -290,7 +291,7 @@ function ProductsTab({ products }: { products: Record<string, unknown>[] }) {
             {p.image_url ? <img src={p.image_url as string} alt={p.name as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Package className="w-8 h-8 text-gray-400 m-auto" />}
           </div>
           <p className="text-sm font-medium text-gray-900 dark:text-white mt-1 truncate">{p.name as string}</p>
-          <p className="text-sm text-indigo-500">${Number(p.price || 0).toFixed(2)}</p>
+          <p className="text-sm text-indigo-500">{formatDisplayCurrency(Number(Number(p.price || 0).toFixed(2)))}</p>
         </a>
       ))}
     </div>
