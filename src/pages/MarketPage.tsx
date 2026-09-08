@@ -12,8 +12,8 @@ import { trackListingEvent } from '../lib/marketplaceAnalytics';
 import { trackProductView } from '../lib/analyticsService';
 import { generateAffiliateLink, copyToClipboard } from '../lib/affiliate';
 import {
-  fetchSystemConfig, calculateSubscriptionTotal, getExpiryDate,
-  getTaskPercentForTier, ALL_TIERS, DURATIONS,
+  fetchSystemConfig, calculateSubscriptionTotal,
+  ALL_TIERS, DURATIONS,
   type SalesTeamTier, type Duration, type SystemConfig,
 } from '../lib/pricing';
 import { useWishlist, useRecentlyViewed } from '../lib/marketplaceHooks';
@@ -291,41 +291,27 @@ export default function MarketPage() {
     setTeamSubmitting(true);
     setTeamError(null);
     try {
-      let query = supabase.from('users').select('id').eq('is_admin', false);
-      if (selectedTier.startsWith('Mkt')) {
-        const level = parseInt(selectedTier.replace('Mkt L', ''));
-        query = query.eq('marketer_status', 'approved').eq('marketer_level', level);
-      } else {
-        const grade = selectedTier.replace('Adv ', '');
-        query = query.eq('advertiser_status', 'approved').eq('advertiser_grade', grade);
-      }
-      const { data: teamMembers, error: teamErr } = await query.limit(1).maybeSingle();
-      if (teamErr) throw teamErr;
-      if (!teamMembers) {
-        setTeamError(`No ${selectedTier} available. Try a different tier.`);
-        setTeamSubmitting(false);
-        return;
-      }
-
-      const totalAmount = calculateSubscriptionTotal(selectedTier, selectedDuration, systemConfig);
-      const expiresAt = getExpiryDate(selectedDuration);
-      const { error: contractErr } = await supabase.from('sales_team_contracts').insert({
-        seller_id: user.id, sales_team_id: teamMembers.id, product_id: teamModalProduct.id,
-        duration: selectedDuration, total_amount: totalAmount, status: 'active',
-        admin_cut_applied: false, expires_at: expiresAt,
+      const { data: contract, error: contractError } = await supabase.rpc('create_sales_team_contract_request', {
+        p_product_id: teamModalProduct.id,
+        p_selected_tier: selectedTier,
+        p_duration: selectedDuration,
       });
-      if (contractErr) throw contractErr;
+      if (contractError) throw contractError;
 
-      await supabase.from('products').update({
-        sales_team_tier: selectedTier,
-        sales_team_task_percent: getTaskPercentForTier(selectedTier, systemConfig),
-      }).eq('id', teamModalProduct.id);
+      const contractId = contract?.contract_id as string | undefined;
+      if (!contractId) throw new Error('Unable to create a canonical sales team contract');
+
+      const { data: payment, error: paymentError } = await supabase.functions.invoke('sales-team-contract-initialize', {
+        body: { contract_id: contractId },
+      });
+      if (paymentError) throw paymentError;
+      if (!payment?.authorization_url) throw new Error(payment?.error || 'Unable to initialize secure payment');
 
       setTeamSuccess(true);
-      setTimeout(() => closeTeamModal(), 2500);
+      window.location.assign(payment.authorization_url);
     } catch (err) {
       console.error('Contract creation error:', err);
-      setTeamError('Failed to create contract. Please try again.');
+      setTeamError(err instanceof Error ? err.message : 'Failed to prepare the sales team contract. Please try again.');
     } finally {
       setTeamSubmitting(false);
     }
@@ -365,7 +351,6 @@ export default function MarketPage() {
         breadcrumbs={[{ name: 'Home', url: '/welcome' }, { name: 'Marketplace', url: '/market' }]}
       />
 
-      {/* Account status banner */}
       {(isAccountLocked || isAccountBanned) && (
         <div className={`rounded-2xl p-4 mb-6 flex items-center gap-3 ${isAccountBanned ? 'bg-error-muted border border-error/20' : 'bg-warning-muted border border-warning/20'}`}>
           <ShieldAlert className={`w-5 h-5 ${isAccountBanned ? 'text-error' : 'text-warning'}`} />
@@ -377,15 +362,12 @@ export default function MarketPage() {
         </div>
       )}
 
-      {/* 1. Hero Banner */}
       <HeroBanner onSearch={handleSearch} onBrowseCategories={() => setShowCategorySection(s => !s)} />
 
-      {/* 2. AI Search */}
       <div className="mt-6">
         <SmartSearch onSearch={handleSearch} />
       </div>
 
-      {/* 3. Categories */}
       <AnimatePresence>
         {showCategorySection && (
           <motion.div
@@ -399,30 +381,17 @@ export default function MarketPage() {
         )}
       </AnimatePresence>
 
-      {/* Discovery sections — only show when browsing (no search/filter active) */}
       {isBrowsing && (
         <div className="mt-8">
-          {/* 4. Recommended For You (personalized) */}
           <DiscoverySections />
-
-          {/* 5. Continue Browsing */}
           <ContinueBrowsing />
-
-          {/* 6. New Arrivals */}
           <NewArrivalsSection />
-
-          {/* 7. Featured Sellers */}
           <FeaturedSellersSection />
-
-          {/* 8. Featured Services */}
           <FeaturedServicesSection />
-
-          {/* 9. Jobs & Opportunities */}
           <JobsSection />
         </div>
       )}
 
-      {/* 6. All Products section */}
       <div className="mt-10" id="marketplace-products">
         <AdvancedFilterBar
           filters={filters}
@@ -436,7 +405,6 @@ export default function MarketPage() {
             <p className="text-gray-500 mt-0.5 text-sm">{sortedProducts.length} listing{sortedProducts.length !== 1 ? 's' : ''}</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* View toggle */}
             <div className="hidden sm:flex items-center gap-1 bg-gray-100 rounded-xl p-1">
               <button
                 onClick={() => setViewMode('grid')}
@@ -469,7 +437,6 @@ export default function MarketPage() {
           onFilterChange={handleFilterChange}
         />
 
-        {/* Loading skeleton */}
         {loading && (
           <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'} gap-3 sm:gap-5 mt-6`}>
             {Array.from({ length: 8 }).map((_, i) => (
@@ -485,7 +452,6 @@ export default function MarketPage() {
           </div>
         )}
 
-        {/* Empty state */}
         {!loading && sortedProducts.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -514,7 +480,6 @@ export default function MarketPage() {
           </motion.div>
         )}
 
-        {/* Product grid */}
         {!loading && sortedProducts.length > 0 && (
           <>
             <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1 max-w-3xl'} gap-3 sm:gap-5 mt-6`}>
@@ -547,7 +512,6 @@ export default function MarketPage() {
         )}
       </div>
 
-      {/* Quick view modal */}
       <QuickViewModal
         product={quickViewProduct}
         onClose={() => setQuickViewProduct(null)}
@@ -557,7 +521,6 @@ export default function MarketPage() {
         relatedProducts={relatedProducts}
       />
 
-      {/* Share menu */}
       <ShareMenu
         productId={shareProduct?.id || ''}
         productName={shareProduct?.name || ''}
@@ -566,7 +529,6 @@ export default function MarketPage() {
         referralCode={referralCode}
       />
 
-      {/* Sales team modal */}
       <AnimatePresence>
         {showTeamModal && teamModalProduct && (
           <motion.div
@@ -623,11 +585,12 @@ export default function MarketPage() {
               {systemConfig && (
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Total Subscription</span>
+                    <span className="text-gray-600 dark:text-gray-400">Estimated Subscription</span>
                     <span className="font-bold text-gray-900 dark:text-gray-100">
                       ${calculateSubscriptionTotal(selectedTier, selectedDuration, systemConfig).toFixed(2)}
                     </span>
                   </div>
+                  <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">The server confirms the final price and eligible team member before payment.</p>
                 </div>
               )}
               {teamError && (
@@ -637,7 +600,7 @@ export default function MarketPage() {
               )}
               {teamSuccess && (
                 <div className="flex items-center gap-2 text-success text-sm">
-                  <Check className="w-4 h-4" /> Sales team contract created!
+                  <Check className="w-4 h-4" /> Contract prepared. Opening secure payment…
                 </div>
               )}
               <button
@@ -648,7 +611,7 @@ export default function MarketPage() {
                 {teamSubmitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <><Shield className="w-4 h-4" /> Create Contract</>
+                  <><Shield className="w-4 h-4" /> Continue to Secure Payment</>
                 )}
               </button>
             </motion.div>
