@@ -1,6 +1,7 @@
 import { Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AppShell from './AppShell';
+import { CompactPromoStrip } from './promotion/PromotionSurfaces';
 
 export default function PublicAppShell() {
   const { user, loading } = useAuth();
@@ -18,10 +19,13 @@ export default function PublicAppShell() {
     return <AppShell />;
   }
 
-  // Guest users get a minimal header
+  // Guest users get a minimal header plus a dismissible DRIGHT discovery strip.
+  // It never blocks login/navigation and falls back to real admin banners because
+  // guest paid-impression billing remains intentionally disabled.
   return (
     <div className="min-h-screen bg-surface-muted">
-      <nav className="sticky top-0 z-40 bg-white border-b border-gray-100 safe-area-top">
+      <CompactPromoStrip />
+      <nav className="sticky top-0 z-40 bg-white border-b border-gray-100 safe-area-top dark:bg-gray-950 dark:border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <Link to="/welcome" className="flex items-center gap-3">
             <svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -35,24 +39,24 @@ export default function PublicAppShell() {
               <path d="M17 14H26.5C31.7467 14 36 18.2533 36 23.5C36 28.7467 31.7467 33 26.5 33H17V14ZM22 19V28H26.5C28.9853 28 31 25.9853 31 23.5C31 21.0147 28.9853 19 26.5 19H22Z" fill="white" />
               <circle cx="33" cy="15" r="3" fill="#60a5fa" />
             </svg>
-            <span className="text-lg font-bold text-gray-900">Dright</span>
+            <span className="text-lg font-bold text-gray-900 dark:text-white">Dright</span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
               to="/market"
-              className="hidden sm:block text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-2"
+              className="hidden sm:block text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 dark:text-gray-300 dark:hover:text-white"
             >
               Marketplace
             </Link>
             <Link
               to="/jobs"
-              className="hidden sm:block text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-2"
+              className="hidden sm:block text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 dark:text-gray-300 dark:hover:text-white"
             >
               Job Board
             </Link>
             <Link
               to="/sign-in"
-              className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-2.5 min-h-[44px] flex items-center"
+              className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-2.5 min-h-[44px] flex items-center dark:text-gray-300 dark:hover:text-white"
             >
               Sign in
             </Link>
