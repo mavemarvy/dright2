@@ -42,6 +42,7 @@ import { trackListingEvent, trackUserActivity } from '../lib/marketplaceAnalytic
 import { trackProductView } from '../lib/analyticsService';
 import { useRecentlyViewed } from '../lib/marketplaceHooks';
 import { formatCurrency } from '../lib/currency';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 
 interface ServiceTier {
   id: string;
@@ -748,6 +749,9 @@ export default function ProductDetailPage() {
 
       {/* Q&A Section */}
       <ProductQA productId={product.id} productName={product.name} sellerId={product.uploaded_by} />
+
+      {/* One contextual paid related-listing slot before organic recommendations. */}
+      <SponsoredPlacementCard placement="product_detail" variant="compact" className="mt-10" />
 
       {/* Personalized Recommendations */}
       <PersonalizedRecommendations

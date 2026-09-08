@@ -10,6 +10,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { formatSalaryRange } from '../lib/currency';
 import NapFooter from '../components/NapFooter';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import type { Job, JobType, WorkSetup, CareerLevel } from '../lib/types';
 
 const JOB_CATEGORIES = [
@@ -618,6 +619,8 @@ export default function JobBoardPage() {
                 <button onClick={clearFilters} className="text-xs text-error hover:underline px-2">Clear all</button>
               </div>
             )}
+
+            <SponsoredPlacementCard placement="jobs" variant="compact" className="mb-5" />
 
             {loading ? (
               <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-3'}>

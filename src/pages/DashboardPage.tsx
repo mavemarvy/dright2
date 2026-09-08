@@ -29,6 +29,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../lib/currency';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
+import { DiscoveryPromoGallery } from '../components/promotion/PromotionSurfaces';
 
 interface Announcement {
   id: string;
@@ -269,6 +270,11 @@ export default function DashboardPage() {
           Welcome back, {profile?.full_name?.split(' ')[0] || 'Promoter'}!
         </h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">Here's your earnings overview</p>
+      </div>
+
+      {/* Post-login discovery gallery: dismissible and session-scoped. */}
+      <div className="mb-6">
+        <DiscoveryPromoGallery placement="login_gallery" />
       </div>
 
       {/* AI Daily Summary */}

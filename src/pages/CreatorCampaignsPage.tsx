@@ -9,6 +9,7 @@ import { useCampaigns, useCategories, useWorkerProfile } from '../lib/campaignHo
 import { LEVEL_ICONS, LEVEL_COLORS, type WorkerLevel } from '../lib/campaignTypes';
 import { CreatorCampaignAnalytics } from '../components/analytics/EntityPerformance';
 import { formatCurrency } from '../lib/currency';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 
 const SORT_TABS = [
   { key: 'trending' as const, label: 'Trending', icon: Flame },
@@ -113,6 +114,9 @@ export default function CreatorCampaignsPage() {
           ))}
         </div>
       )}
+
+      {/* Paid campaign/task discovery stays separate from organic ranking. */}
+      <SponsoredPlacementCard placement="campaign_feed" variant="compact" className="mb-6" />
 
       {/* Campaign Grid */}
       {loading && campaigns.length === 0 ? (

@@ -17,6 +17,7 @@ import NotificationBar from './NotificationBar';
 import { useUIPreferences } from '../lib/uiPreferences';
 import ChatSystem from './ChatSystem';
 import AbandonedPaymentBanner from './AbandonedPaymentBanner';
+import { CompactPromoStrip } from './promotion/PromotionSurfaces';
 import LanguageSwitcher from './LanguageSwitcher';
 
 type NavEntry = {
@@ -444,6 +445,7 @@ export default function AppShell() {
 
       {/* Main Content */}
       <main id="main-content" className={`${mainPadding} pb-20 md:pb-0 transition-all duration-300`}>
+        <CompactPromoStrip />
         <AbandonedPaymentBanner />
         <AnimatePresence mode="wait">
           <motion.div
