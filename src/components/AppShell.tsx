@@ -419,11 +419,16 @@ export default function AppShell() {
                     </NavLink>
                   </div>
                 )}
+
+                {/* Scrollable sidebar utilities */}
+                <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-700 space-y-2">
+                  <LanguageSwitcher variant="sidebar" />
+                  <UIPreferencesToggles />
+                </div>
               </nav>
 
-              <div className="shrink-0 border-t border-gray-100 dark:border-gray-700 p-3 space-y-3">
-                <div><LanguageSwitcher variant="sidebar" /></div>
-                <UIPreferencesToggles />
+              {/* Keep only sign out fixed so utilities never block menu items */}
+              <div className="shrink-0 border-t border-gray-100 dark:border-gray-700 p-3">
                 <button
                   onClick={() => { setSidebarOpen(false); signOut(); }}
                   className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-error hover:bg-error-muted rounded-xl transition-colors"
