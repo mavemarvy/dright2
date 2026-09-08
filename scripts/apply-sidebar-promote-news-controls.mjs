@@ -44,7 +44,7 @@ function replaceRequired(text, from, to, label) {
   roles?: string[];
 };
 
-const navLabel = (item: NavEntry, t: (key: TranslationKey) => string) =>
+const navLabel = (item: NavEntry, t: (key: TranslationKey) => string): string =>
   item.label ?? (item.labelKey ? t(item.labelKey) : item.path);`,
     'allow explicit nav labels',
   );
