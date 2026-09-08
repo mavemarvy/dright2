@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Megaphone, Loader2, Tag, AlertTriangle, Bell } from 'lucide-react';
 import SeoHead from '../components/SeoHead';
@@ -21,9 +22,15 @@ const TYPE_CONFIG: Record<string, { icon: typeof Tag; color: string; bg: string 
 };
 
 export default function AnnouncementsPage() {
+  const location = useLocation();
+  const newsField = location.pathname === '/news';
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('all');
+  const [filter, setFilter] = useState<string>(newsField ? 'news' : 'all');
+
+  useEffect(() => {
+    setFilter(newsField ? 'news' : 'all');
+  }, [newsField]);
 
   useEffect(() => {
     const load = async () => {
@@ -40,13 +47,17 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <SeoHead title="Announcements" description="Latest news, updates, and promotions from DRIGHT." canonical="/announcements" />
+      <SeoHead
+        title={newsField ? 'News' : 'Announcements'}
+        description={newsField ? 'Latest news from DRIGHT.' : 'Latest news, updates, and promotions from DRIGHT.'}
+        canonical={newsField ? '/news' : '/announcements'}
+      />
 
       <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white py-14 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <Megaphone className="w-12 h-12 mx-auto mb-4 opacity-80" />
-          <h1 className="text-3xl sm:text-4xl font-bold mb-3">Announcements</h1>
-          <p className="text-blue-100">Stay up to date with the latest from DRIGHT</p>
+          <h1 className="text-3xl sm:text-4xl font-bold mb-3">{newsField ? 'News' : 'Announcements'}</h1>
+          <p className="text-blue-100">{newsField ? 'Latest DRIGHT stories, product news, and platform updates' : 'Stay up to date with the latest from DRIGHT'}</p>
         </div>
       </div>
 
@@ -68,7 +79,7 @@ export default function AnnouncementsPage() {
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-blue-500 animate-spin" /></div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-gray-400"><Bell className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No announcements available.</p></div>
+          <div className="text-center py-12 text-gray-400"><Bell className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>{newsField ? 'No news available.' : 'No announcements available.'}</p></div>
         ) : (
           <div className="space-y-4">
             {filtered.map((a, i) => {

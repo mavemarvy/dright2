@@ -7,7 +7,7 @@ import {
   MessageCircle, Users, Bell, Activity, TrendingUp, Wallet, Target,
   Settings as SettingsGear, HelpCircle, GraduationCap, Trophy,
   ChevronLeft, ChevronRight, Search, Heart, ScrollText,
-  Gift,
+  Gift, Newspaper, Rocket,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage, type TranslationKey } from '../contexts/LanguageContext';
@@ -22,14 +22,20 @@ import LanguageSwitcher from './LanguageSwitcher';
 
 type NavEntry = {
   path: string;
-  labelKey: TranslationKey;
+  labelKey?: TranslationKey;
+  label?: string;
   icon: React.ComponentType<{ className?: string }>;
   roles?: string[];
 };
 
+const navLabel = (item: NavEntry, t: (key: TranslationKey) => string): string =>
+  item.label ?? (item.labelKey ? navLabel(item, t) : item.path);
+
 const primaryNav: NavEntry[] = [
   { path: '/', labelKey: 'dashboard', icon: LayoutDashboard },
   { path: '/market', labelKey: 'market', icon: Store },
+  { path: '/news', label: 'News', icon: Newspaper },
+  { path: '/promote', label: 'Promote', icon: Rocket },
 ];
 
 const accountNav: NavEntry[] = [
@@ -119,10 +125,10 @@ function NavItem({ item, collapsed, onClick, t }: {
             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
         }`
       }
-      title={collapsed ? t(item.labelKey) : undefined}
+      title={collapsed ? navLabel(item, t) : undefined}
     >
       <item.icon className="w-5 h-5 shrink-0" />
-      {!collapsed && <span className="text-sm truncate">{t(item.labelKey)}</span>}
+      {!collapsed && <span className="text-sm truncate">{navLabel(item, t)}</span>}
     </NavLink>
   );
 }
@@ -135,7 +141,7 @@ function NavGroup({ group, collapsed, sidebarOpen, t, query }: {
   query: string;
 }) {
   const filtered = query
-    ? group.items.filter(item => t(item.labelKey).toLowerCase().includes(query.toLowerCase()))
+    ? group.items.filter(item => navLabel(item, t).toLowerCase().includes(query.toLowerCase()))
     : group.items;
   if (filtered.length === 0) return null;
 
@@ -241,6 +247,9 @@ export default function AppShell() {
               query={searchQuery}
             />
           ))}
+
+          {/* Desktop interface controls stay inside the scrollable sidebar so they never cover navigation. */}
+          {!collapsed && <UIPreferencesToggles />}
 
           {/* Admin Link */}
           {isAdmin && (
@@ -473,7 +482,7 @@ export default function AppShell() {
                 key={item.path}
                 to={item.path}
                 className="flex flex-col items-center py-2 px-6 min-w-[64px] min-h-[56px]"
-                aria-label={t(item.labelKey)}
+                aria-label={navLabel(item, t)}
               >
                 <div className={`relative flex items-center justify-center ${isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>
                   <item.icon className="w-6 h-6" />
@@ -485,7 +494,7 @@ export default function AppShell() {
                   )}
                 </div>
                 <span className={`text-xs mt-1 font-medium ${isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                  {t(item.labelKey)}
+                  {navLabel(item, t)}
                 </span>
               </NavLink>
             );
