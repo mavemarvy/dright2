@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Megaphone, Loader2, Tag, AlertTriangle, Bell } from 'lucide-react';
 import SeoHead from '../components/SeoHead';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import { supabase } from '../lib/supabase';
 
 interface Announcement {
@@ -35,6 +36,7 @@ export default function AnnouncementsPage() {
   }, []);
 
   const filtered = filter === 'all' ? announcements : announcements.filter(a => a.type === filter);
+  const sponsoredPlacement = filter === 'all' ? 'announcement_banner' : filter === 'news' ? 'news' : 'announcement_feed';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -55,6 +57,13 @@ export default function AnnouncementsPage() {
             <button key={t} onClick={() => setFilter(t)} className={`px-4 py-2 rounded-xl text-sm font-medium capitalize ${filter === t ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'}`}>{t}</button>
           ))}
         </div>
+
+        <SponsoredPlacementCard
+          placement={sponsoredPlacement}
+          variant={filter === 'all' ? 'compact' : 'feed'}
+          className="mb-6"
+          heading={filter === 'news' ? 'Sponsored news' : 'Sponsored announcement'}
+        />
 
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-blue-500 animate-spin" /></div>

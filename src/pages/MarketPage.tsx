@@ -40,6 +40,7 @@ import AdvancedFilterBar, {
   DEFAULT_FILTER_STATE, type AdvancedFilterState,
 } from '../components/marketplace/AdvancedFilterBar';
 import ShareMenu from '../components/marketplace/ShareMenu';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import { useLanguage } from '../contexts/LanguageContext';
 
 export default function MarketPage() {
@@ -385,6 +386,9 @@ export default function MarketPage() {
       {isBrowsing && (
         <div className="mt-8">
           <DiscoverySections />
+          {filters.sortBy !== 'trending' && (
+            <SponsoredPlacementCard placement="suggestions" variant="recommendation" className="my-8" />
+          )}
           <ContinueBrowsing />
           <NewArrivalsSection />
           <FeaturedSellersSection />
@@ -399,6 +403,10 @@ export default function MarketPage() {
           onFilterChange={setFilters}
           resultCount={sortedProducts.length}
         />
+
+        {filters.sortBy === 'trending' && (
+          <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />
+        )}
 
         <div className="flex items-center justify-between mb-4 mt-4">
           <div>
