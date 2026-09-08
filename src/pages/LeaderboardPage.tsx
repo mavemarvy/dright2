@@ -2,6 +2,7 @@ import { formatDisplayCurrency } from '../lib/currency';
 import { Trophy, Crown, Medal } from 'lucide-react';
 import { useLeaderboard } from '../lib/campaignHooks';
 import { LEVEL_ICONS, LEVEL_COLORS, type WorkerLevel } from '../lib/campaignTypes';
+import LeaderboardInformationFeed from '../components/promotion/LeaderboardInformationFeed';
 
 export default function LeaderboardPage() {
   const { entries, loading } = useLeaderboard();
@@ -37,6 +38,8 @@ export default function LeaderboardPage() {
           })}
         </div>
       )}
+
+      <LeaderboardInformationFeed />
 
       {/* Full Leaderboard */}
       {loading ? (

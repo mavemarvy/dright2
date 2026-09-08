@@ -28,6 +28,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../lib/currency';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 
 interface Announcement {
   id: string;
@@ -274,6 +275,9 @@ export default function DashboardPage() {
       <div className="mb-6">
         <DailySummaryWidget />
       </div>
+
+      {/* Paid recommendations are server-ranked and frequency-capped. */}
+      <SponsoredPlacementCard placement="recommendations" variant="recommendation" className="mb-6" />
 
       {/* Global Announcements */}
       {visibleAnnouncements.length > 0 && (

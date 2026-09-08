@@ -16,6 +16,7 @@ import {
 } from '../lib/notificationHooks';
 import type { NotificationCategory, NotificationItem, NotificationPriority } from '../lib/types';
 import NotificationCard from '../components/NotificationCard';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 
 // ─── Category tabs config ─────────────────────────────────────────────────────
 
@@ -503,6 +504,10 @@ export default function NotificationsPage() {
             </button>
           )}
         </div>
+
+        {!filters.showArchived && (filters.category === 'all' || filters.category === 'promotions') && (
+          <SponsoredPlacementCard placement="notifications" variant="notification" className="mb-4" />
+        )}
 
         {hook.loading ? (
           <NotificationSkeleton />
