@@ -2,7 +2,7 @@ name: Currency hardening codemod
 
 on:
   push:
-    branches: [main]
+    branches: [currency-cleanup]
     paths:
       - 'scripts/apply-currency-hardening.mjs'
       - '.github/workflows/currency-hardening.yml'
@@ -15,10 +15,11 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message, '[currency-hardening-output]') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout cleanup branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: currency-cleanup
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -32,10 +33,13 @@ jobs:
       - name: Apply exact currency hardening
         run: node scripts/apply-currency-hardening.mjs
 
-      - name: Build and audit
+      - name: Strict currency audit
+        run: node scripts/check-hardcoded-currency.mjs --strict
+
+      - name: TypeScript and Vite build
         run: npm run build
 
-      - name: Commit hardened source
+      - name: Commit hardened source to cleanup branch
         run: |
           if git diff --quiet; then
             echo "No currency hardening changes required."
@@ -45,4 +49,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src
           git commit -m "Currency: apply global display hardening [currency-hardening-output]"
-          git push origin HEAD:main
+          git push origin HEAD:currency-cleanup
