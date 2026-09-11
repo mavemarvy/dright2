@@ -5,6 +5,7 @@ import { Mail, Lock, Phone, User, ArrowRight, Loader2, MapPin } from 'lucide-rea
 import { useAuth } from '../contexts/AuthContext';
 import { getPendingRedirect, clearPendingRedirect } from '../lib/affiliate';
 import TurnstileWidget from '../components/TurnstileWidget';
+import { DrightMark, DrightWordmark } from '../components/DrightBrand';
 import { verifyTurnstileToken } from '../lib/security/turnstile';
 
 export default function SignUpPage() {
@@ -99,10 +100,11 @@ export default function SignUpPage() {
         >
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-6 sm:p-10">
             <div className="text-center mb-6">
-              <Link to="/welcome" className="inline-block">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dright</h1>
+              <Link to="/welcome" className="inline-flex flex-col items-center" aria-label="DRIGHT home">
+                <DrightMark size={76} title="DRIGHT" />
+                <DrightWordmark className="mt-3" />
               </Link>
-              <p className="text-gray-500 dark:text-gray-400 mt-2">Create your account</p>
+              <p className="text-gray-500 dark:text-gray-400 mt-3">Create your account</p>
             </div>
 
             {error && (
