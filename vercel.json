@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/invite/:token",
+      "destination": "/api/invite-page?token=:token"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
