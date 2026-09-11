@@ -1,4 +1,4 @@
-import { useId, type ComponentType } from 'react';
+import { useId, type ElementType } from 'react';
 
 export type DrightBrandVariant = 'standard' | 'admin';
 
@@ -152,7 +152,7 @@ export function DrightBrand({
 }
 
 type MetallicNavIconProps = {
-  icon: ComponentType<{ className?: string }>;
+  icon: ElementType<{ className?: string }>;
   active?: boolean;
   variant?: DrightBrandVariant;
   compact?: boolean;
