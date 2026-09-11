@@ -19,6 +19,7 @@ import ChatSystem from './ChatSystem';
 import AbandonedPaymentBanner from './AbandonedPaymentBanner';
 import { CompactPromoStrip } from './promotion/PromotionSurfaces';
 import LanguageSwitcher from './LanguageSwitcher';
+import { DrightBrand, MetallicNavIcon } from './DrightBrand';
 
 type NavEntry = {
   path: string;
@@ -90,22 +91,6 @@ const mobileBottomItems: NavEntry[] = [
   { path: '/notifications', labelKey: 'notifications', icon: Bell },
 ];
 
-function DrightLogo({ size = 40 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-      <defs>
-        <linearGradient id={`logoGrad-${size}`} x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#4f46e5" />
-          <stop offset="1" stopColor="#3b82f6" />
-        </linearGradient>
-      </defs>
-      <rect width="48" height="48" rx="12" fill={`url(#logoGrad-${size})`} />
-      <path d="M17 14H26.5C31.7467 14 36 18.2533 36 23.5C36 28.7467 31.7467 33 26.5 33H17V14ZM22 19V28H26.5C28.9853 28 31 25.9853 31 23.5C31 21.0147 28.9853 19 26.5 19H22Z" fill="white" />
-      <circle cx="33" cy="15" r="3" fill="#60a5fa" />
-    </svg>
-  );
-}
-
 function NavItem({ item, collapsed, onClick, t }: {
   item: NavEntry;
   collapsed: boolean;
@@ -117,18 +102,22 @@ function NavItem({ item, collapsed, onClick, t }: {
       to={item.path}
       onClick={onClick}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all ${
+        `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all duration-200 ${
           collapsed ? 'justify-center' : ''
         } ${
           isActive
-            ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+            ? 'bg-gradient-to-r from-slate-100 via-white to-slate-100 text-slate-950 shadow-sm ring-1 ring-slate-200 dark:from-slate-700 dark:via-slate-800 dark:to-slate-800 dark:text-white dark:ring-slate-600'
             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
         }`
       }
       title={collapsed ? navLabel(item, t) : undefined}
     >
-      <item.icon className="w-5 h-5 shrink-0" />
-      {!collapsed && <span className="text-sm truncate">{navLabel(item, t)}</span>}
+      {({ isActive }) => (
+        <>
+          <MetallicNavIcon icon={item.icon} active={isActive} compact={collapsed} />
+          {!collapsed && <span className="text-sm truncate">{navLabel(item, t)}</span>}
+        </>
+      )}
     </NavLink>
   );
 }
@@ -193,11 +182,8 @@ export default function AppShell() {
         className={`hidden md:flex md:flex-col ${sidebarWidth} md:fixed md:inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-300`}
       >
         {/* Logo + Collapse Toggle */}
-        <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-4 py-5 border-b border-gray-100 dark:border-gray-700`}>
-          <div className="flex items-center gap-3">
-            <DrightLogo size={collapsed ? 36 : 40} />
-            {!collapsed && <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Dright</span>}
-          </div>
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-4 py-4 border-b border-gray-100 dark:border-gray-700`}>
+          <DrightBrand size={collapsed ? 38 : 46} compact={collapsed} />
           {!collapsed && (
             <button
               onClick={() => setCollapsed(true)}
@@ -229,7 +215,7 @@ export default function AppShell() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder={t('searchMenu')}
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:bg-white dark:focus:bg-gray-900 focus:border-primary-400 outline-none transition-colors text-gray-900 dark:text-gray-100"
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:bg-white dark:focus:bg-gray-900 focus:border-slate-400 outline-none transition-colors text-gray-900 dark:text-gray-100"
               />
             </div>
           </div>
@@ -261,14 +247,18 @@ export default function AppShell() {
                     collapsed ? 'justify-center' : ''
                   } ${
                     isActive
-                      ? 'bg-warning-muted text-warning'
-                      : 'text-warning hover:bg-warning-muted/50'
+                      ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+                      : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50/80 dark:hover:bg-amber-900/10'
                   }`
                 }
                 title={collapsed ? t('adminPanel') : undefined}
               >
-                <Shield className="w-5 h-5 shrink-0" />
-                {!collapsed && <span className="text-sm">{t('adminPanel')}</span>}
+                {({ isActive }) => (
+                  <>
+                    <MetallicNavIcon icon={Shield} active={isActive} variant="admin" compact={collapsed} />
+                    {!collapsed && <span className="text-sm">{t('adminPanel')}</span>}
+                  </>
+                )}
               </NavLink>
             </div>
           )}
@@ -278,7 +268,7 @@ export default function AppShell() {
         <div className="border-t border-gray-100 p-3">
           {!collapsed && (
             <div className="flex items-center gap-3 px-1 py-2 mb-2">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0 ring-1 ring-slate-200">
                 {profile?.avatar_url ? (
                   <img src={profile.avatar_url} alt={profile?.full_name || 'User'} className="w-full h-full object-cover" />
                 ) : (
@@ -332,24 +322,21 @@ export default function AppShell() {
       </aside>
 
       {/* Mobile Header */}
-      <header className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm safe-area-top">
+      <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 shadow-sm safe-area-top">
         <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 min-h-[56px]">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2.5 -ml-1 text-gray-600 hover:text-gray-900 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="p-2.5 -ml-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Open menu"
           >
             <Menu className="w-6 h-6" />
           </button>
-          <div className="flex items-center gap-2">
-            <DrightLogo size={28} />
-            <span className="text-lg font-bold text-gray-900">Dright</span>
-          </div>
+          <DrightBrand size={31} />
           <div className="flex items-center gap-1 sm:gap-2">
             <LanguageSwitcher variant="compact" />
             {uiPrefs.showNotificationButton && <NotificationBar />}
             <ThemeToggle variant="default" />
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0 ring-1 ring-slate-200">
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt={profile?.full_name || 'User'} className="w-full h-full object-cover" />
               ) : (
@@ -372,17 +359,14 @@ export default function AppShell() {
               className="fixed inset-0 bg-black/50 z-50 md:hidden"
             />
             <motion.aside
-              className="fixed left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-white dark:bg-gray-800 z-50 md:hidden shadow-2xl flex flex-col safe-area-top-bottom overscroll-contain"
+              className="fixed left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-white/96 dark:bg-gray-800/98 backdrop-blur-md z-50 md:hidden shadow-2xl flex flex-col safe-area-top-bottom overscroll-contain"
               initial={{ x: -300 }}
               animate={{ x: 0 }}
               exit={{ x: -300 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             >
-              <div className="shrink-0 flex items-center justify-between px-4 py-5 border-b border-gray-100 dark:border-gray-700">
-                <div className="flex items-center gap-3">
-                  <DrightLogo size={40} />
-                  <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Dright</span>
-                </div>
+              <div className="shrink-0 flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700">
+                <DrightBrand size={54} />
                 <button onClick={() => setSidebarOpen(false)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close menu">
                   <X className="w-6 h-6" />
                 </button>
@@ -397,7 +381,7 @@ export default function AppShell() {
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder={t('searchMenu')}
-                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:bg-white dark:focus:bg-gray-900 focus:border-primary-400 outline-none transition-colors text-gray-900 dark:text-gray-100"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:bg-white dark:focus:bg-gray-900 focus:border-slate-400 outline-none transition-colors text-gray-900 dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -420,12 +404,16 @@ export default function AppShell() {
                       onClick={() => setSidebarOpen(false)}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all ${
-                          isActive ? 'bg-warning-muted text-warning' : 'text-warning hover:bg-warning-muted/50'
+                          isActive ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200' : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50/80 dark:hover:bg-amber-900/10'
                         }`
                       }
                     >
-                      <Shield className="w-5 h-5 shrink-0" />
-                      <span className="text-sm">{t('adminPanel')}</span>
+                      {({ isActive }) => (
+                        <>
+                          <MetallicNavIcon icon={Shield} active={isActive} variant="admin" />
+                          <span className="text-sm">{t('adminPanel')}</span>
+                        </>
+                      )}
                     </NavLink>
                   </div>
                 )}
@@ -473,7 +461,7 @@ export default function AppShell() {
       <ChatSystem />
 
       {/* Mobile Bottom Navigation — simplified to 3 items */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-40 shadow-lg safe-area-bottom" aria-label="Main navigation">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/96 dark:bg-gray-800/98 backdrop-blur border-t border-gray-200 dark:border-gray-700 z-40 shadow-lg safe-area-bottom" aria-label="Main navigation">
         <div className="flex justify-around items-center py-2">
           {mobileBottomItems.map(item => {
             const isActive = location.pathname === item.path;
@@ -481,19 +469,19 @@ export default function AppShell() {
               <NavLink
                 key={item.path}
                 to={item.path}
-                className="flex flex-col items-center py-2 px-6 min-w-[64px] min-h-[56px]"
+                className="flex flex-col items-center py-1.5 px-6 min-w-[64px] min-h-[56px]"
                 aria-label={navLabel(item, t)}
               >
-                <div className={`relative flex items-center justify-center ${isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                  <item.icon className="w-6 h-6" />
+                <div className="relative flex items-center justify-center">
+                  <MetallicNavIcon icon={item.icon} active={isActive} />
                   {isActive && (
                     <motion.div
                       layoutId="bottomNavIndicator"
-                      className="absolute -bottom-1 w-1 h-1 bg-primary-600 rounded-full"
+                      className="absolute -bottom-1.5 w-1 h-1 bg-slate-800 dark:bg-slate-200 rounded-full"
                     />
                   )}
                 </div>
-                <span className={`text-xs mt-1 font-medium ${isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                <span className={`text-xs mt-1 font-medium ${isActive ? 'text-slate-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
                   {navLabel(item, t)}
                 </span>
               </NavLink>
