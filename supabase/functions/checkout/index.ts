@@ -58,6 +58,19 @@ function usesAttributedTaskPool(sourceType: SourceType | null): boolean {
   ].includes(sourceType);
 }
 
+function expectedAdvertiserGrade(sourceType: SourceType, sourceLevel: string | null): string | null {
+  if (sourceType === "pro_advertiser") return "Pro";
+  if (sourceType === "super_advertiser") return "Super";
+  if (sourceType === "partnership") return "Partnership";
+  if (sourceType !== "advertiser") return null;
+
+  const normalized = String(sourceLevel || "").trim().toLowerCase();
+  if (/(^|\s)(adv\s*)?a$/.test(normalized)) return "A";
+  if (/(^|\s)(adv\s*)?b$/.test(normalized)) return "B";
+  if (/(^|\s)(adv\s*)?c$/.test(normalized)) return "C";
+  return null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
@@ -152,11 +165,11 @@ Deno.serve(async (req: Request) => {
 
       const { data: referrer } = await supabase
         .from("users")
-        .select("id,role,marketer_level,advertiser_grade,account_status")
+        .select("id,role,marketer_status,marketer_level,advertiser_status,advertiser_grade,account_status")
         .eq("id", referrerId)
         .maybeSingle();
 
-      if (!referrer || referrer.account_status !== "ACTIVE") {
+      if (!referrer || String(referrer.account_status || "").toUpperCase() !== "ACTIVE") {
         referrerId = null;
         sourceType = null;
         sourceLevel = null;
@@ -169,19 +182,35 @@ Deno.serve(async (req: Request) => {
       } else {
         referrerRole = referrer.role;
 
-        // Revalidate privileged source eligibility at conversion time.
-        if (sourceType === "sales_team" && Number(referrer.marketer_level || 0) < 3) {
-          return json({ error: "Sales Team attribution is not eligible for this account" }, 403);
+        // Validate privileged attribution from authoritative account state. The
+        // paid conversion boundary revalidates this again before any payout.
+        if (sourceType === "sales_team") {
+          if (String(referrer.marketer_status || "").toLowerCase() !== "approved" || Number(referrer.marketer_level || 0) < 3) {
+            return json({ error: "Sales Team attribution is not eligible for this account" }, 403);
+          }
+          const levelMatch = String(sourceLevel || "").match(/(?:mkt\s*l?)?([3-5])$/i);
+          if (levelMatch && Number(levelMatch[1]) !== Number(referrer.marketer_level || 0)) {
+            return json({ error: "Sales Team level does not match this attribution link" }, 403);
+          }
         }
+
         if (["advertiser", "pro_advertiser", "super_advertiser", "partnership"].includes(sourceType)) {
+          if (String(referrer.advertiser_status || "").toLowerCase() !== "approved") {
+            return json({ error: "Advertising attribution is not approved for this account" }, 403);
+          }
+
           const grade = String(referrer.advertiser_grade || "");
-          const required = {
-            advertiser: "A",
-            pro_advertiser: "Pro",
-            super_advertiser: "Super",
-            partnership: "Partnership",
-          }[sourceType];
-          if (grade !== required) return json({ error: "Advertising attribution is not eligible for this account" }, 403);
+          const required = expectedAdvertiserGrade(sourceType, sourceLevel);
+          if (sourceType === "advertiser") {
+            if (!["A", "B", "C"].includes(grade)) {
+              return json({ error: "Advertising attribution is not eligible for this account" }, 403);
+            }
+            if (required && grade.toLowerCase() !== required.toLowerCase()) {
+              return json({ error: "Advertiser grade does not match this attribution link" }, 403);
+            }
+          } else if (!required || grade.toLowerCase() !== required.toLowerCase()) {
+            return json({ error: "Advertising attribution is not eligible for this account" }, 403);
+          }
         }
       }
     } else if (body.ref_code) {
@@ -191,7 +220,7 @@ Deno.serve(async (req: Request) => {
         .eq("referral_code", body.ref_code)
         .maybeSingle();
 
-      if (referrer && referrer.account_status === "ACTIVE") {
+      if (referrer && String(referrer.account_status || "").toUpperCase() === "ACTIVE") {
         referrerId = referrer.id;
         referrerRole = referrer.role;
         sourceType = "affiliate";
