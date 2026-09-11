@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getPendingRedirect, clearPendingRedirect } from '../lib/affiliate';
 import TurnstileWidget from '../components/TurnstileWidget';
+import { DrightMark, DrightWordmark } from '../components/DrightBrand';
 import { verifyTurnstileToken } from '../lib/security/turnstile';
 
 export default function SignInPage() {
@@ -46,7 +47,6 @@ export default function SignInPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      // Check if account is banned
       const { data: profile } = await supabase
         .from('users')
         .select('account_status')
@@ -74,7 +74,6 @@ export default function SignInPage() {
       setError(error.message);
       setLoading(false);
     } else if (mockOtp) {
-      // Show OTP in UI since SMS is mocked
       navigate('/verify-otp', { state: { phone, mockOtp } });
     }
   };
@@ -207,10 +206,11 @@ export default function SignInPage() {
         >
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 sm:p-10">
             <div className="text-center mb-8">
-              <Link to="/welcome" className="inline-block">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dright</h1>
+              <Link to="/welcome" className="inline-flex flex-col items-center" aria-label="DRIGHT home">
+                <DrightMark size={82} title="DRIGHT" />
+                <DrightWordmark className="mt-3" />
               </Link>
-              <p className="text-gray-500 dark:text-gray-400 mt-2">Sign in to your account</p>
+              <p className="text-gray-500 dark:text-gray-400 mt-3">Sign in to your account</p>
             </div>
 
             {error && (
