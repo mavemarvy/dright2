@@ -37,7 +37,7 @@ export default async function handler(req: any, res: any) {
 
     let html = await upstream.text();
     const inviteUrl = `https://www.dright.store/invite/${encodeURIComponent(token)}`;
-    const imageUrl = `https://www.dright.store/api/dright-og-v4?brand=metallic-v4`;
+    const imageUrl = 'https://www.dright.store/api/dright-og-v5?brand=premium-metallic-v5';
     const safeInviteUrl = escapeHtml(inviteUrl);
     const safeImageUrl = escapeHtml(imageUrl);
 
@@ -50,7 +50,8 @@ export default async function handler(req: any, res: any) {
         /<meta property="og:url" content="[^"]*"\s*\/?>/i,
         `<meta property="og:url" content="${safeInviteUrl}" />`,
       )
-      .replaceAll('https://www.dright.store/api/dright-og-v4', safeImageUrl);
+      .replace(/https:\/\/www\.dright\.store\/api\/dright-og-v5\?brand=premium-metallic-v5/g, safeImageUrl)
+      .replace(/https:\/\/www\.dright\.store\/api\/dright-og-v4(?:\?brand=metallic-v4)?/g, safeImageUrl);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, must-revalidate');
