@@ -88,7 +88,7 @@ const allNavGroups: { title: TranslationKey; items: NavEntry[] }[] = [
 const mobileBottomItems: NavEntry[] = [
   { path: '/', labelKey: 'dashboard', icon: LayoutDashboard },
   { path: '/market', labelKey: 'market', icon: Store },
-  { path: '/notifications', labelKey: 'notifications', icon: Bell },
+  { path: '/news', label: 'News', icon: Newspaper },
 ];
 
 function NavItem({ item, collapsed, onClick, t }: {
