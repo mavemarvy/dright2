@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Eye,
   Image as ImageIcon,
+  Link as LinkIcon,
   Loader2,
   Megaphone,
   Newspaper,
@@ -18,6 +19,7 @@ import {
   Send,
   Trash2,
   TrendingUp,
+  Upload,
   Video,
   X,
 } from 'lucide-react';
@@ -77,6 +79,7 @@ const CATEGORY_LABELS: Record<ContentCategory, string> = {
 
 const NEWS_CATEGORIES: ContentCategory[] = ['news', 'update', 'market', 'affiliate', 'promo', 'referral'];
 const ANNOUNCEMENT_CATEGORIES: ContentCategory[] = ['announcement', 'update', 'market', 'affiliate', 'promo', 'referral'];
+const MAX_MEDIA_SIZE = 50 * 1024 * 1024;
 
 const emptyForm = (kind: ContentKind): ContentForm => ({
   title: '',
@@ -113,6 +116,16 @@ function contentParams(item: GlobalContentItem, overrides: Partial<GlobalContent
   };
 }
 
+function safeExtension(file: File, mediaType: MediaType) {
+  const candidate = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (candidate && candidate.length <= 8) return candidate;
+  if (mediaType === 'video') return file.type === 'video/webm' ? 'webm' : file.type === 'video/quicktime' ? 'mov' : 'mp4';
+  if (file.type === 'image/png') return 'png';
+  if (file.type === 'image/webp') return 'webp';
+  if (file.type === 'image/gif') return 'gif';
+  return 'jpg';
+}
+
 export default function AdminAnnouncementsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const contentKind: ContentKind = searchParams.get('mode') === 'news' ? 'news' : 'announcement';
@@ -124,6 +137,7 @@ export default function AdminAnnouncementsPage() {
   const [form, setForm] = useState<ContentForm>(() => emptyForm(contentKind));
   const [sort, setSort] = useState<SortOption>('newest');
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -196,6 +210,54 @@ export default function AdminAnnouncementsPage() {
     setShowForm(true);
   };
 
+  const handleMediaUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    const mediaType: MediaType | null = file.type.startsWith('image/')
+      ? 'image'
+      : file.type.startsWith('video/')
+        ? 'video'
+        : null;
+
+    if (!mediaType) {
+      setError('Choose an image or video file.');
+      return;
+    }
+    if (file.size > MAX_MEDIA_SIZE) {
+      setError('Media files must be 50 MB or smaller.');
+      return;
+    }
+
+    setUploadingMedia(true);
+    setError(null);
+    const extension = safeExtension(file, mediaType);
+    const unique = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const objectPath = `${contentKind}/${new Date().toISOString().slice(0, 10)}/${unique}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('news-media')
+      .upload(objectPath, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type,
+      });
+
+    if (uploadError) {
+      setError(uploadError.message || 'Media upload failed.');
+      setUploadingMedia(false);
+      return;
+    }
+
+    const { data } = supabase.storage.from('news-media').getPublicUrl(objectPath);
+    setForm((current) => ({ ...current, mediaUrl: data.publicUrl, mediaType }));
+    setUploadingMedia(false);
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.title.trim() || !form.message.trim()) {
@@ -222,12 +284,13 @@ export default function AdminAnnouncementsPage() {
       p_cta_label: form.ctaLabel.trim() || null,
     };
 
+    const wasEditing = Boolean(editing);
     const result = editing
       ? await supabase.rpc('admin_update_global_content', { p_id: editing.id, ...payload })
       : await supabase.rpc('admin_create_global_content', payload);
 
     if (result.error) {
-      setError(result.error.message || `Failed to ${editing ? 'update' : 'publish'} ${isNewsMode ? 'news' : 'announcement'}.`);
+      setError(result.error.message || `Failed to ${wasEditing ? 'update' : 'publish'} ${isNewsMode ? 'news' : 'announcement'}.`);
       setSubmitting(false);
       return;
     }
@@ -236,7 +299,7 @@ export default function AdminAnnouncementsPage() {
     setShowForm(false);
     setEditing(null);
     setForm(emptyForm(contentKind));
-    setSuccess(`${isNewsMode ? 'News post' : 'Announcement'} ${editing ? 'updated' : 'published'} successfully.`);
+    setSuccess(`${isNewsMode ? 'News post' : 'Announcement'} ${wasEditing ? 'updated' : 'published'} successfully.`);
     window.setTimeout(() => setSuccess(null), 3500);
     await fetchContent();
   };
@@ -284,16 +347,14 @@ export default function AdminAnnouncementsPage() {
               onClick={() => switchMode('announcement')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${!isNewsMode ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
             >
-              <Megaphone className="h-4 w-4" />
-              Announcements
+              <Megaphone className="h-4 w-4" /> Announcements
             </button>
             <button
               type="button"
               onClick={() => switchMode('news')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${isNewsMode ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
             >
-              <Newspaper className="h-4 w-4" />
-              News Posting
+              <Newspaper className="h-4 w-4" /> News Posting
             </button>
           </div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
@@ -302,29 +363,19 @@ export default function AdminAnnouncementsPage() {
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
             {isNewsMode
-              ? 'Publish editable DRIGHT news, pin important stories, mark trending posts, attach media or links, and mention all users when a global notification is required.'
-              : 'Publish platform announcements. Announcements can optionally appear in the News feed and can notify every DRIGHT user with a direct link.'}
+              ? 'Create Facebook-style DRIGHT news posts with text, uploaded images or videos, links, categories, pinning, trending status, and global mentions.'
+              : 'Publish platform announcements. Announcements can also appear in News and can notify every DRIGHT user with a direct link.'}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={sort}
-            onChange={(event) => setSort(event.target.value as SortOption)}
-            className="min-h-[44px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-primary-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-            aria-label="Sort posts"
-          >
+          <select value={sort} onChange={(event) => setSort(event.target.value as SortOption)} className="min-h-[44px] rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-primary-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" aria-label="Sort posts">
             <option value="newest">Recently posted</option>
             <option value="oldest">Oldest first</option>
             <option value="trending">Trending</option>
           </select>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex min-h-[44px] items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 font-semibold text-white transition hover:bg-primary-700"
-          >
-            <Plus className="h-5 w-5" />
-            New {isNewsMode ? 'News Post' : 'Announcement'}
+          <button type="button" onClick={openCreate} className="flex min-h-[44px] items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 font-semibold text-white transition hover:bg-primary-700">
+            <Plus className="h-5 w-5" /> New {isNewsMode ? 'News Post' : 'Announcement'}
           </button>
         </div>
       </div>
@@ -332,23 +383,17 @@ export default function AdminAnnouncementsPage() {
       <AnimatePresence>
         {success && (
           <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="mb-4 flex items-center gap-2 rounded-xl bg-success-muted p-3 text-success">
-            <CheckCircle className="h-5 w-5" />
-            {success}
+            <CheckCircle className="h-5 w-5" /> {success}
           </motion.div>
         )}
       </AnimatePresence>
 
       {error && !showForm && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl bg-error-muted p-3 text-sm text-error">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <div className="mb-4 flex items-start gap-2 rounded-xl bg-error-muted p-3 text-sm text-error"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>
       )}
 
       {loading ? (
-        <div className="flex min-h-[320px] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-        </div>
+        <div className="flex min-h-[320px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary-600" /></div>
       ) : sortedItems.length === 0 ? (
         <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
           {isNewsMode ? <Newspaper className="mx-auto mb-4 h-16 w-16 text-gray-300" /> : <Megaphone className="mx-auto mb-4 h-16 w-16 text-gray-300" />}
@@ -358,30 +403,17 @@ export default function AdminAnnouncementsPage() {
       ) : (
         <div className="space-y-4">
           {sortedItems.map((item, index) => (
-            <motion.article
-              key={item.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(index * 0.035, 0.2) }}
-              className={`overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-gray-800 ${item.is_pinned ? 'border-primary-300 dark:border-primary-700' : 'border-gray-100 dark:border-gray-700'} ${!item.is_active ? 'opacity-60' : ''}`}
-            >
+            <motion.article key={item.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.035, 0.2) }} className={`overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-gray-800 ${item.is_pinned ? 'border-primary-300 dark:border-primary-700' : 'border-gray-100 dark:border-gray-700'} ${!item.is_active ? 'opacity-60' : ''}`}>
               {item.media_url && (
-                <div className="max-h-[360px] overflow-hidden bg-gray-950">
-                  {item.media_type === 'video' ? (
-                    <video src={item.media_url} controls preload="metadata" className="max-h-[360px] w-full object-contain" />
-                  ) : (
-                    <img src={item.media_url} alt="" className="max-h-[360px] w-full object-cover" />
-                  )}
+                <div className="max-h-[420px] overflow-hidden bg-gray-950">
+                  {item.media_type === 'video' ? <video src={item.media_url} controls preload="metadata" className="max-h-[420px] w-full object-contain" /> : <img src={item.media_url} alt="" className="max-h-[420px] w-full object-cover" />}
                 </div>
               )}
-
               <div className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                        {CATEGORY_LABELS[item.type]}
-                      </span>
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-gray-600 dark:bg-gray-700 dark:text-gray-300">{CATEGORY_LABELS[item.type]}</span>
                       {item.is_pinned && <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"><Pin className="h-3 w-3" />Pinned</span>}
                       {item.is_trending && <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"><TrendingUp className="h-3 w-3" />Trending</span>}
                       {item.mention_all && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"><AtSign className="h-3 w-3" />All DRIGHT</span>}
@@ -390,21 +422,13 @@ export default function AdminAnnouncementsPage() {
                     </div>
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white">{item.title}</h2>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gray-600 dark:text-gray-300">{item.message}</p>
-
                     <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-400">
                       <span>{new Date(item.published_at).toLocaleString()}</span>
                       <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" />{item.view_count || 0} unique views</span>
-                      {item.external_url && (
-                        <a href={item.external_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary-600 hover:underline">
-                          {item.cta_label || 'Open link'} <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      )}
-                      <a href={publicUrl(item)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary-600 hover:underline">
-                        View public post <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                      {item.external_url && <a href={item.external_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary-600 hover:underline">{item.cta_label || 'Open link'} <ExternalLink className="h-3.5 w-3.5" /></a>}
+                      <a href={publicUrl(item)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary-600 hover:underline">View public post <ExternalLink className="h-3.5 w-3.5" /></a>
                     </div>
                   </div>
-
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                     <button type="button" disabled={busyId === item.id} onClick={() => void updateItem(item, { is_pinned: !item.is_pinned })} className={`rounded-lg p-2 transition ${item.is_pinned ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30' : 'text-gray-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20'}`} title={item.is_pinned ? 'Unpin' : 'Pin'}><Pin className="h-4 w-4" /></button>
                     <button type="button" disabled={busyId === item.id} onClick={() => void updateItem(item, { is_trending: !item.is_trending })} className={`rounded-lg p-2 transition ${item.is_trending ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/30' : 'text-gray-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20'}`} title={item.is_trending ? 'Remove trending' : 'Mark trending'}><TrendingUp className="h-4 w-4" /></button>
@@ -424,101 +448,66 @@ export default function AdminAnnouncementsPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4" onClick={() => setShowForm(false)}>
             <motion.div initial={{ scale: 0.97, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.97, opacity: 0, y: 12 }} onClick={(event) => event.stopPropagation()} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-gray-800 sm:p-6">
               <div className="mb-5 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">{editing ? 'Edit' : 'Create'} {isNewsMode ? 'News Post' : 'Announcement'}</h3>
-                  <p className="mt-1 text-xs text-gray-500">Only DRIGHT admins with News/Announcement publishing access can save changes.</p>
-                </div>
+                <div><h3 className="text-xl font-bold text-gray-900 dark:text-white">{editing ? 'Edit' : 'Create'} {isNewsMode ? 'News Post' : 'Announcement'}</h3><p className="mt-1 text-xs text-gray-500">Only authorized DRIGHT admins can publish, edit, pin, or delete these posts.</p></div>
                 <button type="button" onClick={() => setShowForm(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700"><X className="h-5 w-5" /></button>
               </div>
 
-              {error && (
-                <div className="mb-4 flex items-start gap-2 rounded-xl bg-error-muted p-3 text-sm text-error">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
+              {error && <div className="mb-4 flex items-start gap-2 rounded-xl bg-error-muted p-3 text-sm text-error"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">Category</label>
                   <div className="flex flex-wrap gap-2">
-                    {availableCategories.map((category) => (
-                      <button key={category} type="button" onClick={() => setForm((current) => ({ ...current, category }))} className={`rounded-full border px-3 py-2 text-sm font-medium transition ${form.category === category ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-primary-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
-                        {CATEGORY_LABELS[category]}
-                      </button>
-                    ))}
+                    {availableCategories.map((category) => <button key={category} type="button" onClick={() => setForm((current) => ({ ...current, category }))} className={`rounded-full border px-3 py-2 text-sm font-medium transition ${form.category === category ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-primary-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>{CATEGORY_LABELS[category]}</button>)}
                   </div>
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">Title</label>
-                  <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder={isNewsMode ? 'News headline' : 'Announcement title'} required maxLength={180} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-                </div>
+                <div><label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">Title</label><input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder={isNewsMode ? 'News headline' : 'Announcement title'} required maxLength={180} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white" /></div>
 
                 <div>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200">Post text</label>
-                    <span className="text-xs text-gray-400">Use @all, @everyone, or @dright to mention everyone automatically.</span>
-                  </div>
+                  <div className="mb-2 flex items-center justify-between gap-2"><label className="block text-sm font-semibold text-gray-700 dark:text-gray-200">Post text</label><span className="text-xs text-gray-400">@all, @everyone, or @dright mentions everyone.</span></div>
                   <textarea value={form.message} onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))} placeholder="Write the post..." rows={7} required className="w-full resize-y rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-[140px_1fr]">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">Media type</label>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
-                      <button type="button" onClick={() => setForm((current) => ({ ...current, mediaType: 'image' }))} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm ${form.mediaType === 'image' ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'border-gray-200 text-gray-500 dark:border-gray-600 dark:text-gray-300'}`}><ImageIcon className="h-4 w-4" />Image</button>
-                      <button type="button" onClick={() => setForm((current) => ({ ...current, mediaType: 'video' }))} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm ${form.mediaType === 'video' ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'border-gray-200 text-gray-500 dark:border-gray-600 dark:text-gray-300'}`}><Video className="h-4 w-4" />Video</button>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">Photo or video <span className="font-normal text-gray-400">(optional)</span></label>
+                  {form.mediaUrl ? (
+                    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-950 dark:border-gray-600">
+                      <div className="relative max-h-[360px] overflow-hidden">
+                        {form.mediaType === 'video' ? <video src={form.mediaUrl} controls playsInline className="max-h-[360px] w-full object-contain" /> : <img src={form.mediaUrl} alt="Post media preview" className="max-h-[360px] w-full object-contain" />}
+                        <button type="button" onClick={() => setForm((current) => ({ ...current, mediaUrl: '' }))} className="absolute right-2 top-2 rounded-full bg-black/70 p-2 text-white hover:bg-black" aria-label="Remove media"><X className="h-4 w-4" /></button>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">Media URL <span className="font-normal text-gray-400">(optional)</span></label>
-                    <input type="url" value={form.mediaUrl} onChange={(event) => setForm((current) => ({ ...current, mediaUrl: event.target.value }))} placeholder="https://... image or video" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none focus:border-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-                  </div>
+                  ) : (
+                    <label className={`flex min-h-[112px] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center transition hover:border-primary-400 hover:bg-primary-50/40 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-primary-500 ${uploadingMedia ? 'pointer-events-none opacity-60' : ''}`}>
+                      {uploadingMedia ? <Loader2 className="h-7 w-7 animate-spin text-primary-600" /> : <Upload className="h-7 w-7 text-primary-600" />}
+                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{uploadingMedia ? 'Uploading media…' : 'Add photo or video'}</span>
+                      <span className="text-xs text-gray-500">Images and videos up to 50 MB</span>
+                      <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" className="hidden" disabled={uploadingMedia} onChange={(event) => void handleMediaUpload(event)} />
+                    </label>
+                  )}
+                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-400"><ImageIcon className="h-3.5 w-3.5" /><Video className="h-3.5 w-3.5" />Uploaded media is stored in DRIGHT’s admin-only News Media bucket and served publicly with the post.</div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">Destination link <span className="font-normal text-gray-400">(optional)</span></label>
-                    <input type="url" value={form.externalUrl} onChange={(event) => setForm((current) => ({ ...current, externalUrl: event.target.value }))} placeholder="https://..." className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none focus:border-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">Link button label</label>
-                    <input value={form.ctaLabel} onChange={(event) => setForm((current) => ({ ...current, ctaLabel: event.target.value }))} placeholder="Learn more / Shop now / View offer" maxLength={40} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none focus:border-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
+                <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-600">
+                  <div className="mb-3 flex items-center gap-2"><LinkIcon className="h-4 w-4 text-primary-600" /><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Optional link / call to action</span></div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <input value={form.externalUrl} onChange={(event) => setForm((current) => ({ ...current, externalUrl: event.target.value }))} placeholder="https://… or /market" className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none focus:border-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
+                    <input value={form.ctaLabel} onChange={(event) => setForm((current) => ({ ...current, ctaLabel: event.target.value }))} placeholder="Learn more / Shop now" maxLength={40} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none focus:border-primary-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
                   </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {!isNewsMode && (
-                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600">
-                      <input type="checkbox" checked={form.showInNews} onChange={(event) => setForm((current) => ({ ...current, showInNews: event.target.checked }))} className="mt-1 h-4 w-4" />
-                      <span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Show in News</span><span className="text-xs text-gray-500">Makes this announcement appear under the News “Announcements” category.</span></span>
-                    </label>
-                  )}
-                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600">
-                    <input type="checkbox" checked={form.mentionAll} onChange={(event) => setForm((current) => ({ ...current, mentionAll: event.target.checked }))} className="mt-1 h-4 w-4" />
-                    <span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Mention @all DRIGHT users</span><span className="text-xs text-gray-500">Creates an in-app notification for every active DRIGHT user with a direct link to this post.</span></span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600">
-                    <input type="checkbox" checked={form.isPinned} onChange={(event) => setForm((current) => ({ ...current, isPinned: event.target.checked }))} className="mt-1 h-4 w-4" />
-                    <span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Pin post</span><span className="text-xs text-gray-500">Pinned content stays above normal sorting.</span></span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600">
-                    <input type="checkbox" checked={form.isTrending} onChange={(event) => setForm((current) => ({ ...current, isTrending: event.target.checked }))} className="mt-1 h-4 w-4" />
-                    <span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Mark trending</span><span className="text-xs text-gray-500">Trending content is prioritized by the Trending sort and automatically notifies active DRIGHT users.</span></span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600">
-                    <input type="checkbox" checked={form.isActive} onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))} className="mt-1 h-4 w-4" />
-                    <span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Published / active</span><span className="text-xs text-gray-500">Turn off to hide the post without deleting it.</span></span>
-                  </label>
+                  {!isNewsMode && <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600"><input type="checkbox" checked={form.showInNews} onChange={(event) => setForm((current) => ({ ...current, showInNews: event.target.checked }))} className="mt-1 h-4 w-4" /><span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Show in News</span><span className="text-xs text-gray-500">Also places this announcement under the News “Announcements” category.</span></span></label>}
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600"><input type="checkbox" checked={form.mentionAll} onChange={(event) => setForm((current) => ({ ...current, mentionAll: event.target.checked }))} className="mt-1 h-4 w-4" /><span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Mention @all DRIGHT users</span><span className="text-xs text-gray-500">Every active user receives an in-app notification linking to this exact post.</span></span></label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600"><input type="checkbox" checked={form.isPinned} onChange={(event) => setForm((current) => ({ ...current, isPinned: event.target.checked }))} className="mt-1 h-4 w-4" /><span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Pin post</span><span className="text-xs text-gray-500">Pinned content stays above ordinary sorting.</span></span></label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600"><input type="checkbox" checked={form.isTrending} onChange={(event) => setForm((current) => ({ ...current, isTrending: event.target.checked }))} className="mt-1 h-4 w-4" /><span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Mark trending</span><span className="text-xs text-gray-500">Prioritizes the post under Trending and notifies active DRIGHT users.</span></span></label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-600"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))} className="mt-1 h-4 w-4" /><span><span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">Published / active</span><span className="text-xs text-gray-500">Turn off to hide the post without deleting it.</span></span></label>
                 </div>
 
                 <div className="flex flex-col-reverse gap-3 pt-1 sm:flex-row">
                   <button type="button" onClick={() => setShowForm(false)} className="min-h-[48px] flex-1 rounded-xl border border-gray-200 px-4 py-3 font-medium text-gray-600 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">Cancel</button>
-                  <button type="submit" disabled={submitting} className="flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 font-semibold text-white transition hover:bg-primary-700 disabled:opacity-50">
-                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    {editing ? 'Save changes' : `Publish ${isNewsMode ? 'news' : 'announcement'}`}
-                  </button>
+                  <button type="submit" disabled={submitting || uploadingMedia} className="flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 font-semibold text-white transition hover:bg-primary-700 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{editing ? 'Save changes' : `Publish ${isNewsMode ? 'news' : 'announcement'}`}</button>
                 </div>
               </form>
             </motion.div>
