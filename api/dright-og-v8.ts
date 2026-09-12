@@ -1,15 +1,15 @@
 import { createHash } from 'node:crypto';
 
-import part00 from './og-v8/part00.js';
-import part01 from './og-v8/part01.js';
-import part02 from './og-v8/part02.js';
-import part03 from './og-v8/part03.js';
-import part04 from './og-v8/part04.js';
-import part05 from './og-v8/part05.js';
-import part06 from './og-v8/part06.js';
-import part07 from './og-v8/part07.js';
-import part08 from './og-v8/part08.js';
-import part09 from './og-v8/part09.js';
+import part00 from '../server/og-v8/part00.js';
+import part01 from '../server/og-v8/part01.js';
+import part02 from '../server/og-v8/part02.js';
+import part03 from '../server/og-v8/part03.js';
+import part04 from '../server/og-v8/part04.js';
+import part05 from '../server/og-v8/part05.js';
+import part06 from '../server/og-v8/part06.js';
+import part07 from '../server/og-v8/part07.js';
+import part08 from '../server/og-v8/part08.js';
+import part09 from '../server/og-v8/part09.js';
 
 const EXPECTED_LENGTH = 86140;
 const EXPECTED_SHA256 = '54462fca41aebbd5f81b7ac6b58c97004ee9bc1c6081c7a9ab528d2d416d1ffc';
