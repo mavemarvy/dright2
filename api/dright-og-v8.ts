@@ -1,4 +1,4 @@
-const IMAGE_URL = 'https://www.dright.store/dright-og-v9.jpg';
+const IMAGE_URL = 'https://www.dright.store/api/dright-og-v9?brand=react-hero-v9';
 
 export default function handler(req: any, res: any) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
