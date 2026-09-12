@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, Eye, EyeOff, Loader2, MessageCircle, RotateCcw, Trash2, X } from 'lucide-react';
+import { AlertCircle, EyeOff, Loader2, MessageCircle, RotateCcw, Trash2, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface ModerationComment {
