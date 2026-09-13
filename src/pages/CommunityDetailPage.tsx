@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, CheckCircle, Image as ImageIcon, Loader2, Lock, MessageCircle, Plus, Send, Shield, Users, Video, X,
+  ArrowLeft, CheckCircle, Image as ImageIcon, Loader2, Lock, MessageCircle, Send, Shield, Users, Video, X,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
