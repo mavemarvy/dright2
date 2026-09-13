@@ -64,6 +64,7 @@ const growthNav: NavEntry[] = [
 ];
 
 const communityNav: NavEntry[] = [
+  { path: '/communities', label: 'Communities', icon: Users },
   { path: '/notifications', labelKey: 'notifications', icon: Bell },
   { path: '/activity', labelKey: 'activityFeed', icon: Activity },
   { path: '/challenges', labelKey: 'challenges', icon: Trophy },
@@ -170,8 +171,8 @@ export default function AppShell() {
   const filteredGroups = useMemo(() => allNavGroups, []);
 
   return (
-    <div className="min-h-screen bg-surface-muted">
-      <aside className={`hidden md:flex md:flex-col ${sidebarWidth} md:fixed md:inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-300`}>
+    <div className={`min-h-screen ${immersiveSocial ? 'bg-black' : 'bg-surface-muted'}`}>
+      {!immersiveSocial && <aside className={`hidden md:flex md:flex-col ${sidebarWidth} md:fixed md:inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-300`}>
         <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-4 py-4 border-b border-gray-100 dark:border-gray-700`}>
           <DrightBrand size={collapsed ? 38 : 46} compact={collapsed} />
           {!collapsed && <button onClick={() => setCollapsed(true)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Collapse sidebar"><ChevronLeft className="w-5 h-5" /></button>}
@@ -216,18 +217,18 @@ export default function AppShell() {
             {collapsed ? <><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><button onClick={signOut} className="p-2 text-gray-600 hover:text-error hover:bg-error-muted rounded-xl transition-colors" aria-label={t('signOut')} title={t('signOut')}><LogOut className="w-5 h-5" /></button></> : <><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><button onClick={signOut} className="flex-1 flex items-center gap-2 px-3 py-2.5 text-sm text-gray-600 hover:text-error hover:bg-error-muted rounded-xl transition-colors"><LogOut className="w-4 h-4" />{t('signOut')}</button></>}
           </div>
         </div>
-      </aside>
+      </aside>}
 
-      <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 shadow-sm safe-area-top">
+      {!immersiveSocial && <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 shadow-sm safe-area-top">
         <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 min-h-[56px]">
           <button onClick={() => setSidebarOpen(true)} className="p-2.5 -ml-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Open menu"><Menu className="w-6 h-6" /></button>
           <DrightBrand size={31} />
           <div className="flex items-center gap-1 sm:gap-2"><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0 ring-1 ring-slate-200">{profile?.avatar_url ? <img src={profile.avatar_url} alt={profile?.full_name || 'User'} className="w-full h-full object-cover" /> : <span className="text-primary-700 font-semibold text-sm">{getInitials()}</span>}</div></div>
         </div>
-      </header>
+      </header>}
 
       <AnimatePresence>
-        {sidebarOpen && (
+        {!immersiveSocial && sidebarOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/50 z-50 md:hidden" />
             <motion.aside className="fixed left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-white/96 dark:bg-gray-800/98 backdrop-blur-md z-50 md:hidden shadow-2xl flex flex-col safe-area-top-bottom overscroll-contain" initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}>
@@ -244,10 +245,10 @@ export default function AppShell() {
         )}
       </AnimatePresence>
 
-      <main id="main-content" className={`${mainPadding} pb-20 md:pb-0 transition-all duration-300`}>
+      <main id="main-content" className={immersiveSocial ? 'p-0' : `${mainPadding} pb-20 md:pb-0 transition-all duration-300`}>
         {!immersiveSocial && <><CompactPromoStrip /><AbandonedPaymentBanner /></>}
         <AnimatePresence mode="wait">
-          <motion.div key={location.pathname} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+          <motion.div key={location.pathname} initial={{ opacity: 0, y: immersiveSocial ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: immersiveSocial ? 0 : -8 }} transition={{ duration: 0.2 }}>
             <Outlet />
           </motion.div>
         </AnimatePresence>
@@ -255,7 +256,7 @@ export default function AppShell() {
 
       {!immersiveSocial && <ChatSystem />}
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/96 dark:bg-gray-800/98 backdrop-blur border-t border-gray-200 dark:border-gray-700 z-40 shadow-lg safe-area-bottom" aria-label="Main navigation">
+      {!immersiveSocial && <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/96 dark:bg-gray-800/98 backdrop-blur border-t border-gray-200 dark:border-gray-700 z-40 shadow-lg safe-area-bottom" aria-label="Main navigation">
         <div className="flex justify-around items-center py-2">
           {mobileBottomItems.map(item => {
             const isActive = item.path === '/' ? location.pathname === '/' : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
@@ -267,7 +268,7 @@ export default function AppShell() {
             );
           })}
         </div>
-      </nav>
+      </nav>}
     </div>
   );
 }
