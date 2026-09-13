@@ -37,10 +37,10 @@ export type SocialFeedItem = {
   community_name: string | null;
   community_slug: string | null;
   community_avatar: string | null;
-  source_type: 'user' | 'community';
+  source_type: 'user' | 'community' | 'news';
   category: string | null;
   topic_tags: string[];
-  linked_entity_type: 'product' | 'service' | 'course' | 'job' | 'store' | 'creator' | 'community' | null;
+  linked_entity_type: 'product' | 'service' | 'course' | 'job' | 'store' | 'creator' | 'community' | 'news' | null;
   linked_entity_id: string | null;
   linked_entity_url: string | null;
   is_pinned: boolean;
@@ -75,6 +75,7 @@ export type SocialRuntimeSettings = {
 export async function signSocialMedia(items: SocialFeedItem[]): Promise<SocialFeedItem[]> {
   return Promise.all(items.map(async (item) => {
     if (!item.media_path) return { ...item, media_url: null };
+    if (/^https?:\/\//i.test(item.media_path)) return { ...item, media_url: item.media_path };
     const { data, error } = await supabase.storage.from('social-media').createSignedUrl(item.media_path, 60 * 60);
     return { ...item, media_url: error ? null : data.signedUrl };
   }));
