@@ -1,162 +1,106 @@
 import { supabase } from './supabase';
 
 type Editor = HTMLInputElement | HTMLTextAreaElement;
-type TokenKind = 'mention' | 'hashtag';
-
-type ActiveToken = {
-  kind: TokenKind;
-  query: string;
-  start: number;
-  end: number;
-};
-
-type MentionSuggestion = {
-  kind: 'mention';
-  userId: string;
-  username: string;
-  fullName: string | null;
-  avatarUrl: string | null;
-  verified: boolean;
-};
-
-type HashtagSuggestion = {
-  kind: 'hashtag';
-  tag: string;
-  usageCount: number;
-  isNew?: boolean;
-};
-
-type Suggestion = MentionSuggestion | HashtagSuggestion;
-
-type MentionContext = {
-  communityId: string | null;
-  conversationId: string | null;
-};
+type ActiveToken = { kind: 'mention' | 'hashtag'; query: string; start: number; end: number };
+type MentionItem = { kind: 'mention'; userId: string; username: string; fullName: string | null; avatarUrl: string | null; verified: boolean };
+type HashtagItem = { kind: 'hashtag'; tag: string; usageCount: number; isNew?: boolean };
+type Suggestion = MentionItem | HashtagItem;
 
 const ROOT_ID = 'dright-social-token-suggestions';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const communityCache = new Map<string, string | null>();
+let editor: Editor | null = null;
+let token: ActiveToken | null = null;
+let items: Suggestion[] = [];
+let selected = 0;
+let requestId = 0;
+let timer: number | null = null;
 
-let activeEditor: Editor | null = null;
-let activeToken: ActiveToken | null = null;
-let suggestions: Suggestion[] = [];
-let selectedIndex = 0;
-let requestSequence = 0;
-let debounceTimer: number | null = null;
-
-function isEligibleEditor(node: EventTarget | null): node is Editor {
-  if (!(node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement)) return false;
-  if (node.disabled || node.readOnly) return false;
-  if (node.dataset.socialTokens === 'false') return false;
-  if (node.dataset.socialTokens === 'true') return true;
-  if (node instanceof HTMLTextAreaElement) return true;
-
-  const type = (node.type || 'text').toLowerCase();
-  if (!['text', 'search'].includes(type)) return false;
-  const hint = `${node.name || ''} ${node.id || ''} ${node.placeholder || ''} ${node.getAttribute('aria-label') || ''}`.toLowerCase();
+function supported(target: EventTarget | null): target is Editor {
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return false;
+  if (target.disabled || target.readOnly || target.dataset.socialTokens === 'false') return false;
+  if (target.dataset.socialTokens === 'true' || target instanceof HTMLTextAreaElement) return true;
+  if (!['text', 'search'].includes((target.type || 'text').toLowerCase())) return false;
+  const hint = `${target.name} ${target.id} ${target.placeholder} ${target.getAttribute('aria-label') || ''}`.toLowerCase();
   return /(comment|reply|message|caption|description|post|share|write|chat|bio|text)/.test(hint);
 }
 
-function readActiveToken(editor: Editor): ActiveToken | null {
-  const caret = editor.selectionStart;
+function activeToken(target: Editor): ActiveToken | null {
+  const caret = target.selectionStart;
   if (caret == null) return null;
-  const head = editor.value.slice(0, caret);
-
-  const mention = head.match(/(^|[^A-Za-z0-9_.-])@([A-Za-z0-9_.-]{0,64})$/);
-  if (mention) {
-    const raw = `@${mention[2]}`;
-    return { kind: 'mention', query: mention[2], start: caret - raw.length, end: caret };
-  }
-
-  const hashtag = head.match(/(^|[^A-Za-z0-9_])#([A-Za-z0-9_]{0,64})$/);
-  if (hashtag) {
-    const raw = `#${hashtag[2]}`;
-    return { kind: 'hashtag', query: hashtag[2], start: caret - raw.length, end: caret };
-  }
-
+  const before = target.value.slice(0, caret);
+  const mention = before.match(/(^|[^A-Za-z0-9_.-])@([A-Za-z0-9_.-]{0,64})$/);
+  if (mention) return { kind: 'mention', query: mention[2], start: caret - mention[2].length - 1, end: caret };
+  const hashtag = before.match(/(^|[^A-Za-z0-9_])#([A-Za-z0-9_]{0,64})$/);
+  if (hashtag) return { kind: 'hashtag', query: hashtag[2], start: caret - hashtag[2].length - 1, end: caret };
   return null;
 }
 
-function getRoot(): HTMLDivElement {
-  let root = document.getElementById(ROOT_ID) as HTMLDivElement | null;
-  if (root) return root;
-
-  root = document.createElement('div');
-  root.id = ROOT_ID;
-  root.setAttribute('role', 'listbox');
-  Object.assign(root.style, {
-    position: 'fixed',
-    zIndex: '2147483000',
-    display: 'none',
-    minWidth: '220px',
-    maxWidth: '380px',
-    maxHeight: '320px',
-    overflowY: 'auto',
-    padding: '6px',
-    border: '1px solid rgba(255,255,255,.12)',
-    borderRadius: '14px',
-    background: 'rgba(13,16,23,.98)',
-    boxShadow: '0 18px 55px rgba(0,0,0,.45)',
-    backdropFilter: 'blur(18px)',
-    color: '#fff',
-    fontFamily: 'inherit',
+function root(): HTMLDivElement {
+  let node = document.getElementById(ROOT_ID) as HTMLDivElement | null;
+  if (node) return node;
+  node = document.createElement('div');
+  node.id = ROOT_ID;
+  node.setAttribute('role', 'listbox');
+  Object.assign(node.style, {
+    position: 'fixed', zIndex: '2147483000', display: 'none', minWidth: '220px', maxWidth: '380px', maxHeight: '320px',
+    overflowY: 'auto', padding: '6px', border: '1px solid rgba(255,255,255,.12)', borderRadius: '14px',
+    background: 'rgba(13,16,23,.98)', boxShadow: '0 18px 55px rgba(0,0,0,.45)', backdropFilter: 'blur(18px)',
+    color: '#fff', fontFamily: 'inherit',
   });
-  document.body.appendChild(root);
-  return root;
+  document.body.appendChild(node);
+  return node;
 }
 
-function hide() {
-  const root = document.getElementById(ROOT_ID);
-  if (root) root.style.display = 'none';
-  suggestions = [];
-  selectedIndex = 0;
-  activeToken = null;
+function close() {
+  const node = document.getElementById(ROOT_ID);
+  if (node) node.style.display = 'none';
+  token = null;
+  items = [];
+  selected = 0;
 }
 
-function compactCount(value: number): string {
-  const count = Math.max(0, Number(value) || 0);
-  if (count >= 1_000_000_000) return `${trimZero(count / 1_000_000_000)}B`;
-  if (count >= 1_000_000) return `${trimZero(count / 1_000_000)}M`;
-  if (count >= 1_000) return `${trimZero(count / 1_000)}K`;
-  return String(count);
+function compact(value: number) {
+  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(Math.max(0, Number(value) || 0));
 }
 
-function trimZero(value: number): string {
-  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
-  return value.toFixed(digits).replace(/\.0+$|(?<=\.[0-9])0+$/, '');
-}
-
-function positionRoot(editor: Editor, root: HTMLDivElement) {
+function position(node: HTMLDivElement) {
+  if (!editor) return;
   const rect = editor.getBoundingClientRect();
   const width = Math.max(220, Math.min(380, rect.width || 320));
+  const height = Math.min(320, 16 + Math.max(1, items.length) * 58);
   const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left));
-  const estimatedHeight = Math.min(320, 16 + Math.max(1, suggestions.length) * 58);
-  const roomBelow = window.innerHeight - rect.bottom;
-  const top = roomBelow >= Math.min(180, estimatedHeight)
-    ? rect.bottom + 6
-    : Math.max(8, rect.top - estimatedHeight - 6);
-  root.style.width = `${width}px`;
-  root.style.left = `${left}px`;
-  root.style.top = `${top}px`;
+  const top = window.innerHeight - rect.bottom > Math.min(180, height) ? rect.bottom + 6 : Math.max(8, rect.top - height - 6);
+  node.style.width = `${width}px`;
+  node.style.left = `${left}px`;
+  node.style.top = `${top}px`;
 }
 
-function rowBase(selected: boolean): Partial<CSSStyleDeclaration> {
-  return {
-    display: 'flex',
-    width: '100%',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '9px 10px',
-    border: '0',
-    borderRadius: '10px',
-    background: selected ? 'rgba(67,83,255,.24)' : 'transparent',
-    color: '#fff',
-    cursor: 'pointer',
-    textAlign: 'left',
-  };
+function line(primary: string, secondary: string, index: number, icon: HTMLElement) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute('role', 'option');
+  Object.assign(button.style, {
+    display: 'flex', width: '100%', alignItems: 'center', gap: '10px', padding: '9px 10px', border: '0', borderRadius: '10px',
+    background: index === selected ? 'rgba(67,83,255,.24)' : 'transparent', color: '#fff', cursor: 'pointer', textAlign: 'left',
+  });
+  const copy = document.createElement('span');
+  copy.style.minWidth = '0';
+  copy.style.flex = '1';
+  const main = document.createElement('span');
+  main.textContent = primary;
+  Object.assign(main.style, { display: 'block', fontSize: '13px', fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' });
+  const sub = document.createElement('span');
+  sub.textContent = secondary;
+  Object.assign(sub.style, { display: 'block', marginTop: '2px', color: '#9ca3af', fontSize: '12px' });
+  copy.append(main, sub);
+  button.append(icon, copy);
+  button.addEventListener('pointerenter', () => { selected = index; render(); });
+  button.addEventListener('pointerdown', (event) => { event.preventDefault(); choose(items[index]); });
+  return button;
 }
 
-function makeAvatar(item: MentionSuggestion): HTMLElement {
+function mentionIcon(item: MentionItem) {
   if (item.avatarUrl) {
     const image = document.createElement('img');
     image.src = item.avatarUrl;
@@ -164,248 +108,145 @@ function makeAvatar(item: MentionSuggestion): HTMLElement {
     Object.assign(image.style, { width: '34px', height: '34px', borderRadius: '999px', objectFit: 'cover', flex: '0 0 auto' });
     return image;
   }
-  const fallback = document.createElement('span');
-  fallback.textContent = (item.fullName || item.username || 'D').slice(0, 1).toUpperCase();
-  Object.assign(fallback.style, {
-    width: '34px', height: '34px', borderRadius: '999px', display: 'inline-flex', alignItems: 'center',
-    justifyContent: 'center', background: 'rgba(255,255,255,.1)', fontSize: '12px', fontWeight: '800', flex: '0 0 auto',
-  });
-  return fallback;
+  const node = document.createElement('span');
+  node.textContent = (item.fullName || item.username || 'D').slice(0, 1).toUpperCase();
+  Object.assign(node.style, { width: '34px', height: '34px', borderRadius: '999px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.1)', fontSize: '12px', fontWeight: '800', flex: '0 0 auto' });
+  return node;
+}
+
+function hashtagIcon(isNew?: boolean) {
+  const node = document.createElement('span');
+  node.textContent = '#';
+  Object.assign(node.style, { width: '34px', height: '34px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: isNew ? 'rgba(67,83,255,.22)' : 'rgba(255,255,255,.08)', color: isNew ? '#aeb6ff' : '#fff', fontSize: '18px', fontWeight: '900', flex: '0 0 auto' });
+  return node;
 }
 
 function render() {
-  if (!activeEditor || !activeToken) return hide();
-  const root = getRoot();
-  root.replaceChildren();
-
-  if (!suggestions.length) {
+  if (!editor || !token) return close();
+  const node = root();
+  node.replaceChildren();
+  if (!items.length) {
     const empty = document.createElement('div');
-    empty.textContent = activeToken.kind === 'mention' ? 'No matching users' : 'No hashtags found';
+    empty.textContent = token.kind === 'mention' ? 'No matching users' : 'No hashtags found';
     Object.assign(empty.style, { padding: '11px 12px', fontSize: '13px', color: '#9ca3af' });
-    root.appendChild(empty);
+    node.appendChild(empty);
   } else {
-    suggestions.forEach((item, index) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.setAttribute('role', 'option');
-      button.setAttribute('aria-selected', String(index === selectedIndex));
-      Object.assign(button.style, rowBase(index === selectedIndex));
-      button.addEventListener('pointerdown', (event) => {
-        event.preventDefault();
-        selectedIndex = index;
-        applySuggestion(item);
-      });
-      button.addEventListener('pointerenter', () => {
-        selectedIndex = index;
-        render();
-      });
-
+    items.forEach((item, index) => {
       if (item.kind === 'mention') {
-        button.appendChild(makeAvatar(item));
-        const copy = document.createElement('span');
-        Object.assign(copy.style, { minWidth: '0', display: 'block' });
-        const name = document.createElement('span');
-        name.textContent = `${item.fullName || item.username}${item.verified ? ' ✓' : ''}`;
-        Object.assign(name.style, { display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px', fontWeight: '700' });
-        const username = document.createElement('span');
-        username.textContent = `@${item.username}`;
-        Object.assign(username.style, { display: 'block', marginTop: '2px', color: '#9ca3af', fontSize: '12px' });
-        copy.append(name, username);
-        button.appendChild(copy);
+        node.appendChild(line(`${item.fullName || item.username}${item.verified ? ' ✓' : ''}`, `@${item.username}`, index, mentionIcon(item)));
       } else {
-        const icon = document.createElement('span');
-        icon.textContent = '#';
-        Object.assign(icon.style, { width: '34px', height: '34px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: item.isNew ? 'rgba(67,83,255,.22)' : 'rgba(255,255,255,.08)', color: item.isNew ? '#aeb6ff' : '#fff', fontSize: '18px', fontWeight: '900', flex: '0 0 auto' });
-        const copy = document.createElement('span');
-        Object.assign(copy.style, { minWidth: '0', display: 'block', flex: '1' });
-        const tag = document.createElement('span');
-        tag.textContent = item.isNew ? `Use #${item.tag}` : `#${item.tag}`;
-        Object.assign(tag.style, { display: 'block', fontSize: '13px', fontWeight: '800' });
-        const usage = document.createElement('span');
-        usage.textContent = item.isNew ? 'Counted only after the post is published' : `${compactCount(item.usageCount)} ${item.usageCount === 1 ? 'use' : 'uses'}`;
-        Object.assign(usage.style, { display: 'block', marginTop: '2px', color: '#9ca3af', fontSize: '12px' });
-        copy.append(tag, usage);
-        button.append(icon, copy);
+        const secondary = item.isNew ? 'Counted only after the post is published' : `${compact(item.usageCount)} ${item.usageCount === 1 ? 'use' : 'uses'}`;
+        node.appendChild(line(item.isNew ? `Use #${item.tag}` : `#${item.tag}`, secondary, index, hashtagIcon(item.isNew)));
       }
-      root.appendChild(button);
     });
   }
-
-  positionRoot(activeEditor, root);
-  root.style.display = 'block';
+  position(node);
+  node.style.display = 'block';
 }
 
-function setReactControlledValue(editor: Editor, value: string) {
-  const proto = editor instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+function setValue(target: Editor, value: string) {
+  const proto = target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-  if (setter) setter.call(editor, value);
-  else editor.value = value;
-  editor.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  if (setter) setter.call(target, value); else target.value = value;
+  target.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
 }
 
-function applySuggestion(item: Suggestion) {
-  if (!activeEditor || !activeToken) return;
-  const editor = activeEditor;
-  const token = activeToken;
+function choose(item: Suggestion | undefined) {
+  if (!item || !editor || !token) return;
+  const target = editor;
+  const current = token;
   const replacement = item.kind === 'mention' ? `@${item.username}` : `#${item.tag}`;
-  const next = `${editor.value.slice(0, token.start)}${replacement} ${editor.value.slice(token.end)}`;
-  const caret = token.start + replacement.length + 1;
-  setReactControlledValue(editor, next);
-  editor.focus();
-  window.requestAnimationFrame(() => editor.setSelectionRange(caret, caret));
-  hide();
+  const value = `${target.value.slice(0, current.start)}${replacement} ${target.value.slice(current.end)}`;
+  const caret = current.start + replacement.length + 1;
+  setValue(target, value);
+  target.focus();
+  window.requestAnimationFrame(() => target.setSelectionRange(caret, caret));
+  close();
 }
 
-async function resolveCommunityId(editor: Editor): Promise<string | null> {
-  const scoped = editor.closest<HTMLElement>('[data-community-id]')?.dataset.communityId;
+async function communityId(target: Editor) {
+  const scoped = target.closest<HTMLElement>('[data-community-id]')?.dataset.communityId;
   if (scoped && UUID_RE.test(scoped)) return scoped;
-
-  const params = new URLSearchParams(window.location.search);
-  const queryValue = params.get('community_id') || params.get('community');
-  if (queryValue && UUID_RE.test(queryValue)) return queryValue;
-
-  const match = window.location.pathname.match(/\/communities\/([^/?#]+)/i);
+  const params = new URLSearchParams(location.search);
+  const query = params.get('community_id') || params.get('community');
+  if (query && UUID_RE.test(query)) return query;
+  const match = location.pathname.match(/\/communities\/([^/?#]+)/i);
   if (!match) return null;
-  const part = decodeURIComponent(match[1]);
-  if (UUID_RE.test(part)) return part;
-  if (['new', 'create', 'discover', 'mine', 'joined'].includes(part.toLowerCase())) return null;
-  if (communityCache.has(part)) return communityCache.get(part) ?? null;
-
-  const { data, error } = await supabase.rpc('get_community_by_slug', { p_slug: part });
+  const slug = decodeURIComponent(match[1]);
+  if (UUID_RE.test(slug)) return slug;
+  if (['new', 'create', 'discover', 'mine', 'joined'].includes(slug.toLowerCase())) return null;
+  if (communityCache.has(slug)) return communityCache.get(slug) ?? null;
+  const { data, error } = await supabase.rpc('get_community_by_slug', { p_slug: slug });
   const value = !error && data && typeof data === 'object' && 'id' in data ? String((data as { id?: unknown }).id || '') : '';
-  const id = UUID_RE.test(value) ? value : null;
-  communityCache.set(part, id);
-  return id;
+  const result = UUID_RE.test(value) ? value : null;
+  communityCache.set(slug, result);
+  return result;
 }
 
-async function resolveContext(editor: Editor): Promise<MentionContext> {
-  const scopedConversation = editor.closest<HTMLElement>('[data-conversation-id]')?.dataset.conversationId;
-  const params = new URLSearchParams(window.location.search);
-  const queryConversation = params.get('conv') || params.get('conversation') || params.get('conversation_id');
-  const conversationId = scopedConversation && UUID_RE.test(scopedConversation)
-    ? scopedConversation
-    : queryConversation && UUID_RE.test(queryConversation)
-      ? queryConversation
-      : null;
-  const communityId = conversationId ? null : await resolveCommunityId(editor);
-  return { communityId, conversationId };
+async function context(target: Editor) {
+  const scoped = target.closest<HTMLElement>('[data-conversation-id]')?.dataset.conversationId;
+  const params = new URLSearchParams(location.search);
+  const query = params.get('conv') || params.get('conversation') || params.get('conversation_id');
+  const conversationId = scoped && UUID_RE.test(scoped) ? scoped : query && UUID_RE.test(query) ? query : null;
+  return { conversationId, communityId: conversationId ? null : await communityId(target) };
 }
 
-async function loadSuggestions(editor: Editor, token: ActiveToken, sequence: number) {
-  try {
-    if (token.kind === 'hashtag') {
-      const { data, error } = await supabase.rpc('search_hashtags', { p_query: token.query, p_limit: 10 });
-      if (sequence !== requestSequence || activeEditor !== editor) return;
-      if (error) {
-        suggestions = [];
-        return render();
-      }
-      const rows = Array.isArray(data) ? data : [];
-      const normalized = token.query.toLowerCase();
-      const mapped: HashtagSuggestion[] = rows.map((row: Record<string, unknown>) => ({
-        kind: 'hashtag',
-        tag: String(row.tag || ''),
-        usageCount: Number(row.usage_count || 0),
-      })).filter((item) => item.tag);
-      if (normalized && /^[A-Za-z0-9_]{1,64}$/.test(normalized) && !mapped.some((item) => item.tag.toLowerCase() === normalized)) {
-        mapped.push({ kind: 'hashtag', tag: normalized, usageCount: 0, isNew: true });
-      }
-      suggestions = mapped;
-      selectedIndex = 0;
-      return render();
-    }
-
-    const context = await resolveContext(editor);
-    if (sequence !== requestSequence || activeEditor !== editor) return;
-    const { data, error } = await supabase.rpc('search_social_mentions', {
-      p_query: token.query,
-      p_community_id: context.communityId,
-      p_conversation_id: context.conversationId,
-      p_limit: 10,
-    });
-    if (sequence !== requestSequence || activeEditor !== editor) return;
-    if (error) {
-      suggestions = [];
-      return render();
-    }
+async function load(target: Editor, current: ActiveToken, sequence: number) {
+  if (current.kind === 'hashtag') {
+    const { data, error } = await supabase.rpc('search_hashtags', { p_query: current.query, p_limit: 10 });
+    if (sequence !== requestId || editor !== target) return;
+    if (error) { items = []; return render(); }
     const rows = Array.isArray(data) ? data : [];
-    suggestions = rows.map((row: Record<string, unknown>): MentionSuggestion => ({
-      kind: 'mention',
-      userId: String(row.user_id || ''),
-      username: String(row.username || ''),
-      fullName: row.full_name == null ? null : String(row.full_name),
-      avatarUrl: row.avatar_url == null ? null : String(row.avatar_url),
-      verified: Boolean(row.is_verified),
-    })).filter((item) => item.userId && item.username);
-    selectedIndex = 0;
-    render();
-  } catch {
-    if (sequence === requestSequence) {
-      suggestions = [];
-      render();
-    }
+    const mapped = rows.map((row: Record<string, unknown>): HashtagItem => ({ kind: 'hashtag', tag: String(row.tag || ''), usageCount: Number(row.usage_count || 0) })).filter((item) => item.tag);
+    const normalized = current.query.toLowerCase();
+    if (normalized && /^[A-Za-z0-9_]{1,64}$/.test(normalized) && !mapped.some((item) => item.tag.toLowerCase() === normalized)) mapped.push({ kind: 'hashtag', tag: normalized, usageCount: 0, isNew: true });
+    items = mapped;
+    selected = 0;
+    return render();
   }
+
+  const scope = await context(target);
+  if (sequence !== requestId || editor !== target) return;
+  const { data, error } = await supabase.rpc('search_social_mentions', { p_query: current.query, p_community_id: scope.communityId, p_conversation_id: scope.conversationId, p_limit: 10 });
+  if (sequence !== requestId || editor !== target) return;
+  if (error) { items = []; return render(); }
+  const rows = Array.isArray(data) ? data : [];
+  items = rows.map((row: Record<string, unknown>): MentionItem => ({
+    kind: 'mention', userId: String(row.user_id || ''), username: String(row.username || ''),
+    fullName: row.full_name == null ? null : String(row.full_name), avatarUrl: row.avatar_url == null ? null : String(row.avatar_url), verified: Boolean(row.is_verified),
+  })).filter((item) => item.userId && item.username);
+  selected = 0;
+  render();
 }
 
-function schedule(editor: Editor) {
-  const token = readActiveToken(editor);
-  activeEditor = editor;
-  activeToken = token;
-  if (debounceTimer != null) window.clearTimeout(debounceTimer);
-  if (!token) return hide();
-  const sequence = ++requestSequence;
-  debounceTimer = window.setTimeout(() => void loadSuggestions(editor, token, sequence), 130);
-}
-
-function handleInput(event: Event) {
-  if (!isEligibleEditor(event.target)) return;
-  schedule(event.target);
-}
-
-function handleKeyDown(event: KeyboardEvent) {
-  if (!isEligibleEditor(event.target)) return;
-  if (!activeToken || activeEditor !== event.target || !suggestions.length) return;
-  if (event.key === 'ArrowDown') {
-    event.preventDefault();
-    selectedIndex = (selectedIndex + 1) % suggestions.length;
-    render();
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault();
-    selectedIndex = (selectedIndex - 1 + suggestions.length) % suggestions.length;
-    render();
-  } else if (event.key === 'Enter' || event.key === 'Tab') {
-    event.preventDefault();
-    applySuggestion(suggestions[selectedIndex]);
-  } else if (event.key === 'Escape') {
-    event.preventDefault();
-    hide();
-  }
-}
-
-function handleSelection(event: Event) {
-  if (!isEligibleEditor(event.target)) return;
-  if (activeEditor === event.target) schedule(event.target);
-}
-
-function handleDocumentPointer(event: PointerEvent) {
-  const root = document.getElementById(ROOT_ID);
-  if (root?.contains(event.target as Node)) return;
-  if (event.target === activeEditor) return;
-  hide();
-}
-
-function reposition() {
-  const root = document.getElementById(ROOT_ID) as HTMLDivElement | null;
-  if (root && root.style.display !== 'none' && activeEditor) positionRoot(activeEditor, root);
+function schedule(target: Editor) {
+  editor = target;
+  token = activeToken(target);
+  if (timer != null) clearTimeout(timer);
+  if (!token) return close();
+  const current = token;
+  const sequence = ++requestId;
+  timer = window.setTimeout(() => void load(target, current, sequence), 130);
 }
 
 if (typeof document !== 'undefined') {
-  document.addEventListener('input', handleInput, true);
-  document.addEventListener('click', handleSelection, true);
-  document.addEventListener('keyup', handleSelection, true);
-  document.addEventListener('keydown', handleKeyDown, true);
-  document.addEventListener('pointerdown', handleDocumentPointer, true);
+  document.addEventListener('input', (event) => { if (supported(event.target)) schedule(event.target); }, true);
+  document.addEventListener('click', (event) => { if (supported(event.target) && editor === event.target) schedule(event.target); }, true);
+  document.addEventListener('keyup', (event) => { if (supported(event.target) && editor === event.target) schedule(event.target); }, true);
+  document.addEventListener('keydown', (event) => {
+    if (!supported(event.target) || editor !== event.target || !token || !items.length) return;
+    if (event.key === 'ArrowDown') { event.preventDefault(); selected = (selected + 1) % items.length; render(); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); selected = (selected - 1 + items.length) % items.length; render(); }
+    else if (event.key === 'Enter' || event.key === 'Tab') { event.preventDefault(); choose(items[selected]); }
+    else if (event.key === 'Escape') { event.preventDefault(); close(); }
+  }, true);
+  document.addEventListener('pointerdown', (event) => {
+    const node = document.getElementById(ROOT_ID);
+    if (node?.contains(event.target as Node) || event.target === editor) return;
+    close();
+  }, true);
+  const reposition = () => { const node = document.getElementById(ROOT_ID) as HTMLDivElement | null; if (node && node.style.display !== 'none') position(node); };
   window.addEventListener('resize', reposition, { passive: true });
   window.addEventListener('scroll', reposition, { passive: true, capture: true });
-  window.addEventListener('popstate', hide);
+  window.addEventListener('popstate', close);
 }
