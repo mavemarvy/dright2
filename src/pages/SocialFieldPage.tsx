@@ -1,724 +1,170 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Bookmark,
-  CheckCircle,
-  ChevronLeft,
-  Expand,
-  Image as ImageIcon,
-  Loader2,
-  MessageCircle,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  RotateCw,
-  Send,
-  Share2,
-  ThumbsUp,
-  Trash2,
-  UserCheck,
-  UserPlus,
-  Users,
-  Video,
-  Volume2,
-  VolumeX,
-  X,
+  Bookmark, CheckCircle, ExternalLink, Image as ImageIcon, Loader2, MessageCircle, MoreHorizontal,
+  Pencil, Plus, Send, Share2, ThumbsUp, Trash2, UserCheck, UserPlus, Users, Video, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useFollow } from '../lib/socialHooks';
 import { supabase } from '../lib/supabase';
+import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
+import {
+  fetchSocialFeed, fetchSocialRuntimeSettings, fetchSocialSuggestions, recordEntityClick, recordSocialClick,
+  recordSocialEvent, recordVideoProgress, recordVideoStart, signSocialMedia, updateSocialPosition,
+  type SocialAccountSuggestion, type SocialFeedItem, type SocialFeedMode, type SocialReactionType, type SocialRuntimeSettings,
+} from '../lib/socialFeed';
 
-type ReactionType = 'like' | 'love' | 'care' | 'haha' | 'wow' | 'sad' | 'angry';
-type FeedMode = 'for_you' | 'following' | 'friends' | 'mine';
 type Visibility = 'public' | 'followers' | 'friends' | 'private';
 type MediaType = 'image' | 'video';
+type Comment = { id: string; user_id: string; body: string; created_at: string; author_name: string; author_avatar: string | null; can_delete: boolean };
+type NewsBridge = { id: string; title: string; message: string; media_url: string | null; media_type: MediaType | null; published_at: string; view_count: number };
+type Composer = { id: string | null; body: string; visibility: Visibility; commentsEnabled: boolean; allowedReactions: SocialReactionType[]; mediaPath: string | null; mediaType: MediaType | null; mediaWidth: number | null; mediaHeight: number | null; mediaUrl: string | null };
+type Snapshot = { timestamp: number; posts: SocialFeedItem[]; cursor: string | null; sessionId: string | null; hasMore: boolean; activePostId: string | null };
 
-type SocialPost = {
-  id: string;
-  author_id: string;
-  author_name: string | null;
-  author_username: string | null;
-  author_avatar: string | null;
-  author_verified: boolean;
-  body: string;
-  media_path: string | null;
-  media_type: MediaType | null;
-  media_width: number | null;
-  media_height: number | null;
-  media_url?: string | null;
-  visibility: Visibility;
-  comments_enabled: boolean;
-  allowed_reactions: ReactionType[];
-  created_at: string;
-  updated_at: string;
-  edited_at: string | null;
-  is_following: boolean;
-  is_friend: boolean;
-  view_count: number;
-  reaction_count: number;
-  comment_count: number;
-  save_count: number;
-  current_reaction: ReactionType | null;
-  is_saved: boolean;
+const REACTIONS: Record<SocialReactionType, { emoji: string; label: string }> = {
+  like: { emoji: '👍', label: 'Like' }, love: { emoji: '❤️', label: 'Love' }, care: { emoji: '🤗', label: 'Care' },
+  haha: { emoji: '😂', label: 'Haha' }, wow: { emoji: '😮', label: 'Wow' }, sad: { emoji: '😢', label: 'Sad' }, angry: { emoji: '😡', label: 'Angry' },
 };
-
-type SocialComment = {
-  id: string;
-  user_id: string;
-  body: string;
-  created_at: string;
-  author_name: string;
-  author_avatar: string | null;
-  can_delete: boolean;
-};
-
-type NewsBridge = {
-  id: string;
-  title: string;
-  message: string;
-  media_url: string | null;
-  media_type: MediaType | null;
-  published_at: string;
-  view_count: number;
-};
-
-type ComposerState = {
-  id: string | null;
-  body: string;
-  visibility: Visibility;
-  commentsEnabled: boolean;
-  allowedReactions: ReactionType[];
-  mediaPath: string | null;
-  mediaType: MediaType | null;
-  mediaWidth: number | null;
-  mediaHeight: number | null;
-  mediaUrl: string | null;
-};
-
-const REACTIONS: Record<ReactionType, { emoji: string; label: string }> = {
-  like: { emoji: '👍', label: 'Like' },
-  love: { emoji: '❤️', label: 'Love' },
-  care: { emoji: '🤗', label: 'Care' },
-  haha: { emoji: '😂', label: 'Haha' },
-  wow: { emoji: '😮', label: 'Wow' },
-  sad: { emoji: '😢', label: 'Sad' },
-  angry: { emoji: '😡', label: 'Angry' },
-};
-const ALL_REACTIONS = Object.keys(REACTIONS) as ReactionType[];
-const PAGE_SIZE = 20;
+const ALL_REACTIONS = Object.keys(REACTIONS) as SocialReactionType[];
 const MAX_MEDIA_SIZE = 100 * 1024 * 1024;
+const SNAPSHOT_TTL = 60 * 60 * 1000;
+const emptyComposer = (): Composer => ({ id: null, body: '', visibility: 'public', commentsEnabled: true, allowedReactions: [...ALL_REACTIONS], mediaPath: null, mediaType: null, mediaWidth: null, mediaHeight: null, mediaUrl: null });
+const compact = (value: number) => value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}K` : String(value || 0);
 
-const emptyComposer = (): ComposerState => ({
-  id: null,
-  body: '',
-  visibility: 'public',
-  commentsEnabled: true,
-  allowedReactions: [...ALL_REACTIONS],
-  mediaPath: null,
-  mediaType: null,
-  mediaWidth: null,
-  mediaHeight: null,
-  mediaUrl: null,
-});
-
-function compact(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}K`;
-  return String(value || 0);
-}
-
-function safeExtension(file: File, mediaType: MediaType) {
-  const candidate = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (candidate && candidate.length <= 8) return candidate;
-  if (mediaType === 'video') return file.type === 'video/webm' ? 'webm' : file.type === 'video/quicktime' ? 'mov' : 'mp4';
-  if (file.type === 'image/png') return 'png';
-  if (file.type === 'image/webp') return 'webp';
-  if (file.type === 'image/gif') return 'gif';
-  return 'jpg';
-}
-
-function readDimensions(file: File, mediaType: MediaType): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    if (mediaType === 'image') {
-      const image = new Image();
-      image.onload = () => {
-        resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 });
-        URL.revokeObjectURL(url);
-      };
-      image.onerror = () => {
-        resolve({ width: 1, height: 1 });
-        URL.revokeObjectURL(url);
-      };
-      image.src = url;
-      return;
-    }
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      resolve({ width: video.videoWidth || 1, height: video.videoHeight || 1 });
-      URL.revokeObjectURL(url);
-    };
-    video.onerror = () => {
-      resolve({ width: 1, height: 1 });
-      URL.revokeObjectURL(url);
-    };
-    video.src = url;
-  });
-}
-
-function feedMode(pathname: string): FeedMode {
+function modeFromPath(pathname: string): SocialFeedMode {
   if (pathname.endsWith('/following')) return 'following';
   if (pathname.endsWith('/friends')) return 'friends';
   if (pathname.endsWith('/mine')) return 'mine';
-  return 'for_you';
+  return 'social';
 }
+function snapshotKey(userId: string, mode: SocialFeedMode) { return `dright:social:${userId}:${mode}`; }
+function extension(file: File, type: MediaType) { const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, ''); return ext && ext.length <= 8 ? ext : type === 'video' ? 'mp4' : 'jpg'; }
+function readDimensions(file: File, type: MediaType): Promise<{ width: number; height: number }> { return new Promise((resolve) => { const url = URL.createObjectURL(file); if (type === 'image') { const image = new Image(); image.onload = () => { resolve({ width: image.naturalWidth || 1, height: image.naturalHeight || 1 }); URL.revokeObjectURL(url); }; image.onerror = () => { resolve({ width: 1, height: 1 }); URL.revokeObjectURL(url); }; image.src = url; } else { const video = document.createElement('video'); video.preload = 'metadata'; video.onloadedmetadata = () => { resolve({ width: video.videoWidth || 1, height: video.videoHeight || 1 }); URL.revokeObjectURL(url); }; video.onerror = () => { resolve({ width: 1, height: 1 }); URL.revokeObjectURL(url); }; video.src = url; } }); }
 
-function SocialReaction({ post, onReact }: { post: SocialPost; onReact: (reaction: ReactionType) => void }) {
-  const [open, setOpen] = useState(false);
-  const timer = useRef<number | null>(null);
-  const allowed = Array.isArray(post.allowed_reactions) ? post.allowed_reactions : [];
-  const fallback: ReactionType | undefined = allowed.includes('like') ? 'like' : allowed[0];
-
-  const beginPress = () => {
-    if (!allowed.length) return;
-    timer.current = window.setTimeout(() => setOpen(true), 430);
-  };
-  const clearPress = () => {
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = null;
-  };
-
+function ReactionControl({ post, onReact }: { post: SocialFeedItem; onReact: (reaction: SocialReactionType) => void }) {
+  const [open, setOpen] = useState(false); const timer = useRef<number | null>(null); const allowed = post.allowed_reactions || []; const fallback = allowed.includes('like') ? 'like' : allowed[0];
+  const start = () => { if (allowed.length) timer.current = window.setTimeout(() => setOpen(true), 430); }; const clear = () => { if (timer.current) window.clearTimeout(timer.current); timer.current = null; };
   if (!allowed.length) return null;
-
-  return (
-    <div className="relative flex flex-col items-center">
-      {open && (
-        <div className="absolute bottom-14 right-0 z-50 flex gap-1 rounded-full border border-white/10 bg-black/85 p-1.5 shadow-2xl backdrop-blur-xl">
-          {allowed.map((reaction) => (
-            <button key={reaction} type="button" onClick={() => { setOpen(false); onReact(reaction); }} className="h-10 w-10 rounded-full text-2xl hover:bg-white/10" title={REACTIONS[reaction].label}>
-              {REACTIONS[reaction].emoji}
-            </button>
-          ))}
-        </div>
-      )}
-      <button
-        type="button"
-        onPointerDown={beginPress}
-        onPointerUp={clearPress}
-        onPointerCancel={clearPress}
-        onPointerLeave={clearPress}
-        onDoubleClick={() => setOpen(true)}
-        onClick={() => fallback && onReact(fallback)}
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur"
-        aria-label="React"
-      >
-        {post.current_reaction ? <span className="text-2xl">{REACTIONS[post.current_reaction].emoji}</span> : <ThumbsUp className="h-7 w-7" />}
-      </button>
-      {post.reaction_count > 0 && <span className="mt-1 text-xs font-bold text-white drop-shadow">{compact(post.reaction_count)}</span>}
-    </div>
-  );
+  return <div className="relative flex flex-col items-center">{open && <div className="absolute bottom-14 right-0 z-50 flex gap-1 rounded-full border border-white/10 bg-black/90 p-1.5 shadow-2xl">{allowed.map((reaction) => <button key={reaction} type="button" onClick={() => { setOpen(false); onReact(reaction); }} className="h-10 w-10 rounded-full text-2xl hover:bg-white/10" title={REACTIONS[reaction].label}>{REACTIONS[reaction].emoji}</button>)}</div>}<button type="button" onPointerDown={start} onPointerUp={clear} onPointerCancel={clear} onPointerLeave={clear} onDoubleClick={() => setOpen(true)} onClick={() => fallback && onReact(fallback)} className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur">{post.current_reaction ? <span className="text-2xl">{REACTIONS[post.current_reaction].emoji}</span> : <ThumbsUp className="h-7 w-7" />}</button>{post.reaction_count > 0 && <span className="mt-1 text-xs font-bold text-white">{compact(post.reaction_count)}</span>}</div>;
 }
 
-function CommentsModal({ post, onClose, onCountChange }: { post: SocialPost; onClose: () => void; onCountChange: (count: number) => void }) {
-  const [comments, setComments] = useState<SocialComment[]>([]);
-  const [draft, setDraft] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data, error: loadError } = await supabase.rpc('get_social_post_comments', { p_post_id: post.id });
-    if (loadError) setError(loadError.message);
-    else setComments((data || []) as SocialComment[]);
-    setLoading(false);
-  }, [post.id]);
-
+function CommentsModal({ post, onClose, onCount }: { post: SocialFeedItem; onClose: () => void; onCount: (count: number) => void }) {
+  const [items, setItems] = useState<Comment[]>([]); const [draft, setDraft] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => { setLoading(true); const { data, error: e } = await supabase.rpc('get_social_post_comments', { p_post_id: post.id }); if (e) setError(e.message); else setItems((data || []) as Comment[]); setLoading(false); }, [post.id]);
   useEffect(() => { void load(); }, [load]);
-
-  const send = async () => {
-    const body = draft.trim();
-    if (!body || busy) return;
-    setBusy(true);
-    setError(null);
-    const { data, error: sendError } = await supabase.rpc('add_social_post_comment', { p_post_id: post.id, p_body: body });
-    setBusy(false);
-    if (sendError) return setError(sendError.message);
-    setDraft('');
-    const result = (data || {}) as Record<string, unknown>;
-    onCountChange(Number(result.comment_count || post.comment_count + 1));
-    await load();
-  };
-
-  const remove = async (commentId: string) => {
-    const { data, error: deleteError } = await supabase.rpc('delete_social_post_comment', { p_comment_id: commentId });
-    if (deleteError) return setError(deleteError.message);
-    onCountChange(Number(data || 0));
-    await load();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="flex max-h-[82vh] w-full max-w-xl flex-col rounded-t-3xl border border-white/10 bg-[#11151e] text-white shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
-          <div><h2 className="font-bold">Comments</h2><p className="text-xs text-neutral-500">{post.comment_count} comment{post.comment_count === 1 ? '' : 's'}</p></div>
-          <button type="button" onClick={onClose} className="rounded-full p-2 hover:bg-white/10"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="min-h-[220px] flex-1 overflow-y-auto p-4">
-          {error && <div className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</div>}
-          {loading ? <div className="flex min-h-[180px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div> : comments.length === 0 ? <p className="py-12 text-center text-sm text-neutral-500">No comments yet.</p> : (
-            <div className="space-y-3">
-              {comments.map((comment) => (
-                <div key={comment.id} className="flex items-start gap-3">
-                  {comment.author_avatar ? <img src={comment.author_avatar} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-xs font-bold">{comment.author_name?.slice(0, 1).toUpperCase() || 'D'}</div>}
-                  <div className="min-w-0 flex-1 rounded-2xl bg-white/[0.06] px-3.5 py-2.5">
-                    <div className="flex items-start justify-between gap-2"><div><p className="text-xs font-bold text-neutral-200">{comment.author_name}</p><p className="mt-1 whitespace-pre-wrap text-sm text-neutral-300">{comment.body}</p></div>{comment.can_delete && <button type="button" onClick={() => void remove(comment.id)} className="rounded-lg p-1 text-neutral-500 hover:bg-white/10 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>}</div>
-                    <p className="mt-1.5 text-[10px] text-neutral-600">{new Date(comment.created_at).toLocaleString()}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        {post.comments_enabled && (
-          <div className="flex gap-2 border-t border-white/10 p-3 safe-area-bottom">
-            <input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} maxLength={2000} placeholder="Write a comment…" className="min-h-[44px] flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm text-white outline-none placeholder:text-neutral-600 focus:border-[#7180ff]" />
-            <button type="button" disabled={busy || !draft.trim()} onClick={() => void send()} className="flex h-11 w-11 items-center justify-center rounded-full bg-[#4353ff] disabled:opacity-40">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  const send = async () => { if (!draft.trim() || busy) return; setBusy(true); const { data, error: e } = await supabase.rpc('add_social_post_comment', { p_post_id: post.id, p_body: draft.trim() }); setBusy(false); if (e) return setError(e.message); setDraft(''); const result = (data || {}) as Record<string, unknown>; onCount(Number(result.comment_count || post.comment_count + 1)); await load(); };
+  const remove = async (id: string) => { const { data, error: e } = await supabase.rpc('delete_social_post_comment', { p_comment_id: id }); if (e) return setError(e.message); onCount(Number(data || 0)); await load(); };
+  return <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 sm:items-center sm:p-4" onClick={onClose}><div className="flex max-h-[82vh] w-full max-w-xl flex-col rounded-t-3xl border border-white/10 bg-[#11151e] text-white shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}><header className="flex items-center justify-between border-b border-white/10 p-4"><div><h2 className="font-bold">Comments</h2><p className="text-xs text-neutral-500">{post.comment_count} total</p></div><button onClick={onClose} className="rounded-full p-2 hover:bg-white/10"><X className="h-5 w-5" /></button></header><div className="min-h-[220px] flex-1 overflow-y-auto p-4">{error && <div className="mb-3 rounded-xl bg-red-500/10 p-3 text-sm text-red-200">{error}</div>}{loading ? <div className="flex min-h-[160px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div> : items.length === 0 ? <p className="py-10 text-center text-sm text-neutral-500">No comments yet.</p> : <div className="space-y-3">{items.map((comment) => <div key={comment.id} className="flex gap-3">{comment.author_avatar ? <img src={comment.author_avatar} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-xs font-bold">{comment.author_name?.slice(0, 1).toUpperCase() || 'D'}</div>}<div className="flex-1 rounded-2xl bg-white/[.06] px-3 py-2"><div className="flex justify-between gap-2"><div><p className="text-xs font-bold">{comment.author_name}</p><p className="mt-1 whitespace-pre-wrap text-sm text-neutral-300">{comment.body}</p></div>{comment.can_delete && <button onClick={() => void remove(comment.id)} className="text-neutral-500 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>}</div></div></div>)}</div>}</div>{post.comments_enabled && <footer className="flex gap-2 border-t border-white/10 p-3"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} maxLength={2000} placeholder="Write a comment…" className="min-h-[44px] flex-1 rounded-full border border-white/10 bg-white/[.06] px-4 text-sm outline-none" /><button disabled={busy || !draft.trim()} onClick={() => void send()} className="flex h-11 w-11 items-center justify-center rounded-full bg-[#4353ff] disabled:opacity-40">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></footer>}</div></div>;
 }
 
-function ComposerModal({ initial, onClose, onSaved }: { initial?: SocialPost | null; onClose: () => void; onSaved: () => void }) {
+function ComposerModal({ initial, onClose, onSaved }: { initial: SocialFeedItem | null; onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth();
-  const [form, setForm] = useState<ComposerState>(() => initial ? {
-    id: initial.id,
-    body: initial.body,
-    visibility: initial.visibility,
-    commentsEnabled: initial.comments_enabled,
-    allowedReactions: [...(initial.allowed_reactions || [])],
-    mediaPath: initial.media_path,
-    mediaType: initial.media_type,
-    mediaWidth: initial.media_width,
-    mediaHeight: initial.media_height,
-    mediaUrl: initial.media_url || null,
-  } : emptyComposer());
-  const [file, setFile] = useState<File | null>(null);
-  const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => () => { if (localPreview) URL.revokeObjectURL(localPreview); }, [localPreview]);
-
-  const chooseFile = async (selected: File | undefined) => {
-    if (!selected) return;
-    const mediaType: MediaType | null = selected.type.startsWith('image/') ? 'image' : selected.type.startsWith('video/') ? 'video' : null;
-    if (!mediaType) return setError('Choose a photo or video.');
-    if (selected.size > MAX_MEDIA_SIZE) return setError('Social media uploads must be 100 MB or smaller.');
-    const dimensions = await readDimensions(selected, mediaType);
-    if (localPreview) URL.revokeObjectURL(localPreview);
-    setFile(selected);
-    setLocalPreview(URL.createObjectURL(selected));
-    setForm((current) => ({ ...current, mediaType, mediaWidth: dimensions.width, mediaHeight: dimensions.height }));
-    setError(null);
-  };
-
-  const removeMedia = () => {
-    if (localPreview) URL.revokeObjectURL(localPreview);
-    setLocalPreview(null);
-    setFile(null);
-    setForm((current) => ({ ...current, mediaPath: null, mediaType: null, mediaWidth: null, mediaHeight: null, mediaUrl: null }));
-  };
-
-  const toggleReaction = (reaction: ReactionType) => setForm((current) => ({ ...current, allowedReactions: current.allowedReactions.includes(reaction) ? current.allowedReactions.filter((value) => value !== reaction) : [...current.allowedReactions, reaction] }));
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!user) return;
-    if (!form.body.trim() && !file && !form.mediaPath) return setError('Add text, a photo, or a video.');
-    setSubmitting(true);
-    setError(null);
-
-    const oldPath = initial?.media_path || null;
-    let uploadedPath: string | null = null;
-    let mediaPath = form.mediaPath;
-    try {
-      if (file && form.mediaType) {
-        const extension = safeExtension(file, form.mediaType);
-        const unique = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        uploadedPath = `${user.id}/${new Date().toISOString().slice(0, 10)}/${unique}.${extension}`;
-        const { error: uploadError } = await supabase.storage.from('social-media').upload(uploadedPath, file, { upsert: false, cacheControl: '3600', contentType: file.type });
-        if (uploadError) throw uploadError;
-        mediaPath = uploadedPath;
-      }
-
-      const args = {
-        p_body: form.body.trim(),
-        p_media_path: mediaPath,
-        p_media_type: mediaPath ? form.mediaType : null,
-        p_visibility: form.visibility,
-        p_comments_enabled: form.commentsEnabled,
-        p_allowed_reactions: form.allowedReactions,
-        p_media_width: mediaPath ? form.mediaWidth : null,
-        p_media_height: mediaPath ? form.mediaHeight : null,
-      };
-      const result = form.id ? await supabase.rpc('update_social_post', { p_post_id: form.id, ...args }) : await supabase.rpc('create_social_post', args);
-      if (result.error) throw result.error;
-
-      if (oldPath && oldPath !== mediaPath) await supabase.storage.from('social-media').remove([oldPath]);
-      setSubmitting(false);
-      onSaved();
-    } catch (caught) {
-      if (uploadedPath) await supabase.storage.from('social-media').remove([uploadedPath]);
-      setSubmitting(false);
-      setError(caught instanceof Error ? caught.message : 'Unable to save this post.');
-    }
-  };
-
-  const preview = localPreview || form.mediaUrl;
-  return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-white/10 bg-[#11151e] p-5 text-white shadow-2xl sm:rounded-3xl sm:p-6" onClick={(event) => event.stopPropagation()}>
-        <div className="mb-5 flex items-center justify-between"><div><h2 className="text-xl font-black">{form.id ? 'Edit your post' : 'Create a Social post'}</h2><p className="mt-1 text-xs text-neutral-500">This is your Social content, separate from admin News.</p></div><button type="button" onClick={onClose} className="rounded-full p-2 hover:bg-white/10"><X className="h-5 w-5" /></button></div>
-        {error && <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</div>}
-        <form onSubmit={submit} className="space-y-5">
-          <textarea value={form.body} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} rows={6} maxLength={5000} placeholder="What do you want to share?" className="w-full resize-y rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-sm text-white outline-none placeholder:text-neutral-600 focus:border-[#7180ff]" />
-          {preview && <div className="relative overflow-hidden rounded-2xl bg-black">{form.mediaType === 'video' ? <video src={preview} controls playsInline className="max-h-[420px] w-full object-contain" /> : <img src={preview} alt="Preview" className="max-h-[420px] w-full object-contain" />}<button type="button" onClick={removeMedia} className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/70"><X className="h-4 w-4" /></button></div>}
-          {!preview && <label className="flex min-h-[90px] cursor-pointer items-center justify-center gap-3 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] text-sm font-semibold text-neutral-300 hover:border-[#7180ff]"><ImageIcon className="h-5 w-5" /><Video className="h-5 w-5" /> Add photo or video<input type="file" accept="image/*,video/*" className="hidden" onChange={(event) => void chooseFile(event.target.files?.[0])} /></label>}
-          {preview && <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-neutral-300 hover:bg-white/5">Replace media<input type="file" accept="image/*,video/*" className="hidden" onChange={(event) => void chooseFile(event.target.files?.[0])} /></label>}
-          <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-neutral-300">Audience<select value={form.visibility} onChange={(event) => setForm((current) => ({ ...current, visibility: event.target.value as Visibility }))} className="mt-2 w-full rounded-xl border border-white/10 bg-[#1b202b] px-3 py-3 text-white outline-none"><option value="public">Public</option><option value="followers">Followers</option><option value="friends">Friends</option><option value="private">Only me</option></select></label><label className="flex items-center justify-between rounded-2xl border border-white/10 p-4 text-sm font-semibold text-neutral-300">Comments<input type="checkbox" checked={form.commentsEnabled} onChange={(event) => setForm((current) => ({ ...current, commentsEnabled: event.target.checked }))} className="h-4 w-4" /></label></div>
-          <div><p className="text-sm font-semibold text-neutral-300">Allowed reactions</p><div className="mt-2 flex flex-wrap gap-2">{ALL_REACTIONS.map((reaction) => { const active = form.allowedReactions.includes(reaction); return <button key={reaction} type="button" onClick={() => toggleReaction(reaction)} className={`rounded-full border px-3 py-2 text-sm ${active ? 'border-[#7180ff] bg-[#4353ff]/15 text-white' : 'border-white/10 text-neutral-600'}`}><span className="mr-1 text-lg">{REACTIONS[reaction].emoji}</span>{REACTIONS[reaction].label}</button>; })}</div><p className="mt-2 text-xs text-neutral-600">Deselect every reaction to disable reactions on this post.</p></div>
-          <button type="submit" disabled={submitting} className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-[#4353ff] px-4 font-bold text-white hover:bg-[#5261ff] disabled:opacity-50">{submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : form.id ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}{form.id ? 'Save changes' : 'Post to Social'}</button>
-        </form>
-      </div>
-    </div>
-  );
+  const [form, setForm] = useState<Composer>(() => initial ? { id: initial.id, body: initial.body, visibility: initial.visibility, commentsEnabled: initial.comments_enabled, allowedReactions: [...(initial.allowed_reactions || [])], mediaPath: initial.media_path, mediaType: initial.media_type, mediaWidth: initial.media_width, mediaHeight: initial.media_height, mediaUrl: initial.media_url || null } : emptyComposer());
+  const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  const choose = async (selected?: File) => { if (!selected) return; const type: MediaType | null = selected.type.startsWith('image/') ? 'image' : selected.type.startsWith('video/') ? 'video' : null; if (!type) return setError('Choose a photo or video.'); if (selected.size > MAX_MEDIA_SIZE) return setError('Upload must be 100 MB or smaller.'); const dimensions = await readDimensions(selected, type); if (preview) URL.revokeObjectURL(preview); setFile(selected); setPreview(URL.createObjectURL(selected)); setForm((current) => ({ ...current, mediaType: type, mediaWidth: dimensions.width, mediaHeight: dimensions.height })); setError(null); };
+  const removeMedia = () => { if (preview) URL.revokeObjectURL(preview); setPreview(null); setFile(null); setForm((current) => ({ ...current, mediaPath: null, mediaType: null, mediaWidth: null, mediaHeight: null, mediaUrl: null })); };
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); if (!user || (!form.body.trim() && !file && !form.mediaPath)) return setError('Add text, a photo, or a video.'); setBusy(true); setError(null); let uploaded: string | null = null; const oldPath = initial?.media_path || null; let mediaPath = form.mediaPath; try { if (file && form.mediaType) { uploaded = `${user.id}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension(file, form.mediaType)}`; const { error: uploadError } = await supabase.storage.from('social-media').upload(uploaded, file, { contentType: file.type, upsert: false }); if (uploadError) throw uploadError; mediaPath = uploaded; } const args = { p_body: form.body.trim(), p_media_path: mediaPath, p_media_type: mediaPath ? form.mediaType : null, p_visibility: form.visibility, p_comments_enabled: form.commentsEnabled, p_allowed_reactions: form.allowedReactions, p_media_width: mediaPath ? form.mediaWidth : null, p_media_height: mediaPath ? form.mediaHeight : null }; const result = form.id ? await supabase.rpc('update_social_post', { p_post_id: form.id, ...args }) : await supabase.rpc('create_social_post', args); if (result.error) throw result.error; if (oldPath && oldPath !== mediaPath) await supabase.storage.from('social-media').remove([oldPath]); setBusy(false); onSaved(); } catch (caught) { if (uploaded) await supabase.storage.from('social-media').remove([uploaded]); setBusy(false); setError(caught instanceof Error ? caught.message : 'Unable to save post.'); } };
+  const visiblePreview = preview || form.mediaUrl;
+  return <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 sm:items-center sm:p-4" onClick={onClose}><div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-white/10 bg-[#11151e] p-5 text-white shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}><header className="mb-5 flex items-center justify-between"><div><h2 className="text-xl font-black">{form.id ? 'Edit your post' : 'Create a Social post'}</h2><p className="text-xs text-neutral-500">News remains DRIGHT-admin information; this is your Social content.</p></div><button onClick={onClose} className="rounded-full p-2 hover:bg-white/10"><X className="h-5 w-5" /></button></header>{error && <div className="mb-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-200">{error}</div>}<form onSubmit={submit} className="space-y-4"><textarea value={form.body} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} rows={5} maxLength={5000} placeholder="What do you want to share?" className="w-full rounded-2xl border border-white/10 bg-white/[.05] p-4 text-sm outline-none" />{visiblePreview && <div className="relative overflow-hidden rounded-2xl bg-black">{form.mediaType === 'video' ? <video src={visiblePreview} controls playsInline className="max-h-[420px] w-full object-contain" /> : <img src={visiblePreview} alt="Preview" className="max-h-[420px] w-full object-contain" />}<button type="button" onClick={removeMedia} className="absolute right-2 top-2 rounded-full bg-black/70 p-2"><X className="h-4 w-4" /></button></div>}{!visiblePreview && <label className="flex min-h-[90px] cursor-pointer items-center justify-center gap-3 rounded-2xl border border-dashed border-white/15 text-sm font-semibold"><ImageIcon className="h-5 w-5" /><Video className="h-5 w-5" /> Add photo or video<input type="file" accept="image/*,video/*" className="hidden" onChange={(event) => void choose(event.target.files?.[0])} /></label>}<div className="grid gap-3 sm:grid-cols-2"><select value={form.visibility} onChange={(event) => setForm((current) => ({ ...current, visibility: event.target.value as Visibility }))} className="rounded-xl border border-white/10 bg-[#1b202b] px-3 py-3"><option value="public">Public</option><option value="followers">Followers</option><option value="friends">Friends</option><option value="private">Only me</option></select><label className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-3 text-sm">Comments<input type="checkbox" checked={form.commentsEnabled} onChange={(event) => setForm((current) => ({ ...current, commentsEnabled: event.target.checked }))} /></label></div><div className="flex flex-wrap gap-2">{ALL_REACTIONS.map((reaction) => <button key={reaction} type="button" onClick={() => setForm((current) => ({ ...current, allowedReactions: current.allowedReactions.includes(reaction) ? current.allowedReactions.filter((value) => value !== reaction) : [...current.allowedReactions, reaction] }))} className={`rounded-full border px-3 py-2 text-sm ${form.allowedReactions.includes(reaction) ? 'border-[#7180ff] bg-[#4353ff]/15' : 'border-white/10 text-neutral-600'}`}>{REACTIONS[reaction].emoji} {REACTIONS[reaction].label}</button>)}</div><button type="submit" disabled={busy} className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-[#4353ff] font-bold disabled:opacity-50">{busy ? <Loader2 className="h-5 w-5 animate-spin" /> : form.id ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}{form.id ? 'Save changes' : 'Post to Social'}</button></form></div></div>;
 }
 
 function NewsBridgeCard({ item }: { item: NewsBridge }) {
-  const navigate = useNavigate();
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const viewed = useRef(false);
-  const [landscape, setLandscape] = useState(false);
-  const [muted, setMuted] = useState(true);
-
-  useEffect(() => {
-    if (viewed.current) return;
-    viewed.current = true;
-    void supabase.rpc('record_global_content_view', { p_content_id: item.id });
-  }, [item.id]);
-
-  const fullscreen = async () => { try { await videoRef.current?.requestFullscreen?.(); } catch { /* unsupported */ } };
-  const rotate = async () => {
-    try {
-      await videoRef.current?.requestFullscreen?.();
-      const orientation = (screen as Screen & { orientation?: ScreenOrientation & { lock?: (orientation: string) => Promise<void> } }).orientation;
-      await orientation?.lock?.('landscape');
-    } catch { /* orientation lock is optional */ }
-  };
-  const share = async () => {
-    const url = `${window.location.origin}/news?item=${item.id}`;
-    if (navigator.share) { try { await navigator.share({ title: item.title, text: item.message.slice(0, 140), url }); return; } catch { /* copy fallback */ } }
-    await navigator.clipboard?.writeText(url);
-  };
-
-  return (
-    <section className="relative h-[calc(100dvh-8rem)] min-h-[520px] w-full snap-start overflow-hidden bg-black md:h-screen">
-      <div className="absolute inset-0 flex items-center justify-center bg-black">
-        {item.media_type === 'video' && item.media_url ? <video ref={videoRef} src={item.media_url} playsInline loop muted={muted} autoPlay preload="metadata" onLoadedMetadata={(event) => setLandscape(event.currentTarget.videoWidth > event.currentTarget.videoHeight)} onClick={(event) => event.currentTarget.paused ? void event.currentTarget.play() : event.currentTarget.pause()} className="h-full w-full object-contain" /> : item.media_type === 'image' && item.media_url ? <img src={item.media_url} alt="" className="h-full w-full object-contain" /> : <div className="absolute inset-0 bg-gradient-to-b from-[#1b2030] via-[#10151f] to-black" />}
-      </div>
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/85" />
-      <div className="absolute left-4 right-20 top-16 z-20"><span className="rounded-full border border-blue-400/20 bg-blue-500/20 px-3 py-1 text-xs font-bold text-blue-200 backdrop-blur">DRIGHT News</span></div>
-      {item.media_type === 'video' && <div className="absolute right-3 top-16 z-30 flex flex-col gap-2"><button type="button" onClick={() => setMuted((value) => !value)} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur">{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button>{landscape && <><button type="button" onClick={() => void fullscreen()} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur" title="Full screen"><Expand className="h-5 w-5" /></button><button type="button" onClick={() => void rotate()} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur" title="Flip landscape video"><RotateCw className="h-5 w-5" /></button></>}</div>}
-      <div className="absolute bottom-20 left-4 right-20 z-20 text-white md:bottom-6"><p className="text-sm font-extrabold">DRIGHT News</p><p className="mt-1 text-xs text-white/65">{new Date(item.published_at).toLocaleDateString()}</p><h2 className="mt-3 text-xl font-black leading-tight">{item.title}</h2><p className="mt-2 line-clamp-2 text-sm leading-relaxed text-white/90">{item.message}</p><button type="button" onClick={() => navigate(`/news?item=${item.id}`)} className="mt-2 text-sm font-bold">… more</button></div>
-      <div className="absolute bottom-20 right-3 z-30 flex flex-col gap-4 md:bottom-6"><button type="button" onClick={() => navigate(`/news?item=${item.id}&comments=1`)} className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"><MessageCircle className="h-7 w-7" /></button><button type="button" onClick={() => void share()} className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"><Share2 className="h-7 w-7" /></button></div>
-    </section>
-  );
+  const navigate = useNavigate(); const [muted, setMuted] = useState(true); const viewed = useRef(false);
+  useEffect(() => { if (!viewed.current) { viewed.current = true; void supabase.rpc('record_global_content_view', { p_content_id: item.id }); } }, [item.id]);
+  return <section className="relative h-[calc(100dvh-8rem)] min-h-[520px] snap-start overflow-hidden bg-black md:h-screen">{item.media_type === 'video' && item.media_url ? <video src={item.media_url} autoPlay muted={muted} playsInline controls={false} className="h-full w-full object-contain" /> : item.media_url ? <img src={item.media_url} alt="" className="h-full w-full object-contain" /> : <div className="absolute inset-0 bg-gradient-to-b from-[#1b2030] to-black" />}<div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90" /><button onClick={() => setMuted((value) => !value)} className="absolute right-3 top-16 z-20 rounded-full bg-black/50 p-3">{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button><div className="absolute bottom-20 left-4 right-20 z-20"><span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-bold text-blue-200">DRIGHT News</span><h2 className="mt-3 text-xl font-black">{item.title}</h2><p className="mt-2 line-clamp-3 text-sm text-white/85">{item.message}</p><button onClick={() => navigate(`/news?item=${item.id}`)} className="mt-2 text-sm font-bold">Open News post</button></div></section>;
 }
 
-function SocialCard({
-  post,
-  own,
-  following,
-  onFollow,
-  onPatch,
-  onEdit,
-  onDelete,
-  onComments,
-  onRemoved,
-}: {
-  post: SocialPost;
-  own: boolean;
-  following: boolean;
-  onFollow: () => void;
-  onPatch: (patch: Partial<SocialPost>) => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onComments: () => void;
-  onRemoved: () => void;
+function SuggestionEmpty({ mode }: { mode: 'following' | 'friends' }) {
+  const { toggleFollow, followingIds } = useFollow(); const navigate = useNavigate(); const [items, setItems] = useState<SocialAccountSuggestion[]>([]); const [loading, setLoading] = useState(true);
+  useEffect(() => { let active = true; void fetchSocialSuggestions(mode).then((data) => { if (active) setItems(data); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [mode]);
+  return <div className="min-h-full bg-[#0d1017] px-5 pb-28 pt-24"><div className="mx-auto max-w-xl text-center"><Users className="mx-auto h-12 w-12 text-neutral-600" /><h2 className="mt-4 text-xl font-black">{mode === 'following' ? 'Build your Following feed' : 'Find people you may know'}</h2><p className="mt-2 text-sm text-neutral-500">{mode === 'following' ? 'Follow creators and people you care about. Their eligible posts will appear here.' : 'Friends on DRIGHT are mutual follows. These suggestions can help you build your network.'}</p></div>{loading ? <Loader2 className="mx-auto mt-8 h-6 w-6 animate-spin" /> : <div className="mx-auto mt-7 max-w-xl space-y-2">{items.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.04] p-3">{item.avatar_url ? <img src={item.avatar_url} alt="" className="h-11 w-11 rounded-full object-cover" /> : <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#4353ff] font-bold">{(item.full_name || item.username || 'D').slice(0, 1).toUpperCase()}</div>}<button onClick={() => navigate(`/profile/${item.id}`)} className="min-w-0 flex-1 text-left"><p className="truncate text-sm font-bold">{item.username ? `@${item.username}` : item.full_name || 'DRIGHT User'} {item.is_verified && <CheckCircle className="inline h-3.5 w-3.5 text-blue-400" />}</p><p className="text-xs text-neutral-500">{compact(item.followers)} followers{item.mutual_score > 0 ? ` · ${item.mutual_score} mutual` : ''}</p></button><button onClick={() => void toggleFollow(item.id)} className="rounded-full bg-[#4353ff] px-4 py-2 text-xs font-bold">{followingIds.has(item.id) ? 'Following' : 'Follow'}</button></div>)}</div>}</div>;
+}
+
+function SocialCard({ post, index, activeIndex, sessionId, qualifiedMs, fastSkipMs, following, own, onPatch, onActive, onProfile, onFollow, onEdit, onDelete, onComments, onRemove }: {
+  post: SocialFeedItem; index: number; activeIndex: number; sessionId: string | null; qualifiedMs: number; fastSkipMs: number; following: boolean; own: boolean;
+  onPatch: (patch: Partial<SocialFeedItem>) => void; onActive: () => void; onProfile: () => void; onFollow: () => void; onEdit: () => void; onDelete: () => void; onComments: () => void; onRemove: () => void;
 }) {
-  const navigate = useNavigate();
-  const root = useRef<HTMLElement | null>(null);
-  const video = useRef<HTMLVideoElement | null>(null);
-  const viewed = useRef(false);
-  const visibleAt = useRef<number | null>(null);
-  const [muted, setMuted] = useState(true);
-  const [landscape, setLandscape] = useState(Boolean(post.media_width && post.media_height && post.media_width > post.media_height));
-  const [expanded, setExpanded] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [reactionBusy, setReactionBusy] = useState(false);
+  const navigate = useNavigate(); const root = useRef<HTMLElement | null>(null); const video = useRef<HTMLVideoElement | null>(null); const visibleAt = useRef<number | null>(null); const segmentStart = useRef<number | null>(null); const qualifiedTimer = useRef<number | null>(null); const qualified = useRef(false); const ended = useRef(false); const impressions = useRef(false); const [muted, setMuted] = useState(true); const [menu, setMenu] = useState(false); const near = Math.abs(index - activeIndex) <= 2; const mediaUrl = post.media_type === 'video' && !near ? null : post.media_url;
+
+  const clearQualified = () => { if (qualifiedTimer.current) window.clearTimeout(qualifiedTimer.current); qualifiedTimer.current = null; };
+  const ratio = () => video.current && Number.isFinite(video.current.duration) && video.current.duration > 0 ? Math.min(video.current.currentTime / video.current.duration, 1.5) : 0;
+  const watchMs = () => segmentStart.current ? Math.max(0, Date.now() - segmentStart.current) : 0;
 
   useEffect(() => {
-    const node = root.current;
-    if (!node) return;
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.intersectionRatio >= 0.65) {
-          visibleAt.current = Date.now();
-          video.current?.play().catch(() => undefined);
-          if (!viewed.current) {
-            viewed.current = true;
-            void supabase.rpc('record_social_post_view', { p_post_id: post.id }).then(({ data }) => onPatch({ view_count: Number(data || post.view_count) }));
-          }
-        } else {
-          video.current?.pause();
-          if (visibleAt.current) {
-            const dwell = Date.now() - visibleAt.current;
-            visibleAt.current = null;
-            if (dwell >= 2000) void supabase.rpc('record_social_post_event', { p_post_id: post.id, p_event_type: 'dwell', p_dwell_ms: dwell });
-          }
-        }
-      }
-    }, { threshold: [0.2, 0.65, 0.9] });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [onPatch, post.id, post.view_count]);
+    const node = root.current; if (!node) return;
+    const observer = new IntersectionObserver((entries) => { for (const entry of entries) { if (entry.intersectionRatio >= 0.68) { visibleAt.current = Date.now(); onActive(); if (!impressions.current) { impressions.current = true; void recordSocialEvent(post.id, 'impression'); } if (post.media_type === 'video') void video.current?.play().catch(() => undefined); } else if (entry.intersectionRatio < 0.35) { if (post.media_type === 'video' && video.current && !video.current.paused) video.current.pause(); if (visibleAt.current) { const dwell = Date.now() - visibleAt.current; visibleAt.current = null; if (dwell < fastSkipMs) void recordVideoProgress(post.id, 'skip', dwell, ratio(), sessionId); else if (dwell >= 2000) void recordVideoProgress(post.id, 'dwell', dwell, ratio(), sessionId); } } } }, { threshold: [0.2, 0.35, 0.68, 0.9] });
+    observer.observe(node); return () => observer.disconnect();
+  }, [fastSkipMs, onActive, post.id, post.media_type, sessionId]);
 
-  const react = async (reaction: ReactionType) => {
-    if (reactionBusy) return;
-    setReactionBusy(true);
-    const { data } = await supabase.rpc('set_social_post_reaction', { p_post_id: post.id, p_reaction: reaction });
-    setReactionBusy(false);
-    if (data) {
-      const result = data as Record<string, unknown>;
-      onPatch({ current_reaction: (result.reaction || null) as ReactionType | null, reaction_count: Number(result.reaction_count || 0) });
-    }
-  };
+  useEffect(() => { const pause = () => { if (document.hidden) video.current?.pause(); }; document.addEventListener('visibilitychange', pause); return () => document.removeEventListener('visibilitychange', pause); }, []);
+  useEffect(() => () => clearQualified(), []);
 
-  const save = async () => {
-    const { data } = await supabase.rpc('toggle_social_post_save', { p_post_id: post.id });
-    if (data) {
-      const result = data as Record<string, unknown>;
-      onPatch({ is_saved: Boolean(result.saved), save_count: Number(result.save_count || 0) });
-    }
-  };
+  const onPlay = () => { ended.current = false; qualified.current = false; segmentStart.current = Date.now(); clearQualified(); qualifiedTimer.current = window.setTimeout(() => { if (video.current && !video.current.paused && !qualified.current) { qualified.current = true; void recordVideoProgress(post.id, 'qualified_view', qualifiedMs, ratio(), sessionId); } }, qualifiedMs); void recordVideoStart(post.id, sessionId).then((result) => onPatch({ view_count: Number(result.view_count || post.view_count), unique_view_count: Number(result.unique_view_count || post.unique_view_count) })).catch(() => undefined); };
+  const onPause = () => { clearQualified(); if (ended.current) return; const watched = watchMs(); segmentStart.current = null; if (watched > 0) void recordVideoProgress(post.id, 'pause', watched, ratio(), sessionId); };
+  const onEnded = () => { ended.current = true; clearQualified(); const watched = watchMs(); segmentStart.current = null; void recordVideoProgress(post.id, 'watch_complete', watched, 1, sessionId); window.setTimeout(() => { if (!video.current) return; video.current.currentTime = 0; void recordVideoProgress(post.id, 'replay', 0, 0, sessionId); void video.current.play().catch(() => undefined); }, 250); };
+  const videoClick = () => { void recordSocialClick(post.id, sessionId).then((result) => onPatch({ click_count: Number(result.click_count || post.click_count) })).catch(() => undefined); if (!video.current) return; if (video.current.paused) void video.current.play().catch(() => undefined); else video.current.pause(); };
+  const react = async (reaction: SocialReactionType) => { const { data } = await supabase.rpc('set_social_post_reaction', { p_post_id: post.id, p_reaction: reaction }); if (data) { const result = data as Record<string, unknown>; onPatch({ current_reaction: (result.reaction || null) as SocialReactionType | null, reaction_count: Number(result.reaction_count || 0) }); } };
+  const save = async () => { const { data } = await supabase.rpc('toggle_social_post_save', { p_post_id: post.id }); if (data) { const result = data as Record<string, unknown>; onPatch({ is_saved: Boolean(result.saved), save_count: Number(result.save_count || 0) }); } };
+  const share = async () => { const url = `${window.location.origin}/social?post=${post.id}`; if (navigator.share) { try { await navigator.share({ text: post.body.slice(0, 140), url }); await recordSocialEvent(post.id, 'share'); return; } catch { /* fallback */ } } await navigator.clipboard?.writeText(url); await recordSocialEvent(post.id, 'share'); };
+  const hide = async (kind: 'not_interested' | 'hide_creator') => { await recordSocialEvent(post.id, kind); onRemove(); };
+  const report = async () => { await recordSocialEvent(post.id, 'report'); setMenu(false); onRemove(); };
+  const openEntity = async () => { try { const result = await recordEntityClick(post.id, sessionId); if (result.url) { if (result.url.startsWith('/')) navigate(result.url); else window.location.assign(result.url); return; } if (!result.entity_id) return; const routes: Record<string, string> = { product: `/product/${result.entity_id}`, service: `/product/${result.entity_id}`, course: `/product/${result.entity_id}`, job: `/jobs/${result.entity_id}`, creator: `/profile/${result.entity_id}`, community: post.community_slug ? `/communities/${post.community_slug}` : '/communities' }; navigate(routes[result.entity_type] || '/market'); } catch { /* unavailable CTA */ } };
 
-  const share = async () => {
-    const url = `${window.location.origin}/social?post=${post.id}`;
-    if (navigator.share) { try { await navigator.share({ text: post.body.slice(0, 140), url }); void supabase.rpc('record_social_post_event', { p_post_id: post.id, p_event_type: 'share', p_dwell_ms: null }); return; } catch { /* copy fallback */ } }
-    await navigator.clipboard?.writeText(url);
-    void supabase.rpc('record_social_post_event', { p_post_id: post.id, p_event_type: 'share', p_dwell_ms: null });
-  };
-
-  const openProfile = () => {
-    void supabase.rpc('record_social_post_event', { p_post_id: post.id, p_event_type: 'profile_visit', p_dwell_ms: null });
-    navigate(`/profile/${post.author_id}`);
-  };
-
-  const hide = async (eventType: 'not_interested' | 'hide_creator') => {
-    const { error } = await supabase.rpc('record_social_post_event', { p_post_id: post.id, p_event_type: eventType, p_dwell_ms: null });
-    if (!error) onRemoved();
-  };
-
-  const fullscreen = async () => { try { await video.current?.requestFullscreen?.(); } catch { /* unsupported */ } };
-  const rotate = async () => {
-    try {
-      await video.current?.requestFullscreen?.();
-      const orientation = (screen as Screen & { orientation?: ScreenOrientation & { lock?: (orientation: string) => Promise<void> } }).orientation;
-      await orientation?.lock?.('landscape');
-    } catch { /* optional */ }
-  };
-
-  return (
-    <section ref={root} className="relative h-[calc(100dvh-8rem)] min-h-[520px] w-full snap-start overflow-hidden bg-black md:h-screen">
-      <div className="absolute inset-0 flex items-center justify-center bg-black">
-        {post.media_type === 'video' && post.media_url ? (
-          <video ref={video} src={post.media_url} playsInline loop muted={muted} preload="metadata" onEnded={() => void supabase.rpc('record_social_post_event', { p_post_id: post.id, p_event_type: 'watch_complete', p_dwell_ms: null })} onLoadedMetadata={(event) => setLandscape(event.currentTarget.videoWidth > event.currentTarget.videoHeight)} onClick={(event) => event.currentTarget.paused ? void event.currentTarget.play() : event.currentTarget.pause()} className="h-full w-full object-contain" />
-        ) : post.media_type === 'image' && post.media_url ? <img src={post.media_url} alt="" className="h-full w-full object-contain" /> : <div className="absolute inset-0 bg-gradient-to-b from-[#172033] via-[#111827] to-black" />}
-      </div>
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90" />
-
-      {post.media_type === 'video' && <div className="absolute right-3 top-16 z-30 flex flex-col gap-2"><button type="button" onClick={() => setMuted((value) => !value)} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur">{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button>{landscape && <><button type="button" onClick={() => void fullscreen()} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur" title="Full screen"><Expand className="h-5 w-5" /></button><button type="button" onClick={() => void rotate()} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur" title="Flip landscape video"><RotateCw className="h-5 w-5" /></button></>}</div>}
-
-      <div className="absolute bottom-20 left-4 right-20 z-20 text-white md:bottom-6">
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={openProfile} className="shrink-0">{post.author_avatar ? <img src={post.author_avatar} alt="" className="h-11 w-11 rounded-full border-2 border-white object-cover" /> : <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-[#4353ff] font-black">{(post.author_name || post.author_username || 'D').slice(0, 1).toUpperCase()}</div>}</button>
-          <button type="button" onClick={openProfile} className="min-w-0 text-left"><div className="flex items-center gap-1"><span className="truncate text-sm font-extrabold">{post.author_username ? `@${post.author_username}` : post.author_name || 'DRIGHT User'}</span>{post.author_verified && <CheckCircle className="h-4 w-4 shrink-0 text-blue-400" />}</div>{post.author_username && post.author_name && <p className="truncate text-xs text-white/65">{post.author_name}</p>}</button>
-          {!own && <button type="button" onClick={onFollow} className={`ml-1 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold ${following ? 'bg-white/15 text-white' : 'bg-[#4353ff] text-white'}`}>{following ? <UserCheck className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}{following ? 'Following' : 'Follow'}</button>}
-        </div>
-        {post.body && <div className="mt-3"><p className={`whitespace-pre-wrap text-sm leading-relaxed text-white/95 ${expanded ? '' : 'line-clamp-2'}`}>{post.body}</p>{post.body.length > 100 && <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-1 text-sm font-bold text-white">{expanded ? 'less' : '… more'}</button>}</div>}
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-white/60"><span>{compact(post.view_count)} views</span><span>·</span><span>{new Date(post.created_at).toLocaleDateString()}</span>{post.edited_at && <><span>·</span><span>edited</span></>}</div>
-      </div>
-
-      <div className="absolute bottom-20 right-3 z-30 flex flex-col items-center gap-4 md:bottom-6">
-        <SocialReaction post={post} onReact={(reaction) => void react(reaction)} />
-        {post.comments_enabled && <button type="button" onClick={onComments} className="flex flex-col items-center text-white"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 backdrop-blur"><MessageCircle className="h-7 w-7" /></span>{post.comment_count > 0 && <span className="mt-1 text-xs font-bold">{compact(post.comment_count)}</span>}</button>}
-        <button type="button" onClick={() => void share()} className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"><Share2 className="h-7 w-7" /></button>
-        <button type="button" onClick={() => void save()} className={`flex h-12 w-12 items-center justify-center rounded-full bg-black/45 backdrop-blur ${post.is_saved ? 'text-[#7180ff]' : 'text-white'}`}><Bookmark className={`h-7 w-7 ${post.is_saved ? 'fill-current' : ''}`} /></button>
-        <div className="relative"><button type="button" onClick={() => setMenuOpen((value) => !value)} className="flex h-11 w-11 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"><MoreHorizontal className="h-6 w-6" /></button>{menuOpen && <div className="absolute bottom-12 right-0 w-44 overflow-hidden rounded-2xl border border-white/10 bg-[#171b25] py-1 text-sm text-white shadow-2xl">{own ? <><button type="button" onClick={() => { setMenuOpen(false); onEdit(); }} className="flex w-full items-center gap-2 px-4 py-3 hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit post</button><button type="button" onClick={() => { setMenuOpen(false); onDelete(); }} className="flex w-full items-center gap-2 px-4 py-3 text-red-300 hover:bg-white/5"><Trash2 className="h-4 w-4" /> Delete post</button></> : <><button type="button" onClick={() => void hide('not_interested')} className="w-full px-4 py-3 text-left hover:bg-white/5">Not interested</button><button type="button" onClick={() => void hide('hide_creator')} className="w-full px-4 py-3 text-left hover:bg-white/5">Hide this creator</button></>}</div>}</div>
-      </div>
-    </section>
-  );
+  return <section id={`social-post-${post.id}`} ref={root} className="relative h-[calc(100dvh-8rem)] min-h-[520px] snap-start overflow-hidden bg-black md:h-screen">
+    <div className="absolute inset-0 flex items-center justify-center">{post.media_type === 'video' && mediaUrl ? <video ref={video} src={mediaUrl} muted={muted} playsInline preload={near ? 'metadata' : 'none'} onPlay={onPlay} onPause={onPause} onEnded={onEnded} onClick={videoClick} className="h-full w-full cursor-pointer object-contain" /> : post.media_type === 'image' && mediaUrl ? <img src={mediaUrl} alt="" className="h-full w-full object-contain" /> : <div className="absolute inset-0 bg-gradient-to-b from-[#172033] via-[#101521] to-black" />}</div>
+    <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90" />
+    {post.media_type === 'video' && <button onClick={() => setMuted((value) => !value)} className="absolute right-3 top-16 z-30 rounded-full bg-black/50 p-3 text-white">{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button>}
+    <div className="absolute bottom-20 left-4 right-20 z-20 text-white md:bottom-6">
+      {post.community_id && post.community_slug && <button onClick={() => navigate(`/communities/${post.community_slug}`)} className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold backdrop-blur">{post.community_avatar ? <img src={post.community_avatar} alt="" className="h-5 w-5 rounded-full object-cover" /> : <Users className="h-4 w-4" />} {post.community_name || 'Community'}</button>}
+      <div className="flex items-center gap-3"><button onClick={onProfile}>{post.author_avatar ? <img src={post.author_avatar} alt="" className="h-11 w-11 rounded-full border-2 border-white object-cover" /> : <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-[#4353ff] font-black">{(post.author_name || post.author_username || 'D').slice(0, 1).toUpperCase()}</div>}</button><button onClick={onProfile} className="min-w-0 text-left"><p className="truncate text-sm font-extrabold">{post.author_username ? `@${post.author_username}` : post.author_name || 'DRIGHT User'} {post.author_verified && <CheckCircle className="inline h-4 w-4 text-blue-400" />}</p>{post.author_username && post.author_name && <p className="truncate text-xs text-white/60">{post.author_name}</p>}</button>{!own && <button onClick={onFollow} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${following ? 'bg-white/15' : 'bg-[#4353ff]'}`}>{following ? <UserCheck className="mr-1 inline h-3.5 w-3.5" /> : <UserPlus className="mr-1 inline h-3.5 w-3.5" />}{following ? 'Following' : 'Follow'}</button>}</div>
+      {post.body && <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-white/95">{post.body}</p>}
+      {post.recommendation_reason && <p className="mt-2 text-[11px] font-semibold text-white/45">{post.recommendation_reason}</p>}
+      {post.linked_entity_type && <button onClick={() => void openEntity()} className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-black">{post.linked_entity_type === 'job' ? 'View Job' : post.linked_entity_type === 'store' ? 'View Store' : post.linked_entity_type === 'course' ? 'View Course' : post.linked_entity_type === 'service' ? 'View Service' : 'Learn More'} <ExternalLink className="h-3.5 w-3.5" /></button>}
+      <p className="mt-2 text-[11px] font-semibold text-white/50">{compact(post.view_count)} views · {compact(post.click_count)} clicks · {new Date(post.created_at).toLocaleDateString()}{post.edited_at ? ' · edited' : ''}</p>
+    </div>
+    <div className="absolute bottom-20 right-3 z-30 flex flex-col items-center gap-4 md:bottom-6"><ReactionControl post={post} onReact={(reaction) => void react(reaction)} />{post.comments_enabled && <button onClick={onComments} className="flex flex-col items-center text-white"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45"><MessageCircle className="h-7 w-7" /></span>{post.comment_count > 0 && <span className="mt-1 text-xs font-bold">{compact(post.comment_count)}</span>}</button>}<button onClick={() => void share()} className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45"><Share2 className="h-7 w-7" /></button><button onClick={() => void save()} className={`flex h-12 w-12 items-center justify-center rounded-full bg-black/45 ${post.is_saved ? 'text-[#7180ff]' : 'text-white'}`}><Bookmark className={`h-7 w-7 ${post.is_saved ? 'fill-current' : ''}`} /></button><div className="relative"><button onClick={() => setMenu((value) => !value)} className="flex h-11 w-11 items-center justify-center rounded-full bg-black/45"><MoreHorizontal className="h-6 w-6" /></button>{menu && <div className="absolute bottom-12 right-0 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#171b25] py-1 text-left text-sm shadow-2xl">{own ? <><button onClick={onEdit} className="flex w-full items-center gap-2 px-4 py-3 hover:bg-white/5"><Pencil className="h-4 w-4" />Edit post</button><button onClick={onDelete} className="flex w-full items-center gap-2 px-4 py-3 text-red-300 hover:bg-white/5"><Trash2 className="h-4 w-4" />Delete post</button></> : <><button onClick={() => void hide('not_interested')} className="w-full px-4 py-3 hover:bg-white/5">Not interested</button><button onClick={() => void hide('hide_creator')} className="w-full px-4 py-3 hover:bg-white/5">Hide this creator</button><button onClick={() => void report()} className="w-full px-4 py-3 text-red-300 hover:bg-white/5">Report post</button></>}</div>}</div></div>
+  </section>;
 }
 
 export default function SocialFieldPage() {
-  const { user } = useAuth();
-  const { followingIds, toggleFollow } = useFollow();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [params] = useSearchParams();
-  const mode = feedMode(location.pathname);
-  const targetPost = params.get('post');
-  const newsId = params.get('news');
-  const [posts, setPosts] = useState<SocialPost[]>([]);
-  const [newsBridge, setNewsBridge] = useState<NewsBridge | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [editing, setEditing] = useState<SocialPost | null>(null);
-  const [commentsPost, setCommentsPost] = useState<SocialPost | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const scroller = useRef<HTMLElement | null>(null);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const { user } = useAuth(); const { followingIds, toggleFollow } = useFollow(); const navigate = useNavigate(); const location = useLocation(); const [params] = useSearchParams();
+  const mode = modeFromPath(location.pathname); const targetPost = params.get('post'); const newsId = params.get('news');
+  const [posts, setPosts] = useState<SocialFeedItem[]>([]); const [sessionId, setSessionId] = useState<string | null>(null); const [cursor, setCursor] = useState<string | null>(null); const [hasMore, setHasMore] = useState(true); const [loading, setLoading] = useState(true); const [loadingMore, setLoadingMore] = useState(false); const [activeIndex, setActiveIndex] = useState(0); const [activePostId, setActivePostId] = useState<string | null>(null); const [settings, setSettings] = useState<SocialRuntimeSettings>({}); const [newsBridge, setNewsBridge] = useState<NewsBridge | null>(null); const [composer, setComposer] = useState(false); const [editing, setEditing] = useState<SocialFeedItem | null>(null); const [comments, setComments] = useState<SocialFeedItem | null>(null); const [error, setError] = useState<string | null>(null); const scroller = useRef<HTMLElement | null>(null); const touch = useRef<{ x: number; y: number } | null>(null); const replenishing = useRef(false);
 
-  const signPosts = useCallback(async (rows: SocialPost[]) => Promise.all(rows.map(async (post) => {
-    if (!post.media_path) return { ...post, media_url: null };
-    const { data, error: signError } = await supabase.storage.from('social-media').createSignedUrl(post.media_path, 60 * 60);
-    return { ...post, media_url: signError ? null : data.signedUrl };
-  })), []);
+  const persist = useCallback((overrideActive?: string | null) => { if (!user) return; const snapshot: Snapshot = { timestamp: Date.now(), posts, cursor, sessionId, hasMore, activePostId: overrideActive === undefined ? activePostId : overrideActive }; try { sessionStorage.setItem(snapshotKey(user.id, mode), JSON.stringify(snapshot)); } catch { /* storage optional */ } }, [activePostId, cursor, hasMore, mode, posts, sessionId, user]);
+  useEffect(() => { const timer = window.setTimeout(() => persist(), 150); return () => window.clearTimeout(timer); }, [persist]);
 
-  const loadFeed = useCallback(async (reset: boolean) => {
-    if (!user) return;
-    reset ? setLoading(true) : setLoadingMore(true);
-    setError(null);
-    const offset = reset ? 0 : posts.length;
-    const { data, error: feedError } = await supabase.rpc('get_social_feed', { p_feed: mode, p_limit: PAGE_SIZE, p_offset: offset, p_target_id: reset ? targetPost : null });
-    if (feedError) {
-      setError(feedError.message);
-      if (reset) setPosts([]);
-    } else {
-      const raw = (Array.isArray(data) ? data : []) as SocialPost[];
-      const signed = await signPosts(raw);
-      setPosts((current) => reset ? signed : [...current, ...signed.filter((next) => !current.some((existing) => existing.id === next.id))]);
-      setHasMore(raw.length === PAGE_SIZE);
-    }
-    setLoading(false);
-    setLoadingMore(false);
-  }, [mode, posts.length, signPosts, targetPost, user]);
+  const applyFeed = useCallback((result: Awaited<ReturnType<typeof fetchSocialFeed>>, append: boolean) => { setSessionId(result.session_id); setCursor(result.next_cursor); setHasMore(result.has_more); setPosts((current) => append ? [...current, ...result.items.filter((next) => !current.some((item) => item.id === next.id))] : result.items); }, []);
+  const freshLoad = useCallback(async () => { if (!user) return; setLoading(true); setError(null); try { const result = await fetchSocialFeed({ feed: mode, targetId: targetPost, limit: 20 }); applyFeed(result, false); setActiveIndex(0); setActivePostId(result.items[0]?.id || null); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to load Social.'); setPosts([]); } finally { setLoading(false); } }, [applyFeed, mode, targetPost, user]);
 
-  useEffect(() => { void loadFeed(true); }, [mode, targetPost]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { let cancelled = false; if (!user) return; void fetchSocialRuntimeSettings().then((value) => { if (!cancelled) setSettings(value); }).catch(() => undefined); void (async () => { if (targetPost || newsId) { await freshLoad(); return; } try { const raw = sessionStorage.getItem(snapshotKey(user.id, mode)); if (raw) { const saved = JSON.parse(raw) as Snapshot; if (Date.now() - saved.timestamp < SNAPSHOT_TTL && saved.posts.length) { const signed = await signSocialMedia(saved.posts); if (cancelled) return; setPosts(signed); setCursor(saved.cursor); setSessionId(saved.sessionId); setHasMore(saved.hasMore); setActivePostId(saved.activePostId); const index = Math.max(0, signed.findIndex((item) => item.id === saved.activePostId)); setActiveIndex(index); setLoading(false); window.setTimeout(() => document.getElementById(`social-post-${saved.activePostId}`)?.scrollIntoView({ block: 'start' }), 80); return; } } } catch { /* fall through */ } await freshLoad(); })(); return () => { cancelled = true; }; }, [freshLoad, mode, newsId, targetPost, user]);
 
-  useEffect(() => {
-    let active = true;
-    if (!newsId) { setNewsBridge(null); return; }
-    void (async () => {
-      const { data } = await supabase.from('global_announcements').select('id,title,message,media_url,media_type,published_at,view_count').eq('id', newsId).eq('is_active', true).maybeSingle();
-      if (active) setNewsBridge(data ? data as NewsBridge : null);
-    })();
-    return () => { active = false; };
-  }, [newsId]);
+  useEffect(() => { let active = true; if (!newsId) { setNewsBridge(null); return; } void supabase.from('global_announcements').select('id,title,message,media_url,media_type,published_at,view_count').eq('id', newsId).eq('is_active', true).maybeSingle().then(({ data }) => { if (active) setNewsBridge(data as NewsBridge | null); }); return () => { active = false; }; }, [newsId]);
 
-  const patchPost = useCallback((id: string, patch: Partial<SocialPost>) => {
-    setPosts((current) => current.map((post) => post.id === id ? { ...post, ...patch } : post));
-    setCommentsPost((current) => current?.id === id ? { ...current, ...patch } : current);
-  }, []);
+  const patch = useCallback((id: string, value: Partial<SocialFeedItem>) => { setPosts((current) => current.map((item) => item.id === id ? { ...item, ...value } : item)); setComments((current) => current?.id === id ? { ...current, ...value } : current); }, []);
+  const loadMore = useCallback(async (forceRefresh = false) => { if (!user || loadingMore || (!hasMore && !forceRefresh)) return; setLoadingMore(true); try { const result = await fetchSocialFeed({ feed: mode, cursor: forceRefresh ? null : cursor, sessionId, limit: 20 }); applyFeed(result, true); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not load more posts.'); } finally { setLoadingMore(false); replenishing.current = false; } }, [applyFeed, cursor, hasMore, loadingMore, mode, sessionId, user]);
+  const onScroll = () => { const node = scroller.current; if (!node || loadingMore) return; if (node.scrollTop + node.clientHeight >= node.scrollHeight - node.clientHeight * 2) { if (hasMore) void loadMore(); else if (!replenishing.current) { replenishing.current = true; window.setTimeout(() => void loadMore(true), 1200); } } };
+  const onActive = (post: SocialFeedItem, index: number) => { if (activePostId === post.id) return; setActiveIndex(index); setActivePostId(post.id); if (sessionId) void updateSocialPosition(sessionId, post.id, index); persist(post.id); };
+  const deletePost = async (post: SocialFeedItem) => { if (!window.confirm('Delete this Social post permanently?')) return; const { data, error: e } = await supabase.rpc('delete_social_post', { p_post_id: post.id }); if (e) return setError(e.message); if (typeof data === 'string' && data) await supabase.storage.from('social-media').remove([data]); setPosts((current) => current.filter((item) => item.id !== post.id)); };
+  const switchMode = (next: SocialFeedMode) => { persist(); navigate(next === 'social' ? '/social' : `/social/${next}`); };
+  const handleFollow = async (post: SocialFeedItem) => { const wasFollowing = followingIds.has(post.author_id) || post.is_following; await toggleFollow(post.author_id); void recordSocialEvent(post.id, wasFollowing ? 'unfollow' : 'follow'); patch(post.id, { is_following: !wasFollowing }); };
+  const openProfile = (post: SocialFeedItem) => { persist(post.id); void recordSocialEvent(post.id, 'profile_visit'); navigate(`/profile/${post.author_id}`); };
+  const handleTouchEnd = (event: React.TouchEvent<HTMLElement>) => { if (!touch.current) return; const end = event.changedTouches[0]; const dx = end.clientX - touch.current.x; const dy = end.clientY - touch.current.y; touch.current = null; if (Math.abs(dx) < 75 || Math.abs(dx) < Math.abs(dy) * 1.25) return; if (mode === 'social' && dx < 0) switchMode('following'); else if (mode === 'social' && dx > 0) switchMode('friends'); else if (mode === 'following' && dx > 0) switchMode('social'); else if (mode === 'friends' && dx < 0) switchMode('social'); };
 
-  const removeFromFeed = (id: string) => setPosts((current) => current.filter((post) => post.id !== id));
+  const qualifiedMs = Number(settings.algorithm?.social_qualified_view_ms || 3000); const fastSkipMs = Number(settings.algorithm?.social_fast_skip_ms || 1800); const adGap = Math.max(2, Number(settings.sponsored?.min_organic_between_ads || 6)); const maxAds = Math.max(0, Number(settings.sponsored?.max_ads_per_session || 4));
+  const tabs = useMemo(() => [{ mode: 'following' as SocialFeedMode, label: 'Following' }, { mode: 'social' as SocialFeedMode, label: 'Social' }, { mode: 'friends' as SocialFeedMode, label: 'Friends' }], []);
 
-  const deletePost = async (post: SocialPost) => {
-    if (!window.confirm('Delete this Social post permanently?')) return;
-    const { data, error: deleteError } = await supabase.rpc('delete_social_post', { p_post_id: post.id });
-    if (deleteError) return setError(deleteError.message);
-    const mediaPath = typeof data === 'string' ? data : null;
-    if (mediaPath) await supabase.storage.from('social-media').remove([mediaPath]);
-    removeFromFeed(post.id);
-  };
-
-  const switchFeed = (next: FeedMode) => navigate(next === 'for_you' ? '/social' : `/social/${next}`);
-
-  const handleTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
-    if (!touchStart.current) return;
-    const touch = event.changedTouches[0];
-    const dx = touch.clientX - touchStart.current.x;
-    const dy = touch.clientY - touchStart.current.y;
-    touchStart.current = null;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
-    if (mode === 'for_you' && dx < 0) switchFeed('following');
-    else if (mode === 'for_you' && dx > 0) switchFeed('friends');
-    else if (mode === 'following' && dx > 0) switchFeed('for_you');
-    else if (mode === 'friends' && dx < 0) switchFeed('for_you');
-  };
-
-  const onScroll = () => {
-    const node = scroller.current;
-    if (!node || loadingMore || !hasMore) return;
-    if (node.scrollTop + node.clientHeight >= node.scrollHeight - node.clientHeight * 1.5) void loadFeed(false);
-  };
-
-  const tabs = useMemo(() => [
-    { mode: 'following' as FeedMode, label: 'Following' },
-    { mode: 'for_you' as FeedMode, label: 'Social Field' },
-    { mode: 'friends' as FeedMode, label: 'Friends' },
-  ], []);
-
-  return (
-    <div className="relative bg-black text-white">
-      <div className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex justify-center pt-3">
-        <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/10 bg-black/45 p-1 shadow-xl backdrop-blur-xl">
-          {tabs.map((tab) => <button key={tab.mode} type="button" onClick={() => switchFeed(tab.mode)} className={`rounded-full px-3 py-2 text-xs font-bold transition sm:px-4 ${mode === tab.mode ? 'bg-white text-black' : 'text-white/70 hover:text-white'}`}>{tab.label}</button>)}
-          <button type="button" onClick={() => switchFeed('mine')} className={`rounded-full px-3 py-2 text-xs font-bold transition ${mode === 'mine' ? 'bg-white text-black' : 'text-white/70 hover:text-white'}`}>My Posts</button>
-        </div>
-      </div>
-
-      <button type="button" onClick={() => { setEditing(null); setComposerOpen(true); }} className="fixed bottom-24 left-1/2 z-[55] flex h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-[#4353ff] px-5 text-sm font-black text-white shadow-[0_10px_35px_rgba(67,83,255,.45)] md:bottom-6 md:left-auto md:right-6 md:translate-x-0"><Plus className="h-5 w-5" /> Post</button>
-
-      {error && <div className="fixed left-1/2 top-16 z-[60] w-[min(92vw,520px)] -translate-x-1/2 rounded-xl border border-red-500/20 bg-red-950/90 p-3 text-sm text-red-100 shadow-2xl">{error}</div>}
-
-      <main
-        ref={scroller}
-        onScroll={onScroll}
-        onTouchStart={(event) => { const touch = event.touches[0]; touchStart.current = { x: touch.clientX, y: touch.clientY }; }}
-        onTouchEnd={handleTouchEnd}
-        className="h-[calc(100dvh-8rem)] snap-y snap-mandatory overflow-y-auto bg-black [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:h-screen"
-      >
-        {newsBridge && mode === 'for_you' && <NewsBridgeCard item={newsBridge} />}
-        {loading ? <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#7180ff]" /></div> : posts.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center px-6 text-center"><div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/[0.05]"><Users className="h-10 w-10 text-neutral-600" /></div><h2 className="mt-5 text-xl font-black">{mode === 'mine' ? 'Your Social space is ready' : mode === 'following' ? 'Follow creators to build this feed' : mode === 'friends' ? 'Your friends’ posts will appear here' : 'Social Field is ready'}</h2><p className="mt-2 max-w-sm text-sm text-neutral-500">{mode === 'mine' ? 'Create your first post. You can edit or delete anything you publish.' : mode === 'following' ? 'Posts from people you follow will appear here.' : mode === 'friends' ? 'Friends are people who follow each other on DRIGHT.' : 'New public posts will appear here as people start sharing.'}</p>{mode === 'mine' && <button type="button" onClick={() => setComposerOpen(true)} className="mt-5 rounded-full bg-[#4353ff] px-5 py-3 text-sm font-bold"><Plus className="mr-2 inline h-4 w-4" />Create post</button>}</div>
-        ) : posts.map((post) => (
-          <SocialCard
-            key={post.id}
-            post={post}
-            own={post.author_id === user?.id}
-            following={followingIds.has(post.author_id) || post.is_following}
-            onFollow={() => void toggleFollow(post.author_id)}
-            onPatch={(patch) => patchPost(post.id, patch)}
-            onEdit={() => { setEditing(post); setComposerOpen(true); }}
-            onDelete={() => void deletePost(post)}
-            onComments={() => setCommentsPost(post)}
-            onRemoved={() => removeFromFeed(post.id)}
-          />
-        ))}
-        {loadingMore && <div className="flex h-20 items-center justify-center bg-black"><Loader2 className="h-6 w-6 animate-spin text-[#7180ff]" /></div>}
-      </main>
-
-      {composerOpen && <ComposerModal initial={editing} onClose={() => { setComposerOpen(false); setEditing(null); }} onSaved={() => { setComposerOpen(false); setEditing(null); void loadFeed(true); }} />}
-      {commentsPost && <CommentsModal post={commentsPost} onClose={() => setCommentsPost(null)} onCountChange={(count) => patchPost(commentsPost.id, { comment_count: count })} />}
-
-      <button type="button" onClick={() => navigate(-1)} className="fixed left-3 top-[4.5rem] z-50 hidden h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur md:flex" aria-label="Back"><ChevronLeft className="h-6 w-6" /></button>
-    </div>
-  );
+  return <div className="relative bg-black text-white">
+    <div className="pointer-events-none fixed left-0 right-0 top-[58px] z-50 flex justify-center pt-2 md:left-64 md:top-0"><div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/10 bg-black/55 p-1 shadow-xl backdrop-blur-xl">{tabs.map((tab) => <button key={tab.mode} onClick={() => switchMode(tab.mode)} className={`rounded-full px-3 py-2 text-xs font-bold ${mode === tab.mode ? 'bg-white text-black' : 'text-white/70'}`}>{tab.label}</button>)}<button onClick={() => switchMode('mine')} className={`rounded-full px-3 py-2 text-xs font-bold ${mode === 'mine' ? 'bg-white text-black' : 'text-white/70'}`}>My Posts</button></div></div>
+    <button onClick={() => { setEditing(null); setComposer(true); }} className="fixed bottom-24 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#4353ff] px-5 py-3 text-sm font-black shadow-xl md:bottom-6 md:left-auto md:right-6 md:translate-x-0"><Plus className="h-5 w-5" />Post</button>
+    {error && <div className="fixed left-1/2 top-28 z-[70] w-[min(92vw,520px)] -translate-x-1/2 rounded-xl bg-red-950/95 p-3 text-sm text-red-100">{error}</div>}
+    <main ref={scroller} onScroll={onScroll} onTouchStart={(event) => { const start = event.touches[0]; touch.current = { x: start.clientX, y: start.clientY }; }} onTouchEnd={handleTouchEnd} className="h-[calc(100dvh-8rem)] snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:h-screen">
+      {newsBridge && mode === 'social' && <NewsBridgeCard item={newsBridge} />}
+      {loading ? <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-[#7180ff]" /></div> : posts.length === 0 && (mode === 'following' || mode === 'friends') ? <SuggestionEmpty mode={mode} /> : posts.length === 0 ? <div className="flex h-full flex-col items-center justify-center px-6 text-center"><Users className="h-12 w-12 text-neutral-600" /><h2 className="mt-4 text-xl font-black">{mode === 'mine' ? 'Your Social space is ready' : 'Social is ready for discovery'}</h2><p className="mt-2 max-w-sm text-sm text-neutral-500">{mode === 'mine' ? 'Create your first post. You can edit or delete anything you publish.' : 'New eligible posts will appear here as people share.'}</p></div> : posts.map((post, index) => <div key={post.id}>{settings.sponsored?.enabled && maxAds > 0 && index > 0 && index % adGap === 0 && Math.floor(index / adGap) <= maxAds && <section className="flex h-[calc(100dvh-8rem)] min-h-[520px] snap-start items-center justify-center bg-[#0d1017] p-4 md:h-screen"><div className="w-full max-w-xl"><SponsoredPlacementCard placement="feed" variant="feed" heading="Sponsored on Social" /></div></section>}<SocialCard post={post} index={index} activeIndex={activeIndex} sessionId={sessionId} qualifiedMs={qualifiedMs} fastSkipMs={fastSkipMs} following={followingIds.has(post.author_id) || post.is_following} own={post.author_id === user?.id} onPatch={(value) => patch(post.id, value)} onActive={() => onActive(post, index)} onProfile={() => openProfile(post)} onFollow={() => void handleFollow(post)} onEdit={() => { setEditing(post); setComposer(true); }} onDelete={() => void deletePost(post)} onComments={() => setComments(post)} onRemove={() => setPosts((current) => current.filter((item) => item.id !== post.id))} /></div>)}
+      {loadingMore && <div className="flex h-20 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[#7180ff]" /></div>}
+    </main>
+    {composer && <ComposerModal initial={editing} onClose={() => { setComposer(false); setEditing(null); }} onSaved={() => { setComposer(false); setEditing(null); sessionStorage.removeItem(user ? snapshotKey(user.id, mode) : ''); void freshLoad(); }} />}
+    {comments && <CommentsModal post={comments} onClose={() => setComments(null)} onCount={(count) => patch(comments.id, { comment_count: count })} />}
+  </div>;
 }
