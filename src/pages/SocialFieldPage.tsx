@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, Bookmark, CheckCircle, Expand, ExternalLink, Image as ImageIcon, Loader2, MessageCircle,
-  MoreHorizontal, Pencil, Plus, Send, Share2, Sparkles, ThumbsUp, Trash2, UserCheck, UserPlus, Users,
-  Video, Volume2, VolumeX, X,
+  ArrowLeft, Bookmark, CheckCircle, Expand, ExternalLink, EyeOff, Gauge, Image as ImageIcon, Loader2,
+  MessageCircle, MoreHorizontal, Pencil, Plus, Send, Share2, Sparkles, ThumbsUp, Trash2, UserCheck,
+  UserPlus, Users, Video, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,6 +17,7 @@ import {
 
 type Visibility = 'public' | 'followers' | 'friends' | 'private';
 type MediaType = 'image' | 'video';
+type PlaybackRate = 0.5 | 1 | 1.5 | 2;
 type Comment = {
   id: string;
   parent_comment_id: string | null;
@@ -58,6 +59,7 @@ const REACTIONS: Record<SocialReactionType, { emoji: string; label: string }> = 
   haha: { emoji: '😂', label: 'Haha' }, wow: { emoji: '😮', label: 'Wow' }, sad: { emoji: '😢', label: 'Sad' }, angry: { emoji: '😡', label: 'Angry' },
 };
 const ALL_REACTIONS = Object.keys(REACTIONS) as SocialReactionType[];
+const PLAYBACK_RATES: PlaybackRate[] = [0.5, 1, 1.5, 2];
 const MAX_MEDIA_SIZE = 100 * 1024 * 1024;
 const SNAPSHOT_TTL = 60 * 60 * 1000;
 const VIDEO_RESET_AFTER_MS = 30_000;
@@ -74,7 +76,7 @@ function modeFromPath(pathname: string): SocialFeedMode {
   if (pathname.endsWith('/mine')) return 'mine';
   return 'social';
 }
-function snapshotKey(userId: string, mode: SocialFeedMode) { return `dright:social:${userId}:${mode}`; }
+function snapshotKey(userId: string, mode: SocialFeedMode) { return `dright:social:${userId}:${mode}:v2`; }
 function extension(file: File, type: MediaType) {
   const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '');
   return ext && ext.length <= 8 ? ext : type === 'video' ? 'mp4' : 'jpg';
@@ -135,7 +137,7 @@ function CommentsModal({ post, onClose, onCount }: { post: SocialFeedItem; onClo
   const load = useCallback(async () => {
     setLoading(true);
     const { data, error: e } = await supabase.rpc('get_social_post_comments_v2', { p_post_id: post.id });
-    if (e) setError(e.message); else setItems((data || []) as Comment[]);
+    if (e) setError(e.message); else { setError(null); setItems((data || []) as Comment[]); }
     setLoading(false);
   }, [post.id]);
   useEffect(() => { void load(); }, [load]);
@@ -272,9 +274,9 @@ function SuggestionEmpty({ mode }: { mode: 'following' | 'friends' }) {
   return <div className="flex min-h-full items-center justify-center bg-[radial-gradient(circle_at_top,#17233a_0,#080b12_48%,#030509_100%)] px-5 pb-28 pt-24"><div className="w-full max-w-xl"><div className="text-center"><Users className="mx-auto h-12 w-12 text-[#7180ff]" /><h2 className="mt-4 text-xl font-black">{mode === 'following' ? 'Build your Following field' : 'Find people you may know'}</h2><p className="mt-2 text-sm text-white/45">{mode === 'following' ? 'Follow creators and people you care about. Their eligible posts will appear here.' : 'Friends on DRIGHT are mutual follows. These suggestions can help you build your network.'}</p></div>{loading ? <Loader2 className="mx-auto mt-8 h-6 w-6 animate-spin" /> : <div className="mt-7 space-y-2">{items.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.05] p-3 backdrop-blur">{item.avatar_url ? <img src={item.avatar_url} alt="" className="h-11 w-11 rounded-xl object-cover" /> : <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#4353ff] font-bold">{(item.full_name || item.username || 'D').slice(0, 1).toUpperCase()}</div>}<button type="button" onClick={() => navigate(`/profile/${item.id}`)} className="min-w-0 flex-1 text-left"><p className="truncate text-sm font-bold">{item.username ? `@${item.username}` : item.full_name || 'DRIGHT User'} {item.is_verified && <CheckCircle className="inline h-3.5 w-3.5 text-blue-400" />}</p><p className="text-xs text-white/40">{compact(item.followers)} followers{item.mutual_score > 0 ? ` · ${item.mutual_score} mutual` : ''}</p></button><button type="button" onClick={() => void toggleFollow(item.id)} className="rounded-xl border border-[#7180ff]/50 bg-[#4353ff]/20 px-4 py-2 text-xs font-bold text-[#dce0ff]">{followingIds.has(item.id) ? 'Following' : 'Follow'}</button></div>)}</div>}</div></div>;
 }
 
-function SocialCard({ post, index, activeIndex, active, sessionId, qualifiedMs, fastSkipMs, following, own, onPatch, onActive, onProfile, onFollow, onEdit, onDelete, onComments, onRemove }: {
-  post: SocialFeedItem; index: number; activeIndex: number; active: boolean; sessionId: string | null; qualifiedMs: number; fastSkipMs: number; following: boolean; own: boolean;
-  onPatch: (patch: Partial<SocialFeedItem>) => void; onActive: () => void; onProfile: () => void; onFollow: () => void; onEdit: () => void; onDelete: () => void; onComments: () => void; onRemove: () => void;
+function SocialCard({ post, index, activeIndex, active, sessionId, qualifiedMs, fastSkipMs, following, own, clearScreen, playbackRate, onPatch, onActive, onProfile, onFollow, onEdit, onDelete, onComments, onRemove, onClearScreen, onPlaybackRate }: {
+  post: SocialFeedItem; index: number; activeIndex: number; active: boolean; sessionId: string | null; qualifiedMs: number; fastSkipMs: number; following: boolean; own: boolean; clearScreen: boolean; playbackRate: PlaybackRate;
+  onPatch: (patch: Partial<SocialFeedItem>) => void; onActive: () => void; onProfile: () => void; onFollow: () => void; onEdit: () => void; onDelete: () => void; onComments: () => void; onRemove: () => void; onClearScreen: (value: boolean) => void; onPlaybackRate: (value: PlaybackRate) => void;
 }) {
   const navigate = useNavigate();
   const root = useRef<HTMLElement | null>(null);
@@ -345,24 +347,29 @@ function SocialCard({ post, index, activeIndex, active, sessionId, qualifiedMs, 
   useEffect(() => {
     const node = video.current;
     if (!node) return;
+    node.playbackRate = playbackRate;
     if (!active || document.hidden) { pauseAway(); return; }
     restoreForReturn(node);
     if (ended.current && Number.isFinite(node.duration) && node.currentTime >= node.duration - 0.2) node.currentTime = 0;
     void node.play().catch(() => undefined);
-  }, [active, mediaUrl]);
+  }, [active, mediaUrl, playbackRate]);
   useEffect(() => {
     const visibility = () => {
       const node = video.current;
       if (!node) return;
       if (document.hidden) pauseAway();
-      else if (active) { restoreForReturn(node); void node.play().catch(() => undefined); }
+      else if (active) { restoreForReturn(node); node.playbackRate = playbackRate; void node.play().catch(() => undefined); }
     };
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
-  }, [active]);
+  }, [active, playbackRate]);
   useEffect(() => () => { clearQualified(); if (video.current) { markAway(); video.current.pause(); } }, []);
 
-  const onLoadedMetadata = () => { if (active && video.current) restoreForReturn(video.current); };
+  const onLoadedMetadata = () => {
+    if (!video.current) return;
+    video.current.playbackRate = playbackRate;
+    if (active) restoreForReturn(video.current);
+  };
   const onPlay = () => {
     const replaying = ended.current; ended.current = false;
     if (replaying) void recordVideoProgress(post.id, 'replay', 0, 0, sessionId);
@@ -390,6 +397,7 @@ function SocialCard({ post, index, activeIndex, active, sessionId, qualifiedMs, 
     void recordVideoProgress(post.id, 'watch_complete', watched, 1, sessionId);
   };
   const videoClick = () => {
+    if (clearScreen) { onClearScreen(false); return; }
     void recordSocialClick(post.id, sessionId).then((result) => onPatch({ click_count: Number(result.click_count || post.click_count) })).catch(() => undefined);
     const node = video.current; if (!node) return;
     if (node.paused) { if (ended.current) node.currentTime = 0; void node.play().catch(() => undefined); } else node.pause();
@@ -397,6 +405,7 @@ function SocialCard({ post, index, activeIndex, active, sessionId, qualifiedMs, 
   const fullscreen = () => {
     const node = video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
     if (!node) return;
+    setMenu(false);
     if (node.requestFullscreen) void node.requestFullscreen().catch(() => undefined); else node.webkitEnterFullscreen?.();
   };
   const react = async (reaction: SocialReactionType) => {
@@ -416,7 +425,7 @@ function SocialCard({ post, index, activeIndex, active, sessionId, qualifiedMs, 
     if (navigator.share) { try { await navigator.share({ text: post.body.slice(0, 140), url }); await recordSocialEvent(post.id, 'share'); return; } catch { /* fallback */ } }
     await navigator.clipboard?.writeText(url); await recordSocialEvent(post.id, 'share');
   };
-  const hide = async (kind: 'not_interested' | 'hide_creator') => { await recordSocialEvent(post.id, kind); onRemove(); };
+  const hide = async (kind: 'not_interested' | 'hide_creator') => { setMenu(false); await recordSocialEvent(post.id, kind); onRemove(); };
   const report = async () => { await recordSocialEvent(post.id, 'report'); setMenu(false); onRemove(); };
   const openEntity = async () => {
     try {
@@ -427,14 +436,18 @@ function SocialCard({ post, index, activeIndex, active, sessionId, qualifiedMs, 
       navigate(routes[result.entity_type] || '/market');
     } catch { /* unavailable CTA */ }
   };
+  const selectRate = (rate: PlaybackRate) => {
+    onPlaybackRate(rate);
+    if (video.current) video.current.playbackRate = rate;
+  };
 
-  return <section id={`social-post-${post.id}`} ref={root} className="relative h-dvh min-h-[520px] snap-start overflow-hidden bg-[#030509]">
+  return <section id={`social-post-${post.id}`} ref={root} onClick={post.media_type !== 'video' && clearScreen ? () => onClearScreen(false) : undefined} className={`relative h-dvh min-h-[520px] snap-start overflow-hidden bg-[#030509] ${clearScreen ? 'cursor-pointer' : ''}`}>
     <div className="absolute inset-0 flex items-center justify-center bg-black">{post.media_type === 'video' && mediaUrl ? <video ref={video} src={mediaUrl} muted={muted} playsInline preload={near ? 'metadata' : 'none'} onLoadedMetadata={onLoadedMetadata} onTimeUpdate={rememberPosition} onPlay={onPlay} onPause={onPause} onEnded={onEnded} onClick={videoClick} className="h-full w-full cursor-pointer object-contain" /> : post.media_type === 'image' && mediaUrl ? <img src={mediaUrl} alt="" className="h-full w-full object-contain" /> : <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(67,83,255,.28),transparent_32%),radial-gradient(circle_at_80%_70%,rgba(42,131,255,.16),transparent_30%),linear-gradient(160deg,#111a2b_0%,#060911_48%,#020306_100%)]" />}</div>
-    <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/95" />
+    {!clearScreen && <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/95" />}
 
-    {post.media_type === 'video' && <div className="absolute right-4 top-20 z-30 flex gap-2"><button type="button" onClick={() => setMuted((value) => !value)} className="rounded-2xl border border-white/10 bg-black/45 p-3 text-white backdrop-blur-xl" aria-label={muted ? 'Unmute' : 'Mute'}>{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button>{isLandscape && <button type="button" onClick={fullscreen} className="rounded-2xl border border-white/10 bg-black/45 p-3 text-white backdrop-blur-xl" title="Expand landscape video"><Expand className="h-5 w-5" /></button>}</div>}
+    {!clearScreen && post.media_type === 'video' && <div className="absolute right-4 top-20 z-30 flex gap-2"><button type="button" onClick={() => setMuted((value) => !value)} className="rounded-2xl border border-white/10 bg-black/45 p-3 text-white backdrop-blur-xl" aria-label={muted ? 'Unmute' : 'Mute'}>{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button>{isLandscape && <button type="button" onClick={fullscreen} className="rounded-2xl border border-white/10 bg-black/45 p-3 text-white backdrop-blur-xl" title="Expand landscape video"><Expand className="h-5 w-5" /></button>}</div>}
 
-    <div className="absolute bottom-[92px] left-4 right-4 z-20 text-white sm:bottom-[100px] sm:left-6 sm:right-6">
+    {!clearScreen && <div className="absolute bottom-[92px] left-4 right-4 z-20 text-white sm:bottom-[100px] sm:left-6 sm:right-6">
       <div className="max-w-2xl">
         <div className="mb-3 flex flex-wrap items-center gap-2">{post.source_type === 'news' && <button type="button" onClick={() => post.linked_entity_id && navigate(`/news?item=${post.linked_entity_id}`)} className="inline-flex items-center gap-2 rounded-xl border border-blue-300/20 bg-blue-500/15 px-3 py-1.5 text-xs font-black text-blue-100 backdrop-blur-xl"><Sparkles className="h-3.5 w-3.5" />From DRIGHT News <ExternalLink className="h-3.5 w-3.5" /></button>}{post.community_id && post.community_slug && <button type="button" onClick={() => navigate(`/communities/${post.community_slug}`)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-bold backdrop-blur-xl">{post.community_avatar ? <img src={post.community_avatar} alt="" className="h-5 w-5 rounded-md object-cover" /> : <Users className="h-4 w-4" />}{post.community_name || 'Community'}</button>}</div>
         <div className="flex items-center gap-3"><button type="button" onClick={onProfile}>{post.author_avatar ? <img src={post.author_avatar} alt="" className="h-11 w-11 rounded-xl border border-white/40 object-cover" /> : <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/30 bg-[#4353ff] font-black">{(post.author_name || post.author_username || 'D').slice(0, 1).toUpperCase()}</div>}</button><button type="button" onClick={onProfile} className="min-w-0 text-left"><p className="truncate text-sm font-extrabold">{post.author_username ? `@${post.author_username}` : post.author_name || 'DRIGHT User'} {post.author_verified && <CheckCircle className="inline h-4 w-4 text-blue-400" />}</p>{post.author_username && post.author_name && <p className="truncate text-xs text-white/55">{post.author_name}</p>}</button>{!own && <button type="button" onClick={onFollow} className={`rounded-xl border px-3 py-1.5 text-xs font-bold backdrop-blur ${following ? 'border-white/15 bg-white/10' : 'border-[#7180ff]/50 bg-[#4353ff]/25'}`}>{following ? <UserCheck className="mr-1 inline h-3.5 w-3.5" /> : <UserPlus className="mr-1 inline h-3.5 w-3.5" />}{following ? 'Following' : 'Follow'}</button>}</div>
@@ -442,17 +455,28 @@ function SocialCard({ post, index, activeIndex, active, sessionId, qualifiedMs, 
         {post.recommendation_reason && <p className="mt-2 text-[11px] font-semibold text-white/40">{post.recommendation_reason}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-2">{post.linked_entity_type && <button type="button" onClick={() => void openEntity()} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/90 px-3.5 py-2 text-xs font-black text-black">{post.linked_entity_type === 'news' ? 'Read News' : post.linked_entity_type === 'job' ? 'View Job' : post.linked_entity_type === 'store' ? 'View Store' : post.linked_entity_type === 'course' ? 'View Course' : post.linked_entity_type === 'service' ? 'View Service' : 'Learn More'} <ExternalLink className="h-3.5 w-3.5" /></button>}<span className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-[10px] font-semibold text-white/50 backdrop-blur">{compact(post.view_count)} views · {compact(post.click_count)} clicks · {new Date(post.created_at).toLocaleDateString()}{post.edited_at ? ' · edited' : ''}</span></div>
       </div>
-    </div>
+    </div>}
 
-    <div className="absolute bottom-3 left-3 right-3 z-40 rounded-[24px] border border-white/10 bg-[#0b111d]/72 p-2 shadow-2xl backdrop-blur-2xl sm:bottom-4 sm:left-1/2 sm:right-auto sm:w-[min(640px,calc(100%-32px))] sm:-translate-x-1/2">
+    {!clearScreen && <div className="absolute bottom-3 left-3 right-3 z-40 rounded-[24px] border border-white/10 bg-[#0b111d]/72 p-2 shadow-2xl backdrop-blur-2xl sm:bottom-4 sm:left-1/2 sm:right-auto sm:w-[min(640px,calc(100%-32px))] sm:-translate-x-1/2">
       <div className="flex items-stretch gap-1.5">
         <ReactionControl post={post} onReact={(reaction) => void react(reaction)} />
         {post.comments_enabled ? <button type="button" onClick={onComments} className="flex min-w-[68px] flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[.07] px-2 py-2.5 text-xs font-bold text-white/85"><MessageCircle className="h-4 w-4" /><span className="truncate">Discuss</span>{post.comment_count > 0 && <span className="text-[10px] text-white/55">{compact(post.comment_count)}</span>}</button> : <div className="flex min-w-[68px] flex-1 items-center justify-center rounded-2xl border border-white/10 bg-white/[.04] px-2 py-2 text-[10px] text-white/35">Comments off</div>}
         <button type="button" onClick={() => void share()} className="flex min-w-[58px] items-center justify-center rounded-2xl border border-white/10 bg-white/[.07] px-3 text-white/85" aria-label="Share"><Share2 className="h-4 w-4" /></button>
         <button type="button" onClick={() => void save()} className={`flex min-w-[58px] items-center justify-center rounded-2xl border px-3 ${post.is_saved ? 'border-[#7180ff]/50 bg-[#4353ff]/20 text-[#bfc6ff]' : 'border-white/10 bg-white/[.07] text-white/85'}`} aria-label="Save"><Bookmark className={`h-4 w-4 ${post.is_saved ? 'fill-current' : ''}`} /></button>
-        <div className="relative"><button type="button" onClick={() => setMenu((value) => !value)} className="flex h-full min-w-[48px] items-center justify-center rounded-2xl border border-white/10 bg-white/[.07] text-white/80"><MoreHorizontal className="h-5 w-5" /></button>{menu && <div className="absolute bottom-[calc(100%+10px)] right-0 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1420] py-1 text-left text-sm shadow-2xl">{own && post.source_type !== 'news' ? <><button type="button" onClick={onEdit} className="flex w-full items-center gap-2 px-4 py-3 hover:bg-white/5"><Pencil className="h-4 w-4" />Edit post</button><button type="button" onClick={onDelete} className="flex w-full items-center gap-2 px-4 py-3 text-red-300 hover:bg-white/5"><Trash2 className="h-4 w-4" />Delete post</button></> : <><button type="button" onClick={() => void hide('not_interested')} className="w-full px-4 py-3 hover:bg-white/5">Not interested</button>{post.source_type !== 'news' && <button type="button" onClick={() => void hide('hide_creator')} className="w-full px-4 py-3 hover:bg-white/5">Hide this creator</button>}<button type="button" onClick={() => void report()} className="w-full px-4 py-3 text-red-300 hover:bg-white/5">Report post</button></>}</div>}</div>
+        <button type="button" onClick={() => setMenu(true)} className="flex min-w-[48px] items-center justify-center rounded-2xl border border-white/10 bg-white/[.07] text-white/80" aria-label="More Social controls"><MoreHorizontal className="h-5 w-5" /></button>
       </div>
-    </div>
+    </div>}
+
+    {menu && !clearScreen && <div className="fixed inset-0 z-[140] flex items-end justify-center bg-black/65 sm:items-center sm:p-4" onClick={() => setMenu(false)}>
+      <div className="max-h-[82dvh] w-full max-w-xl overflow-y-auto rounded-t-[30px] border border-white/10 bg-[#15191f] p-4 text-white shadow-2xl sm:rounded-[30px]" onClick={(event) => event.stopPropagation()}>
+        <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-white/20" />
+        <div className="mb-3 flex items-center justify-between"><div><p className="font-black">More controls</p><p className="text-xs text-white/45">Viewing and post options</p></div><button type="button" onClick={() => setMenu(false)} className="rounded-xl border border-white/10 p-2"><X className="h-4 w-4" /></button></div>
+        {(post.media_type === 'video' || post.media_type === 'image') && <button type="button" onClick={() => { setMenu(false); onClearScreen(true); }} className="mb-2 flex w-full items-center gap-3 rounded-2xl bg-white/[.07] px-4 py-3.5 text-left font-semibold hover:bg-white/10"><EyeOff className="h-5 w-5" /><span><span className="block">Clear screen</span><span className="block text-xs font-normal text-white/45">Hide profile, text, tabs and action icons. Tap the media to restore controls.</span></span></button>}
+        {post.media_type === 'video' && <div className="mb-2 rounded-2xl bg-white/[.07] p-3"><div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Gauge className="h-5 w-5" />Playback speed</div><div className="grid grid-cols-4 gap-2">{PLAYBACK_RATES.map((rate) => <button key={rate} type="button" onClick={() => selectRate(rate)} className={`rounded-xl px-2 py-2.5 text-sm font-bold ${playbackRate === rate ? 'bg-[#6977ff] text-white' : 'bg-black/25 text-white/65'}`}>{rate.toFixed(1)}×</button>)}</div></div>}
+        {post.media_type === 'video' && <div className="mb-2 grid grid-cols-2 gap-2"><button type="button" onClick={() => setMuted((value) => !value)} className="flex items-center justify-center gap-2 rounded-2xl bg-white/[.07] px-3 py-3 text-sm font-semibold">{muted ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}{muted ? 'Turn sound on' : 'Mute'}</button><button type="button" onClick={fullscreen} className="flex items-center justify-center gap-2 rounded-2xl bg-white/[.07] px-3 py-3 text-sm font-semibold"><Expand className="h-4 w-4" />Full screen</button></div>}
+        <div className="overflow-hidden rounded-2xl bg-white/[.07]">{own && post.source_type !== 'news' ? <><button type="button" onClick={() => { setMenu(false); onEdit(); }} className="flex w-full items-center gap-3 border-b border-white/[.06] px-4 py-3.5 text-left hover:bg-white/5"><Pencil className="h-4 w-4" />Edit post</button><button type="button" onClick={() => { setMenu(false); onDelete(); }} className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-red-300 hover:bg-white/5"><Trash2 className="h-4 w-4" />Delete post</button></> : <><button type="button" onClick={() => void hide('not_interested')} className="w-full border-b border-white/[.06] px-4 py-3.5 text-left hover:bg-white/5">Not interested</button>{post.source_type !== 'news' && <button type="button" onClick={() => void hide('hide_creator')} className="w-full border-b border-white/[.06] px-4 py-3.5 text-left hover:bg-white/5">Hide this creator</button>}<button type="button" onClick={() => void report()} className="w-full px-4 py-3.5 text-left text-red-300 hover:bg-white/5">Report post</button></>}</div>
+      </div>
+    </div>}
   </section>;
 }
 
@@ -478,21 +502,29 @@ export default function SocialFieldPage() {
   const [editing, setEditing] = useState<SocialFeedItem | null>(null);
   const [comments, setComments] = useState<SocialFeedItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [clearScreen, setClearScreen] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState<PlaybackRate>(1);
   const scroller = useRef<HTMLElement | null>(null);
   const touch = useRef<{ x: number; y: number } | null>(null);
   const replenishing = useRef(false);
 
+  const scopePosts = useCallback((items: SocialFeedItem[]) => {
+    if (mode !== 'mine' || !user) return items;
+    return items.filter((item) => item.author_id === user.id && item.source_type !== 'news');
+  }, [mode, user]);
   const persist = useCallback((overrideActive?: string | null) => {
     if (!user) return;
-    const snapshot: Snapshot = { timestamp: Date.now(), posts, cursor, sessionId, hasMore, activePostId: overrideActive === undefined ? activePostId : overrideActive };
+    const snapshot: Snapshot = { timestamp: Date.now(), posts: scopePosts(posts), cursor, sessionId, hasMore, activePostId: overrideActive === undefined ? activePostId : overrideActive };
     try { sessionStorage.setItem(snapshotKey(user.id, mode), JSON.stringify(snapshot)); } catch { /* optional */ }
-  }, [activePostId, cursor, hasMore, mode, posts, sessionId, user]);
+  }, [activePostId, cursor, hasMore, mode, posts, scopePosts, sessionId, user]);
   useEffect(() => { const timer = window.setTimeout(() => persist(), 150); return () => window.clearTimeout(timer); }, [persist]);
 
   const applyFeed = useCallback((result: Awaited<ReturnType<typeof fetchSocialFeed>>, append: boolean) => {
+    const incoming = scopePosts(result.items);
     setSessionId(result.session_id); setCursor(result.next_cursor); setHasMore(result.has_more);
-    setPosts((current) => append ? [...current, ...result.items.filter((next) => !current.some((item) => item.id === next.id))] : result.items);
-  }, []);
+    setPosts((current) => append ? [...current, ...incoming.filter((next) => !current.some((item) => item.id === next.id))] : incoming);
+    return incoming;
+  }, [scopePosts]);
   const resolveTarget = useCallback(async () => {
     if (targetPost) return targetPost;
     if (!newsId) return null;
@@ -503,11 +535,11 @@ export default function SocialFieldPage() {
     if (!user) return;
     setLoading(true); setError(null);
     try {
-      const resolvedTarget = await resolveTarget();
+      const resolvedTarget = mode === 'mine' ? null : await resolveTarget();
       const result = await fetchSocialFeed({ feed: mode, targetId: resolvedTarget, limit: 20 });
-      applyFeed(result, false);
-      const targetIndex = resolvedTarget ? Math.max(0, result.items.findIndex((item) => item.id === resolvedTarget)) : 0;
-      setActiveIndex(targetIndex); setActivePostId(result.items[targetIndex]?.id || result.items[0]?.id || null);
+      const loaded = applyFeed(result, false);
+      const targetIndex = resolvedTarget ? Math.max(0, loaded.findIndex((item) => item.id === resolvedTarget)) : 0;
+      setActiveIndex(targetIndex); setActivePostId(loaded[targetIndex]?.id || loaded[0]?.id || null);
       window.setTimeout(() => { if (resolvedTarget) document.getElementById(`social-post-${resolvedTarget}`)?.scrollIntoView({ block: 'start' }); }, 80);
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to load Social.'); setPosts([]); }
     finally { setLoading(false); }
@@ -515,6 +547,7 @@ export default function SocialFieldPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setClearScreen(false);
     if (!user) return;
     void fetchSocialRuntimeSettings().then((value) => { if (!cancelled) setSettings(value); }).catch(() => undefined);
     void (async () => {
@@ -524,20 +557,23 @@ export default function SocialFieldPage() {
         if (raw) {
           const saved = JSON.parse(raw) as Snapshot;
           if (Date.now() - saved.timestamp < SNAPSHOT_TTL && saved.posts.length) {
-            const signed = await signSocialMedia(saved.posts);
+            const signed = scopePosts(await signSocialMedia(saved.posts));
             if (cancelled) return;
-            setPosts(signed); setCursor(saved.cursor); setSessionId(saved.sessionId); setHasMore(saved.hasMore); setActivePostId(saved.activePostId);
-            const index = Math.max(0, signed.findIndex((item) => item.id === saved.activePostId));
-            setActiveIndex(index); setLoading(false);
-            window.setTimeout(() => document.getElementById(`social-post-${saved.activePostId}`)?.scrollIntoView({ block: 'start' }), 80);
-            return;
+            if (signed.length) {
+              const restoredActive = signed.some((item) => item.id === saved.activePostId) ? saved.activePostId : signed[0].id;
+              setPosts(signed); setCursor(saved.cursor); setSessionId(saved.sessionId); setHasMore(saved.hasMore); setActivePostId(restoredActive);
+              const index = Math.max(0, signed.findIndex((item) => item.id === restoredActive));
+              setActiveIndex(index); setLoading(false);
+              window.setTimeout(() => document.getElementById(`social-post-${restoredActive}`)?.scrollIntoView({ block: 'start' }), 80);
+              return;
+            }
           }
         }
       } catch { /* load fresh */ }
       await freshLoad();
     })();
     return () => { cancelled = true; };
-  }, [freshLoad, mode, newsId, targetPost, user]);
+  }, [freshLoad, mode, newsId, scopePosts, targetPost, user]);
 
   const patch = useCallback((id: string, value: Partial<SocialFeedItem>) => {
     setPosts((current) => current.map((item) => item.id === id ? { ...item, ...value } : item));
@@ -572,7 +608,7 @@ export default function SocialFieldPage() {
     if (typeof data === 'string' && data && !/^https?:\/\//i.test(data)) await supabase.storage.from('social-media').remove([data]);
     setPosts((current) => current.filter((item) => item.id !== post.id));
   };
-  const switchMode = (next: SocialFeedMode) => { persist(); navigate(next === 'social' ? '/social' : `/social/${next}`); };
+  const switchMode = (next: SocialFeedMode) => { setClearScreen(false); persist(); navigate(next === 'social' ? '/social' : `/social/${next}`); };
   const handleFollow = async (post: SocialFeedItem) => {
     const wasFollowing = followingIds.has(post.author_id) || post.is_following;
     await toggleFollow(post.author_id); void recordSocialEvent(post.id, wasFollowing ? 'unfollow' : 'follow'); patch(post.id, { is_following: !wasFollowing });
@@ -589,7 +625,7 @@ export default function SocialFieldPage() {
     else if (mode === 'following' && dx < 0) switchMode('social');
   };
   const exitSocial = () => {
-    persist();
+    setClearScreen(false); persist();
     if (window.history.length > 1) navigate(-1); else navigate('/');
   };
 
@@ -600,16 +636,16 @@ export default function SocialFieldPage() {
   const tabs = useMemo(() => [{ mode: 'following' as SocialFeedMode, label: 'Following' }, { mode: 'social' as SocialFeedMode, label: 'Social' }, { mode: 'friends' as SocialFeedMode, label: 'Friends' }, { mode: 'mine' as SocialFeedMode, label: 'My Posts' }], []);
 
   return <div className="fixed inset-0 z-[90] h-dvh overflow-hidden bg-[#030509] text-white">
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex items-start justify-between gap-2 px-3 pb-3 pt-[max(10px,env(safe-area-inset-top))] sm:px-5">
+    {!clearScreen && <div className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex items-start justify-between gap-2 px-3 pb-3 pt-[max(10px,env(safe-area-inset-top))] sm:px-5">
       <button type="button" onClick={exitSocial} className="pointer-events-auto mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/12 bg-[#0b111d]/70 text-white shadow-xl backdrop-blur-2xl" aria-label="Exit Social"><ArrowLeft className="h-5 w-5" /></button>
       <div className="pointer-events-auto flex max-w-[calc(100vw-124px)] gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-[#0b111d]/68 p-1 shadow-xl backdrop-blur-2xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{tabs.map((tab) => <button key={tab.mode} type="button" onClick={() => switchMode(tab.mode)} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-black transition ${mode === tab.mode ? 'bg-gradient-to-r from-[#4353ff] to-[#7180ff] text-white shadow-lg' : 'text-white/55 hover:bg-white/[.06] hover:text-white'}`}>{tab.label}</button>)}</div>
       <button type="button" onClick={() => { setEditing(null); setComposer(true); }} className="pointer-events-auto mt-1 flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-[#7180ff]/40 bg-[#4353ff]/25 px-3 text-xs font-black text-[#e5e8ff] shadow-xl backdrop-blur-2xl" aria-label="Create Social post"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Post</span></button>
-    </div>
+    </div>}
 
-    {error && <div className="fixed left-1/2 top-20 z-[110] w-[min(92vw,520px)] -translate-x-1/2 rounded-2xl border border-red-400/20 bg-red-950/90 p-3 text-sm text-red-100 backdrop-blur-xl">{error}</div>}
+    {!clearScreen && error && <div className="fixed left-1/2 top-20 z-[110] w-[min(92vw,520px)] -translate-x-1/2 rounded-2xl border border-red-400/20 bg-red-950/90 p-3 text-sm text-red-100 backdrop-blur-xl">{error}</div>}
     <main ref={scroller} onScroll={onScroll} onTouchStart={(event) => { const start = event.touches[0]; touch.current = { x: start.clientX, y: start.clientY }; }} onTouchEnd={handleTouchEnd} className="h-dvh snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {loading ? <div className="flex h-dvh items-center justify-center"><div className="rounded-3xl border border-white/10 bg-white/[.04] p-5"><Loader2 className="h-8 w-8 animate-spin text-[#7180ff]" /></div></div> : posts.length === 0 && (mode === 'following' || mode === 'friends') ? <SuggestionEmpty mode={mode} /> : posts.length === 0 ? <div className="flex h-dvh flex-col items-center justify-center bg-[radial-gradient(circle_at_top,#17233a_0,#080b12_48%,#030509_100%)] px-6 text-center"><Sparkles className="h-12 w-12 text-[#7180ff]" /><h2 className="mt-4 text-xl font-black">{mode === 'mine' ? 'Your Social space is ready' : 'Social is ready for discovery'}</h2><p className="mt-2 max-w-sm text-sm text-white/45">{mode === 'mine' ? 'Create your first post. You can edit or delete anything you publish.' : 'New eligible Social, community and News media posts will appear here.'}</p><button type="button" onClick={() => navigate('/communities')} className="mt-5 rounded-2xl border border-white/10 bg-white/[.06] px-4 py-2.5 text-sm font-bold">Explore Communities</button></div> : posts.map((post, index) => <div key={post.id}>{settings.sponsored?.enabled && maxAds > 0 && index > 0 && index % adGap === 0 && Math.floor(index / adGap) <= maxAds && <section className="flex h-dvh min-h-[520px] snap-start items-center justify-center bg-[radial-gradient(circle_at_top,#17233a_0,#080b12_50%,#030509_100%)] p-4"><div className="w-full max-w-xl"><SponsoredPlacementCard placement="feed" variant="feed" heading="Sponsored on Social" /></div></section>}<SocialCard post={post} index={index} activeIndex={activeIndex} active={post.id === activePostId} sessionId={sessionId} qualifiedMs={qualifiedMs} fastSkipMs={fastSkipMs} following={followingIds.has(post.author_id) || post.is_following} own={post.source_type !== 'news' && post.author_id === user?.id} onPatch={(value) => patch(post.id, value)} onActive={() => onActive(post, index)} onProfile={() => openProfile(post)} onFollow={() => void handleFollow(post)} onEdit={() => { if (post.source_type === 'news') return; setEditing(post); setComposer(true); }} onDelete={() => void deletePost(post)} onComments={() => setComments(post)} onRemove={() => setPosts((current) => current.filter((item) => item.id !== post.id))} /></div>)}
-      {loadingMore && <div className="pointer-events-none fixed bottom-24 left-1/2 z-[105] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/60 p-3 backdrop-blur"><Loader2 className="h-5 w-5 animate-spin text-[#7180ff]" /></div>}
+      {loading ? <div className="flex h-dvh items-center justify-center"><div className="rounded-3xl border border-white/10 bg-white/[.04] p-5"><Loader2 className="h-8 w-8 animate-spin text-[#7180ff]" /></div></div> : posts.length === 0 && (mode === 'following' || mode === 'friends') ? <SuggestionEmpty mode={mode} /> : posts.length === 0 ? <div className="flex h-dvh flex-col items-center justify-center bg-[radial-gradient(circle_at_top,#17233a_0,#080b12_48%,#030509_100%)] px-6 text-center"><Sparkles className="h-12 w-12 text-[#7180ff]" /><h2 className="mt-4 text-xl font-black">{mode === 'mine' ? 'Your Social space is ready' : 'Social is ready for discovery'}</h2><p className="mt-2 max-w-sm text-sm text-white/45">{mode === 'mine' ? 'Only posts you publish yourself appear here.' : 'New eligible Social, community and News media posts will appear here.'}</p><button type="button" onClick={() => navigate('/communities')} className="mt-5 rounded-2xl border border-white/10 bg-white/[.06] px-4 py-2.5 text-sm font-bold">Explore Communities</button></div> : posts.map((post, index) => <div key={post.id}>{mode !== 'mine' && settings.sponsored?.enabled && maxAds > 0 && index > 0 && index % adGap === 0 && Math.floor(index / adGap) <= maxAds && <section className="flex h-dvh min-h-[520px] snap-start items-center justify-center bg-[radial-gradient(circle_at_top,#17233a_0,#080b12_50%,#030509_100%)] p-4"><div className="w-full max-w-xl"><SponsoredPlacementCard placement="feed" variant="feed" heading="Sponsored on Social" /></div></section>}<SocialCard post={post} index={index} activeIndex={activeIndex} active={post.id === activePostId} sessionId={sessionId} qualifiedMs={qualifiedMs} fastSkipMs={fastSkipMs} following={followingIds.has(post.author_id) || post.is_following} own={post.source_type !== 'news' && post.author_id === user?.id} clearScreen={clearScreen} playbackRate={playbackRate} onPatch={(value) => patch(post.id, value)} onActive={() => onActive(post, index)} onProfile={() => openProfile(post)} onFollow={() => void handleFollow(post)} onEdit={() => { if (post.source_type === 'news') return; setEditing(post); setComposer(true); }} onDelete={() => void deletePost(post)} onComments={() => setComments(post)} onRemove={() => setPosts((current) => current.filter((item) => item.id !== post.id))} onClearScreen={setClearScreen} onPlaybackRate={setPlaybackRate} /></div>)}
+      {!clearScreen && loadingMore && <div className="pointer-events-none fixed bottom-24 left-1/2 z-[105] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/60 p-3 backdrop-blur"><Loader2 className="h-5 w-5 animate-spin text-[#7180ff]" /></div>}
     </main>
     {composer && <ComposerModal initial={editing} onClose={() => { setComposer(false); setEditing(null); }} onSaved={() => { setComposer(false); setEditing(null); sessionStorage.removeItem(user ? snapshotKey(user.id, mode) : ''); void freshLoad(); }} />}
     {comments && <CommentsModal post={comments} onClose={() => setComments(null)} onCount={(count) => patch(comments.id, { comment_count: count })} />}
