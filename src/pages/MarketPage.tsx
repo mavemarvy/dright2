@@ -1,5 +1,5 @@
 import { formatDisplayCurrency } from '../lib/currency';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,6 +22,7 @@ import {
   MARKETPLACE_CATEGORIES, parseNaturalLanguageSearch, addRecentlyViewedId,
 } from '../lib/marketplace';
 import { fetchRankingWeights, rankProducts, fuzzyMatch, expandSynonyms, type RankingWeights } from '../lib/rankingEngine';
+import { dedupeMarketplaceItems, fetchMarketplaceFeedV2 } from '../lib/marketplaceFeed';
 import SeoHead from '../components/SeoHead';
 import NapFooter from '../components/NapFooter';
 import UniversalAIAssistant from '../components/UniversalAIAssistant';
@@ -47,12 +48,20 @@ export default function MarketPage() {
   const { user, isAccountLocked, isAccountBanned } = useAuth();
   const { t } = useLanguage();
 
+  // Marketplace V2 is canonical for the Recommended discovery surface.
+  // The legacy catalog path remains a resilience/deterministic-sort fallback.
   const [products, setProducts] = useState<MarketplaceProduct[]>([]);
+  const [marketFeed, setMarketFeed] = useState<MarketplaceProduct[]>([]);
+  const [marketCursor, setMarketCursor] = useState<string | null>(null);
+  const [marketHasMore, setMarketHasMore] = useState(false);
+  const [marketPersonalized, setMarketPersonalized] = useState(false);
+  const [marketAlgorithmVersion, setMarketAlgorithmVersion] = useState(2);
+  const [marketV2Failed, setMarketV2Failed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [visibleCount, setVisibleCount] = useState(24);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<AdvancedFilterState>(DEFAULT_FILTER_STATE);
+  const [filters, setFilters] = useState<AdvancedFilterState>({ ...DEFAULT_FILTER_STATE, sortBy: 'recommended' });
   const [showCategorySection, setShowCategorySection] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [referralCode, setReferralCode] = useState<string | null>(null);
@@ -77,6 +86,27 @@ export default function MarketPage() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [rankingWeights, setRankingWeights] = useState<RankingWeights | null>(null);
 
+  const recommendedMode = filters.sortBy === 'recommended';
+  const usingMarketplaceV2 = recommendedMode && !marketV2Failed;
+
+  const fetchCategoryCounts = useCallback(async () => {
+    const { data } = await supabase
+      .from('products')
+      .select('category')
+      .eq('is_active', true)
+      .eq('is_hidden', false)
+      .eq('approval_status', 'approved');
+    const counts: Record<string, number> = {};
+    for (const p of data || []) {
+      const cat = MARKETPLACE_CATEGORIES.find(c =>
+        c.name.toLowerCase() === p.category?.toLowerCase() ||
+        c.subcategories.some(s => s.toLowerCase() === p.category?.toLowerCase())
+      );
+      if (cat) counts[cat.id] = (counts[cat.id] || 0) + 1;
+    }
+    setCategoryCounts(counts);
+  }, []);
+
   const fetchProducts = useCallback(async () => {
     const { data, error } = await supabase
       .from('products')
@@ -91,38 +121,61 @@ export default function MarketPage() {
       .eq('approval_status', 'approved')
       .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      const sellerIds = [...new Set(data.map(p => p.uploaded_by))];
-      const { data: sellers } = await supabase
-        .from('users')
-        .select('id, full_name, avatar_url, store_title, is_verified, account_status')
-        .in('id', sellerIds);
+    if (error || !data) throw error || new Error('Unable to load marketplace');
+    const sellerIds = [...new Set(data.map(p => p.uploaded_by))];
+    const { data: sellers } = await supabase
+      .from('users')
+      .select('id, full_name, avatar_url, store_title, is_verified, account_status')
+      .in('id', sellerIds);
 
-      const sellerMap = new Map((sellers || []).map(s => [s.id, s]));
-      const enriched = data.map(p => {
-        const seller = sellerMap.get(p.uploaded_by);
-        return {
-          ...p,
-          seller_name: seller?.full_name || null,
-          seller_avatar: seller?.avatar_url || null,
-          seller_verified: seller?.is_verified || false,
-          store_name: seller?.store_title || null,
-        } as MarketplaceProduct;
-      });
-      setProducts(enriched);
-
-      const counts: Record<string, number> = {};
-      for (const p of data) {
-        const cat = MARKETPLACE_CATEGORIES.find(c =>
-          c.name.toLowerCase() === p.category?.toLowerCase() ||
-          c.subcategories.some(s => s.toLowerCase() === p.category?.toLowerCase())
-        );
-        if (cat) counts[cat.id] = (counts[cat.id] || 0) + 1;
-      }
-      setCategoryCounts(counts);
-    }
-    setLoading(false);
+    const sellerMap = new Map((sellers || []).map(s => [s.id, s]));
+    const enriched = data.map(p => {
+      const seller = sellerMap.get(p.uploaded_by);
+      return {
+        ...p,
+        seller_name: seller?.full_name || null,
+        seller_avatar: seller?.avatar_url || null,
+        seller_verified: seller?.is_verified || false,
+        store_name: seller?.store_title || null,
+      } as MarketplaceProduct;
+    });
+    setProducts(enriched);
+    return enriched;
   }, []);
+
+  const fetchRecommendedPage = useCallback(async (reset: boolean) => {
+    const cursor = reset ? null : marketCursor;
+    if (!reset && (!marketHasMore || loadingMore)) return;
+    if (reset) setLoading(true); else setLoadingMore(true);
+    try {
+      const page = await fetchMarketplaceFeedV2({
+        search: searchQuery,
+        category: filters.category,
+        minPrice: filters.priceMin ? Number(filters.priceMin) : null,
+        maxPrice: filters.priceMax ? Number(filters.priceMax) : null,
+        location: filters.location,
+        verifiedOnly: filters.verifiedSeller,
+        minRating: filters.minRating,
+        productType: filters.productType,
+      }, cursor, 30);
+
+      setMarketFeed(prev => reset
+        ? dedupeMarketplaceItems(page.items)
+        : dedupeMarketplaceItems([...prev, ...page.items]));
+      setMarketCursor(page.nextCursor);
+      setMarketHasMore(page.hasMore);
+      setMarketPersonalized(page.personalized);
+      setMarketAlgorithmVersion(page.algorithmVersion);
+      setMarketV2Failed(false);
+    } catch (error) {
+      console.error('[marketplace-v2] falling back to legacy catalog', error);
+      setMarketV2Failed(true);
+      try { await fetchProducts(); } catch (fallbackError) { console.error('[marketplace] fallback failed', fallbackError); }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [fetchProducts, filters.category, filters.location, filters.minRating, filters.priceMax, filters.priceMin, filters.productType, filters.verifiedSeller, loadingMore, marketCursor, marketHasMore, searchQuery]);
 
   const fetchReferralCode = useCallback(async () => {
     if (!user) return;
@@ -136,17 +189,28 @@ export default function MarketPage() {
 
   useEffect(() => {
     fetchSystemConfig().then(setSystemConfig);
-    fetchProducts();
-    if (user) fetchReferralCode();
-    fetchRankingWeights().then(setRankingWeights);
+    void fetchCategoryCounts();
+    if (user) void fetchReferralCode();
+    void fetchRankingWeights().then(setRankingWeights);
 
     const cat = searchParams.get('category');
-    if (cat) {
-      setFilters(prev => ({ ...prev, category: cat }));
-    }
+    if (cat) setFilters(prev => ({ ...prev, category: cat }));
     const q = searchParams.get('q');
     if (q) setSearchQuery(q);
-  }, [user, searchParams, fetchProducts, fetchReferralCode]);
+  }, [user, searchParams, fetchCategoryCounts, fetchReferralCode]);
+
+  useEffect(() => {
+    setVisibleCount(24);
+    if (recommendedMode) {
+      setMarketV2Failed(false);
+      const timer = window.setTimeout(() => { void fetchRecommendedPage(true); }, 250);
+      return () => window.clearTimeout(timer);
+    }
+    setLoading(true);
+    void fetchProducts().catch(error => console.error('[marketplace] catalog load failed', error)).finally(() => setLoading(false));
+  // Primitive dependencies intentionally reset true pagination when a server filter changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recommendedMode, searchQuery, filters.category, filters.location, filters.priceMin, filters.priceMax, filters.productType, filters.verifiedSeller, filters.minRating]);
 
   useEffect(() => {
     if (quickViewProduct) {
@@ -157,12 +221,12 @@ export default function MarketPage() {
         listing_type: 'product',
         event_type: 'open',
         user_id: user?.id || null,
-        metadata: { source: 'quick_view' },
+        metadata: { source: 'quick_view', recommendation_strategy: usingMarketplaceV2 ? 'marketplace_v2' : 'legacy' },
         view_source: 'marketplace',
       });
       trackProductView(quickViewProduct.id, quickViewProduct.uploaded_by, 'marketplace');
     }
-  }, [quickViewProduct, recordView, user?.id]);
+  }, [quickViewProduct, recordView, user?.id, usingMarketplaceV2]);
 
   const handleCopyAffiliateLink = async (product: MarketplaceProduct) => {
     if (isAccountLocked || isAccountBanned || !referralCode) return;
@@ -174,9 +238,7 @@ export default function MarketPage() {
     }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-  };
+  const handleSearch = (query: string) => setSearchQuery(query);
 
   const handleCategorySelect = (categoryName: string) => {
     setFilters(prev => ({ ...prev, category: categoryName }));
@@ -189,30 +251,20 @@ export default function MarketPage() {
       const q = parsed.keywords.join(' ').toLowerCase();
       const synonyms = expandSynonyms(q);
       const matchesSearch = synonyms.some(syn =>
-        fuzzyMatch(syn, p.name, 2) ||
-        fuzzyMatch(syn, p.description ?? '', 2) ||
-        fuzzyMatch(syn, p.category, 2) ||
-        fuzzyMatch(syn, p.seller_name ?? '', 2)
+        fuzzyMatch(syn, p.name, 2) || fuzzyMatch(syn, p.description ?? '', 2) ||
+        fuzzyMatch(syn, p.category, 2) || fuzzyMatch(syn, p.seller_name ?? '', 2)
       );
       if (!matchesSearch) return false;
       if (parsed.priceMax && p.price > parsed.priceMax) return false;
     }
-
     if (filters.category !== 'All') {
       const cat = MARKETPLACE_CATEGORIES.find(c => c.name === filters.category);
       if (cat) {
-        const matches = p.category === filters.category ||
-          cat.subcategories.some(s => s.toLowerCase() === p.category?.toLowerCase()) ||
-          p.category.toLowerCase().includes(filters.category.toLowerCase());
+        const matches = p.category === filters.category || cat.subcategories.some(s => s.toLowerCase() === p.category?.toLowerCase()) || p.category.toLowerCase().includes(filters.category.toLowerCase());
         if (!matches) return false;
-      } else if (p.category !== filters.category) {
-        return false;
-      }
+      } else if (p.category !== filters.category) return false;
     }
-
-    if (filters.location) {
-      if (!(p.description ?? '').toLowerCase().includes(filters.location.toLowerCase())) return false;
-    }
+    if (filters.location && !(p.description ?? '').toLowerCase().includes(filters.location.toLowerCase())) return false;
     if (filters.priceMin && p.price < parseFloat(filters.priceMin)) return false;
     if (filters.priceMax && p.price > parseFloat(filters.priceMax)) return false;
     if (filters.productType && p.product_type !== filters.productType) return false;
@@ -221,64 +273,50 @@ export default function MarketPage() {
     if (filters.availability === 'in_stock' && (p.stock_quantity ?? 1) <= 0) return false;
     if (filters.availability === 'out_of_stock' && (p.stock_quantity ?? 1) > 0) return false;
     if (filters.availability === 'limited' && (p.stock_quantity ?? 99) > 5) return false;
-
     return true;
   });
 
   const sortedProducts: MarketplaceProduct[] = (() => {
-    if (filters.sortBy === 'recommended' && rankingWeights) {
-      return rankProducts(filteredProducts, searchQuery, rankingWeights) as MarketplaceProduct[];
-    }
+    if (filters.sortBy === 'recommended' && rankingWeights) return rankProducts(filteredProducts, searchQuery, rankingWeights) as MarketplaceProduct[];
     return [...filteredProducts].sort((a, b) => {
       switch (filters.sortBy) {
-        case 'oldest':
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        case 'price_asc':
-          return a.price - b.price;
-        case 'price_desc':
-          return b.price - a.price;
-        case 'commission_desc':
-          return ((b.is_free ? 0 : b.price * b.commission_rate) / 100) - ((a.is_free ? 0 : a.price * a.commission_rate) / 100);
-        case 'best_selling':
-          return (b.total_sales ?? 0) - (a.total_sales ?? 0);
+        case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'price_asc': return a.price - b.price;
+        case 'price_desc': return b.price - a.price;
+        case 'commission_desc': return ((b.is_free ? 0 : b.price * b.commission_rate) / 100) - ((a.is_free ? 0 : a.price * a.commission_rate) / 100);
+        case 'best_selling': return (b.total_sales ?? 0) - (a.total_sales ?? 0);
         case 'trending':
-          return (b.view_count ?? 0) - (a.view_count ?? 0);
-        case 'most_viewed':
-          return (b.view_count ?? 0) - (a.view_count ?? 0);
-        case 'highest_rated':
-          return (b.average_rating ?? 0) - (a.average_rating ?? 0);
-        default:
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'most_viewed': return (b.view_count ?? 0) - (a.view_count ?? 0);
+        case 'highest_rated': return (b.average_rating ?? 0) - (a.average_rating ?? 0);
+        default: return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
     });
   })();
 
-  const visibleProducts = sortedProducts.slice(0, visibleCount);
+  const displayProducts = usingMarketplaceV2 ? marketFeed : sortedProducts;
+  const visibleProducts = usingMarketplaceV2 ? marketFeed : sortedProducts.slice(0, visibleCount);
 
   useEffect(() => {
     if (!sentinelRef.current) return;
     const target = sentinelRef.current;
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting && !loadingMore && visibleCount < sortedProducts.length) {
-          setLoadingMore(true);
-          setTimeout(() => {
-            setVisibleCount(prev => Math.min(prev + 12, sortedProducts.length));
-            setLoadingMore(false);
-          }, 300);
-        }
-      },
-      { rootMargin: '200px' }
-    );
+    const observer = new IntersectionObserver(entries => {
+      if (!entries[0].isIntersecting || loadingMore) return;
+      if (usingMarketplaceV2) {
+        if (marketHasMore) void fetchRecommendedPage(false);
+      } else if (visibleCount < sortedProducts.length) {
+        setLoadingMore(true);
+        window.setTimeout(() => {
+          setVisibleCount(prev => Math.min(prev + 12, sortedProducts.length));
+          setLoadingMore(false);
+        }, 250);
+      }
+    }, { rootMargin: '300px' });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [loadingMore, visibleCount, sortedProducts.length]);
+  }, [fetchRecommendedPage, loadingMore, marketHasMore, sortedProducts.length, usingMarketplaceV2, visibleCount]);
 
   const relatedProducts = quickViewProduct
-    ? products.filter(p =>
-        p.id !== quickViewProduct.id &&
-        p.category === quickViewProduct.category
-      ).slice(0, 4)
+    ? displayProducts.filter(p => p.id !== quickViewProduct.id && p.category === quickViewProduct.category).slice(0, 4)
     : [];
 
   const closeTeamModal = () => {
@@ -299,24 +337,17 @@ export default function MarketPage() {
         p_duration: selectedDuration,
       });
       if (contractError) throw contractError;
-
       const contractId = contract?.contract_id as string | undefined;
       if (!contractId) throw new Error('Unable to create a canonical sales team contract');
-
-      const { data: payment, error: paymentError } = await supabase.functions.invoke('sales-team-contract-initialize', {
-        body: { contract_id: contractId },
-      });
+      const { data: payment, error: paymentError } = await supabase.functions.invoke('sales-team-contract-initialize', { body: { contract_id: contractId } });
       if (paymentError) throw paymentError;
       if (!payment?.authorization_url) throw new Error(payment?.error || 'Unable to initialize secure payment');
-
       setTeamSuccess(true);
       window.location.assign(payment.authorization_url);
     } catch (err) {
       console.error('Contract creation error:', err);
       setTeamError(err instanceof Error ? err.message : 'Failed to prepare the sales team contract. Please try again.');
-    } finally {
-      setTeamSubmitting(false);
-    }
+    } finally { setTeamSubmitting(false); }
   };
 
   const filterState: FilterState = {
@@ -331,28 +362,22 @@ export default function MarketPage() {
 
   const handleFilterChange = (state: FilterState) => {
     setSearchQuery(state.searchQuery);
-    setFilters(prev => ({
-      ...prev,
-      category: state.categoryFilter || 'All',
-      sortBy: state.sortBy || 'newest',
-      location: state.locationFilter,
-      priceMin: state.priceMin,
-      priceMax: state.priceMax,
-    }));
+    setFilters(prev => ({ ...prev, category: state.categoryFilter || 'All', sortBy: state.sortBy || 'recommended', location: state.locationFilter, priceMin: state.priceMin, priceMax: state.priceMax }));
   };
 
   const isBrowsing = !searchQuery && filters.category === 'All';
+  const contextualPlacement = searchQuery.trim()
+    ? 'search'
+    : filters.productType?.toUpperCase() === 'COURSE'
+      ? 'course_feed'
+      : filters.productType?.toUpperCase() === 'SERVICE'
+        ? 'service_feed'
+        : filters.category !== 'All' ? 'category' : null;
 
-  const contextualPlacement =
-    searchQuery.trim()
-      ? 'search'
-      : filters.productType?.toUpperCase() === 'COURSE'
-        ? 'course_feed'
-        : filters.productType?.toUpperCase() === 'SERVICE'
-          ? 'service_feed'
-          : filters.category !== 'All'
-            ? 'category'
-            : null;
+  const resultLabel = useMemo(() => {
+    if (usingMarketplaceV2) return `${displayProducts.length}${marketHasMore ? '+' : ''} ranked listing${displayProducts.length === 1 ? '' : 's'}${marketPersonalized ? ' · personalized' : ''}`;
+    return `${displayProducts.length} listing${displayProducts.length !== 1 ? 's' : ''}`;
+  }, [displayProducts.length, marketHasMore, marketPersonalized, usingMarketplaceV2]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
@@ -376,19 +401,11 @@ export default function MarketPage() {
       )}
 
       <HeroBanner onSearch={handleSearch} onBrowseCategories={() => setShowCategorySection(s => !s)} />
-
-      <div className="mt-6">
-        <SmartSearch onSearch={handleSearch} />
-      </div>
+      <div className="mt-6"><SmartSearch onSearch={handleSearch} /></div>
 
       <AnimatePresence>
         {showCategorySection && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden mt-6"
-          >
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mt-6">
             <CategorySection onCategorySelect={handleCategorySelect} categoryCounts={categoryCounts} />
           </motion.div>
         )}
@@ -397,9 +414,7 @@ export default function MarketPage() {
       {isBrowsing && (
         <div className="mt-8">
           <DiscoverySections />
-          {filters.sortBy !== 'trending' && (
-            <SponsoredPlacementCard placement="suggestions" variant="recommendation" className="my-8" />
-          )}
+          {filters.sortBy !== 'trending' && <SponsoredPlacementCard placement="suggestions" variant="recommendation" className="my-8" />}
           <ContinueBrowsing />
           <NewArrivalsSection />
           <FeaturedSellersSection />
@@ -409,102 +424,42 @@ export default function MarketPage() {
       )}
 
       <div className="mt-10" id="marketplace-products">
-        <AdvancedFilterBar
-          filters={filters}
-          onFilterChange={setFilters}
-          resultCount={sortedProducts.length}
-        />
-
-        {filters.sortBy === 'trending' && (
-          <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />
-        )}
+        <AdvancedFilterBar filters={filters} onFilterChange={setFilters} resultCount={displayProducts.length} />
+        {filters.sortBy === 'trending' && <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />}
 
         <div className="flex items-center justify-between mb-4 mt-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t('allProducts')}</h1>
-            <p className="text-gray-500 mt-0.5 text-sm">{sortedProducts.length} listing{sortedProducts.length !== 1 ? 's' : ''}</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('allProducts')}</h1>
+            <p className="text-gray-500 mt-0.5 text-sm">{resultLabel}{usingMarketplaceV2 ? ` · v${marketAlgorithmVersion}` : ''}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-1 bg-gray-100 rounded-xl p-1">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-400'}`}
-                aria-label={t('gridView')}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-400'}`}
-                aria-label={t('listView')}
-              >
-                <List className="w-4 h-4" />
-              </button>
+            <div className="hidden sm:flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+              <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 text-primary-600 shadow-sm' : 'text-gray-400'}`} aria-label={t('gridView')}><LayoutGrid className="w-4 h-4" /></button>
+              <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 text-primary-600 shadow-sm' : 'text-gray-400'}`} aria-label={t('listView')}><List className="w-4 h-4" /></button>
             </div>
-            <Link
-              to="/upload-product"
-              className="flex items-center gap-2 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors shadow-md shadow-primary-600/20 min-h-[48px]"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="hidden sm:inline">{t('postAd')}</span>
-            </Link>
+            <Link to="/upload-product" className="flex items-center gap-2 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors shadow-md shadow-primary-600/20 min-h-[48px]"><Plus className="w-5 h-5" /><span className="hidden sm:inline">{t('postAd')}</span></Link>
           </div>
         </div>
 
-        <FilterSettingsBar
-          userId={user?.id}
-          filterState={filterState}
-          onFilterChange={handleFilterChange}
-        />
-
-        {contextualPlacement && (
-          <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />
-        )}
+        <FilterSettingsBar userId={user?.id} filterState={filterState} onFilterChange={handleFilterChange} />
+        {contextualPlacement && <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />}
 
         {loading && (
           <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'} gap-3 sm:gap-5 mt-6`}>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div className="h-48 skeleton" />
-                <div className="p-4 space-y-3">
-                  <div className="h-4 skeleton w-3/4" />
-                  <div className="h-3 skeleton w-1/2" />
-                  <div className="h-6 skeleton w-1/3" />
-                </div>
-              </div>
-            ))}
+            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden"><div className="h-48 skeleton" /><div className="p-4 space-y-3"><div className="h-4 skeleton w-3/4" /><div className="h-3 skeleton w-1/2" /><div className="h-6 skeleton w-1/3" /></div></div>)}
           </div>
         )}
 
-        {!loading && sortedProducts.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center py-20 text-center"
-          >
-            <div className="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-3xl flex items-center justify-center mb-5">
-              <Store className="w-12 h-12 text-gray-400 dark:text-gray-500" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              {searchQuery || filters.category !== 'All' ? 'No products match your filters' : 'No products yet'}
-            </h3>
-            <p className="text-gray-500 dark:text-gray-400 max-w-xs mb-6">
-              {searchQuery || filters.category !== 'All'
-                ? 'Try adjusting your search or filters.'
-                : 'Be the first to add a product to the marketplace!'}
-            </p>
-            {!searchQuery && filters.category === 'All' && (
-              <Link
-                to="/upload-product"
-                className="flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors"
-              >
-                <Plus className="w-5 h-5" /> Post First Ad
-              </Link>
-            )}
+        {!loading && displayProducts.length === 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-3xl flex items-center justify-center mb-5"><Store className="w-12 h-12 text-gray-400 dark:text-gray-500" /></div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{searchQuery || filters.category !== 'All' ? 'No products match your filters' : 'No products yet'}</h3>
+            <p className="text-gray-500 dark:text-gray-400 max-w-xs mb-6">{searchQuery || filters.category !== 'All' ? 'Try adjusting your search or filters.' : 'Be the first to add a product to the marketplace!'}</p>
+            {!searchQuery && filters.category === 'All' && <Link to="/upload-product" className="flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors"><Plus className="w-5 h-5" /> Post First Ad</Link>}
           </motion.div>
         )}
 
-        {!loading && sortedProducts.length > 0 && (
+        {!loading && displayProducts.length > 0 && (
           <>
             <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1 max-w-3xl'} gap-3 sm:gap-5 mt-6`}>
               {visibleProducts.map((product, index) => (
@@ -522,122 +477,30 @@ export default function MarketPage() {
                 />
               ))}
             </div>
-
-            {visibleCount < sortedProducts.length && (
+            {(usingMarketplaceV2 ? marketHasMore : visibleCount < sortedProducts.length) && (
               <div ref={sentinelRef} className="flex items-center justify-center py-8">
-                {loadingMore ? (
-                  <div className="w-8 h-8 border-3 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-                ) : (
-                  <p className="text-sm text-gray-400">Scroll for more</p>
-                )}
+                {loadingMore ? <div className="w-8 h-8 border-3 border-primary-200 border-t-primary-600 rounded-full animate-spin" /> : <p className="text-sm text-gray-400">Scroll for more</p>}
               </div>
             )}
           </>
         )}
       </div>
 
-      <QuickViewModal
-        product={quickViewProduct}
-        onClose={() => setQuickViewProduct(null)}
-        inWishlist={quickViewProduct ? wishlistIds.has(quickViewProduct.id) : false}
-        onToggleWishlist={toggleWishlist}
-        onShare={setShareProduct}
-        relatedProducts={relatedProducts}
-      />
-
-      <ShareMenu
-        productId={shareProduct?.id || ''}
-        productName={shareProduct?.name || ''}
-        isOpen={!!shareProduct}
-        onClose={() => setShareProduct(null)}
-        referralCode={referralCode}
-      />
+      <QuickViewModal product={quickViewProduct} onClose={() => setQuickViewProduct(null)} inWishlist={quickViewProduct ? wishlistIds.has(quickViewProduct.id) : false} onToggleWishlist={toggleWishlist} onShare={setShareProduct} relatedProducts={relatedProducts} />
+      <ShareMenu productId={shareProduct?.id || ''} productName={shareProduct?.name || ''} isOpen={!!shareProduct} onClose={() => setShareProduct(null)} referralCode={referralCode} />
 
       <AnimatePresence>
         {showTeamModal && teamModalProduct && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={closeTeamModal}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-warning" /> Add Sales Team
-                </h3>
-                <button onClick={closeTeamModal} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close">
-                  <ShieldAlert className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Product: <span className="font-medium text-gray-900 dark:text-gray-100">{teamModalProduct.name}</span>
-              </p>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Sales Team Tier</label>
-                <select
-                  value={selectedTier}
-                  onChange={e => setSelectedTier(e.target.value as SalesTeamTier)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:border-primary-500 outline-none"
-                >
-                  {ALL_TIERS.map(tier => <option key={tier} value={tier}>{tier}</option>)}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Duration</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {DURATIONS.map(d => (
-                    <button
-                      key={d.value}
-                      onClick={() => setSelectedDuration(d.value)}
-                      className={`py-2 rounded-xl text-sm font-medium transition-colors ${
-                        selectedDuration === d.value ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {systemConfig && (
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Estimated Subscription</span>
-                    <span className="font-bold text-gray-900 dark:text-gray-100">
-                      {formatDisplayCurrency(Number(calculateSubscriptionTotal(selectedTier, selectedDuration, systemConfig).toFixed(2)))}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">The server confirms the final price and eligible team member before payment.</p>
-                </div>
-              )}
-              {teamError && (
-                <div className="flex items-center gap-2 text-error text-sm">
-                  <AlertCircle className="w-4 h-4" /> {teamError}
-                </div>
-              )}
-              {teamSuccess && (
-                <div className="flex items-center gap-2 text-success text-sm">
-                  <Check className="w-4 h-4" /> Contract prepared. Opening secure payment…
-                </div>
-              )}
-              <button
-                onClick={handleCreateContract}
-                disabled={teamSubmitting || teamSuccess}
-                className="w-full py-3 bg-warning hover:bg-orange-600 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {teamSubmitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <><Shield className="w-4 h-4" /> Continue to Secure Payment</>
-                )}
-              </button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={closeTeamModal}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+              <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2"><Users className="w-5 h-5 text-warning" /> Add Sales Team</h3><button onClick={closeTeamModal} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close"><ShieldAlert className="w-5 h-5" /></button></div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Product: <span className="font-medium text-gray-900 dark:text-gray-100">{teamModalProduct.name}</span></p>
+              <div className="space-y-2"><label className="text-sm font-medium text-gray-700 dark:text-gray-300">Sales Team Tier</label><select value={selectedTier} onChange={e => setSelectedTier(e.target.value as SalesTeamTier)} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:border-primary-500 outline-none">{ALL_TIERS.map(tier => <option key={tier} value={tier}>{tier}</option>)}</select></div>
+              <div className="space-y-2"><label className="text-sm font-medium text-gray-700 dark:text-gray-300">Duration</label><div className="grid grid-cols-3 gap-2">{DURATIONS.map(d => <button key={d.value} onClick={() => setSelectedDuration(d.value)} className={`py-2 rounded-xl text-sm font-medium transition-colors ${selectedDuration === d.value ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{d.label}</button>)}</div></div>
+              {systemConfig && <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3"><div className="flex justify-between text-sm"><span className="text-gray-600 dark:text-gray-400">Estimated Subscription</span><span className="font-bold text-gray-900 dark:text-gray-100">{formatDisplayCurrency(Number(calculateSubscriptionTotal(selectedTier, selectedDuration, systemConfig).toFixed(2)))}</span></div><p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">The server confirms the final price and eligible team member before payment.</p></div>}
+              {teamError && <div className="flex items-center gap-2 text-error text-sm"><AlertCircle className="w-4 h-4" /> {teamError}</div>}
+              {teamSuccess && <div className="flex items-center gap-2 text-success text-sm"><Check className="w-4 h-4" /> Contract prepared. Opening secure payment…</div>}
+              <button onClick={handleCreateContract} disabled={teamSubmitting || teamSuccess} className="w-full py-3 bg-warning hover:bg-orange-600 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50">{teamSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Shield className="w-4 h-4" /> Continue to Secure Payment</>}</button>
             </motion.div>
           </motion.div>
         )}
