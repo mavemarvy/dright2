@@ -21,10 +21,14 @@ type NumericKey = { [K in keyof AlgorithmSettings]: AlgorithmSettings[K] extends
 interface NumericControl { key: NumericKey; label: string; description: string; min: number; max: number; step?: number; }
 interface Section { title: string; description: string; icon: typeof Activity; controls: NumericControl[]; }
 
+const controls = (rows: (string | number)[][]): NumericControl[] => rows.map(([key,label,description,min,max,step]) => ({
+  key:key as NumericKey,label:String(label),description:String(description),min:Number(min),max:Number(max),step:Number(step ?? 1),
+}));
+
 const SECTIONS: Section[] = [
   {
     title: 'General / DDS', description: 'Global listing quality and demand-score controls.', icon: Activity,
-    controls: [
+    controls: controls([
       ['search_weight','Search weight','Text/search relevance contribution.',0,100],
       ['click_weight','Click / CTR weight','Qualified marketplace engagement contribution.',0,100],
       ['conversion_weight','Conversion weight','Purchase/conversion contribution.',0,100],
@@ -37,11 +41,11 @@ const SECTIONS: Section[] = [
       ['fraud_sensitivity','Fraud sensitivity','Sensitivity used by quality/fraud checks.',0,100],
       ['min_reviews_for_confidence','Reviews for confidence','Review count needed before rating confidence matures.',1,100],
       ['trending_decay_rate','Trending decay','How quickly old trending momentum decays.',0.1,1,0.05],
-    ].map(([key,label,description,min,max,step]) => ({ key:key as NumericKey,label:String(label),description:String(description),min:Number(min),max:Number(max),step:Number(step ?? 1) })),
+    ]),
   },
   {
-    title: 'Social Discovery', description: 'Social Field relevance, engagement, diversity and feed-delivery settings.', icon: Users,
-    controls: [
+    title: 'Social Discovery', description: 'Social Field relevance, engagement, three-graph affinity, diversity and feed delivery.', icon: Users,
+    controls: controls([
       ['social_feed_batch_size','Feed batch size','Items requested per Social batch.',5,100],
       ['social_exploration_percentage','Exploration %','Share reserved for controlled discovery outside dominant interests.',0,50],
       ['social_recency_weight','Recency weight','Recency contribution.',0,100],
@@ -53,7 +57,8 @@ const SECTIONS: Section[] = [
       ['social_follow_weight','Follow weight','Follow conversion contribution.',0,100],
       ['social_friend_affinity','Friend affinity','Mutual/social graph affinity.',0,100],
       ['social_creator_affinity','Creator affinity','Learned creator affinity.',0,100],
-      ['social_interest_weight','Interest weight','Behavioral category-interest contribution.',0,100],
+      ['social_interest_weight','Interest graph weight','Behavioral category-interest contribution.',0,100],
+      ['social_commerce_affinity_weight','Commerce graph weight','Commerce-intent contribution without turning Social into a catalogue.',0,50],
       ['social_trend_weight','Trend weight','Trend contribution.',0,100],
       ['social_fresh_boost','Fresh-content boost','Controlled opportunity for new content.',0,100],
       ['social_negative_penalty','Negative feedback penalty','Penalty for skip/hide/not-interested signals.',0,100],
@@ -63,11 +68,11 @@ const SECTIONS: Section[] = [
       ['social_category_max_per_window','Max category posts / window','Maximum posts from one category inside the window.',1,20],
       ['social_qualified_view_ms','Qualified-view threshold (ms)','Minimum visible/watch time for a qualified view.',500,15000,100],
       ['social_fast_skip_ms','Fast-skip threshold (ms)','Threshold used to identify a rapid skip.',250,10000,100],
-    ].map(([key,label,description,min,max,step]) => ({ key:key as NumericKey,label:String(label),description:String(description),min:Number(min),max:Number(max),step:Number(step ?? 1) })),
+    ]),
   },
   {
     title: 'Marketplace Personalization', description: 'Canonical Marketplace V2 ranking weights. Search relevance remains dominant when a query exists.', icon: ShoppingBag,
-    controls: [
+    controls: controls([
       ['marketplace_relevance_weight','Relevance','Text/context relevance.',0,100],
       ['marketplace_seller_verification_weight','Seller verification','Verified-seller contribution.',0,100],
       ['marketplace_listing_quality_weight','Listing quality','DDS/listing quality contribution.',0,100],
@@ -76,17 +81,42 @@ const SECTIONS: Section[] = [
       ['marketplace_rating_weight','Ratings','Rating contribution.',0,100],
       ['marketplace_freshness_weight','Freshness','Fresh listing contribution.',0,100],
       ['marketplace_trending_weight','Trending','DDS/trending contribution.',0,100],
-      ['marketplace_interest_weight','User interests','Category-interest affinity.',0,100],
-      ['marketplace_seller_affinity_weight','Seller affinity','Learned seller/store affinity.',0,100],
-      ['marketplace_commerce_weight','Commerce affinity','Purchase/checkout/wishlist affinity.',0,100],
+      ['marketplace_interest_weight','Interest graph','Category-interest affinity.',0,100],
+      ['marketplace_seller_affinity_weight','Seller/social affinity','Learned seller/store affinity.',0,100],
+      ['marketplace_commerce_weight','Commerce graph','Purchase/checkout/wishlist affinity.',0,100],
       ['marketplace_exploration_percentage','Exploration %','Controlled organic exploration.',0,50],
       ['marketplace_page_size','Page size','Server-ranked items returned per page.',10,60],
       ['search_personalization_weight','Search personalization','Secondary personalized reranking after query relevance.',0,30],
-    ].map(([key,label,description,min,max,step]) => ({ key:key as NumericKey,label:String(label),description:String(description),min:Number(min),max:Number(max),step:Number(step ?? 1) })),
+    ]),
+  },
+  {
+    title: 'Jobs Discovery', description: 'Dedicated job ranking controls; job relevance remains separate from Marketplace and Social scoring.', icon: Search,
+    controls: controls([
+      ['jobs_page_size','Page size','Server-ranked jobs returned per page.',10,60],
+      ['jobs_search_weight','Search relevance','Direct job-query relevance.',0,100],
+      ['jobs_category_affinity_weight','Category affinity','Learned job/category interest.',0,100],
+      ['jobs_skills_weight','Skills match','Skill/requirement match contribution.',0,100],
+      ['jobs_location_weight','Location relevance','Configured location/context contribution.',0,100],
+      ['jobs_application_history_weight','Application history','Application-intent contribution.',0,100],
+      ['jobs_employer_affinity_weight','Employer affinity','Learned employer interaction contribution.',0,100],
+      ['jobs_freshness_weight','Freshness','Fresh job contribution.',0,100],
+      ['jobs_exploration_percentage','Exploration %','Controlled opportunity for relevant jobs outside dominant history.',0,50],
+    ]),
+  },
+  {
+    title: 'Communities Discovery', description: 'Community recommendation controls built on interests, social graph activity, growth and freshness.', icon: Users,
+    controls: controls([
+      ['communities_interest_weight','Interest graph','Topic/category affinity contribution.',0,100],
+      ['communities_friend_weight','Social graph','Friend/follow relationship contribution.',0,100],
+      ['communities_activity_weight','Activity','Recent healthy community activity contribution.',0,100],
+      ['communities_growth_weight','Growth','Bounded membership/engagement momentum contribution.',0,100],
+      ['communities_freshness_weight','Freshness','Fresh-community/content contribution.',0,100],
+      ['communities_exploration_percentage','Exploration %','Controlled discovery outside dominant interests.',0,50],
+    ]),
   },
   {
     title: 'Interest Learning', description: 'Server-side behavioral learning weights and decay. Clients cannot directly award themselves affinity.', icon: BrainCircuit,
-    controls: [
+    controls: controls([
       ['interest_half_life_days','Interest half-life (days)','Recency decay for learned interests.',1,365],
       ['interest_score_cap','Score cap','Maximum normalized interest magnitude.',10,500],
       ['interest_search_weight','Search signal','Search-category signal.',0,50],
@@ -108,11 +138,11 @@ const SECTIONS: Section[] = [
       ['interest_block_penalty','Block penalty','Strong account/creator suppression signal.',0,100],
       ['interest_recompute_window_days','Recompute window (days)','Maximum raw-history window for recomputation.',7,730],
       ['interest_top_category_limit','Top-category limit','Number of strongest category interests retained.',3,50],
-    ].map(([key,label,description,min,max,step]) => ({ key:key as NumericKey,label:String(label),description:String(description),min:Number(min),max:Number(max),step:Number(step ?? 1) })),
+    ]),
   },
   {
     title: 'Semantic Intelligence', description: 'Optional pgvector layer. Behavioral ranking remains the fallback and core system.', icon: Sparkles,
-    controls: [
+    controls: controls([
       ['semantic_similarity_weight','General semantic weight','Global similarity contribution.',0,100],
       ['semantic_min_similarity','Minimum similarity','Minimum cosine similarity accepted.',0,1,0.01],
       ['semantic_candidate_limit','Candidate limit','Maximum vector candidates requested.',5,200],
@@ -129,14 +159,14 @@ const SECTIONS: Section[] = [
       ['embedding_daily_request_limit','Daily embedding requests','Cost-control request ceiling.',0,100000],
       ['embedding_monthly_request_limit','Monthly embedding requests','Monthly cost-control ceiling.',0,1000000],
       ['embedding_estimated_cost_per_million_tokens','Estimated cost / 1M tokens','Owner-configured estimate used for observability only.',0,100,0.01],
-    ].map(([key,label,description,min,max,step]) => ({ key:key as NumericKey,label:String(label),description:String(description),min:Number(min),max:Number(max),step:Number(step ?? 1) })),
+    ]),
   },
   {
     title: 'Promotion Relevance', description: 'Sponsored delivery remains separate from organic ranking and uses its existing eligibility/auction path.', icon: Zap,
-    controls: [
+    controls: controls([
       ['promotion_interest_weight','Behavioral interest weight','Interest relevance contribution for eligible campaigns.',0,100],
       ['promotion_min_relevance','Minimum relevance','Campaign relevance floor before delivery.',0,1,0.01],
-    ].map(([key,label,description,min,max,step]) => ({ key:key as NumericKey,label:String(label),description:String(description),min:Number(min),max:Number(max),step:Number(step ?? 1) })),
+    ]),
   },
 ];
 
@@ -202,13 +232,13 @@ export default function AdminAlgorithmPage() {
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <div className="flex items-center gap-2"><Database className="h-6 w-6 text-primary-500" /><h1 className="text-2xl font-bold text-gray-900 dark:text-white">Algorithm Configuration</h1></div>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Canonical source: <strong>{diagnostics.canonical_source || 'algorithm_settings'}</strong>. Social, Marketplace, interest learning, promotions and optional semantics remain separately weighted.</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Canonical source: <strong>{diagnostics.canonical_source || 'algorithm_settings'}</strong>. Interest, social, commerce, jobs, communities, Marketplace and promotions keep surface-specific weights.</p>
       </div>
       <button onClick={() => void reload()} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-gray-200 px-4 text-sm dark:border-gray-700"><RefreshCw className="h-4 w-4" />Refresh</button>
     </div>
 
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"><div className="text-xs text-gray-500">Algorithm</div><div className="mt-1 text-xl font-bold">v{diagnostics.algorithm_version || 3}</div></div>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"><div className="text-xs text-gray-500">Algorithm</div><div className="mt-1 text-xl font-bold">v{diagnostics.algorithm_version || 4}</div></div>
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"><div className="text-xs text-gray-500">Interest profiles</div><div className="mt-1 text-xl font-bold">{diagnostics.interest_profiles_total ?? 0}</div><div className="text-xs text-gray-500">{diagnostics.interest_profiles_pending ?? 0} pending</div></div>
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"><div className="text-xs text-gray-500">Listing intelligence</div><div className="mt-1 text-xl font-bold">{diagnostics.listing_scores_count ?? 0}</div><div className="text-xs text-gray-500">{diagnostics.listing_intelligence_pending ?? 0} pending</div></div>
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"><div className="text-xs text-gray-500">Semantic index</div><div className="mt-1 text-xl font-bold">{semantic.indexed_entities ?? diagnostics.semantic_indexed ?? 0}</div><div className="text-xs text-gray-500">{semantic.stale_embeddings ?? diagnostics.semantic_stale ?? 0} stale</div></div>
@@ -217,6 +247,7 @@ export default function AdminAlgorithmPage() {
     <div className="flex flex-wrap gap-2">
       <StatusPill ok={diagnostics.social_feed_v2} label="Social V2" />
       <StatusPill ok={diagnostics.marketplace_feed_v2} label="Marketplace V2" />
+      <StatusPill ok={diagnostics.jobs_feed_v2} label="Jobs V2" />
       <StatusPill ok={diagnostics.promotion_delivery_v2} label="Promotion V2" />
       <StatusPill ok={diagnostics.interest_cron_active} label="Interest cron" />
       <StatusPill ok={diagnostics.listing_intelligence_cron_active} label="Listing intelligence" />
