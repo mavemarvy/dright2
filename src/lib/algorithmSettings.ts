@@ -26,6 +26,7 @@ export interface AlgorithmSettings {
   social_friend_affinity: number;
   social_creator_affinity: number;
   social_interest_weight: number;
+  social_commerce_affinity_weight: number;
   social_trend_weight: number;
   social_fresh_boost: number;
   social_negative_penalty: number;
@@ -50,6 +51,23 @@ export interface AlgorithmSettings {
   marketplace_exploration_percentage: number;
   marketplace_page_size: number;
   search_personalization_weight: number;
+
+  jobs_page_size: number;
+  jobs_search_weight: number;
+  jobs_category_affinity_weight: number;
+  jobs_skills_weight: number;
+  jobs_location_weight: number;
+  jobs_application_history_weight: number;
+  jobs_employer_affinity_weight: number;
+  jobs_freshness_weight: number;
+  jobs_exploration_percentage: number;
+
+  communities_interest_weight: number;
+  communities_friend_weight: number;
+  communities_activity_weight: number;
+  communities_growth_weight: number;
+  communities_freshness_weight: number;
+  communities_exploration_percentage: number;
 
   interest_half_life_days: number;
   interest_score_cap: number;
@@ -104,7 +122,9 @@ export interface RecommendationDiagnostics {
   interest_profiles_total?: number;
   interest_profiles_pending?: number;
   profiles_recomputed_24h?: number;
+  job_profiles_recomputed_24h?: number;
   marketplace_feed_v2?: boolean;
+  jobs_feed_v2?: boolean;
   social_feed_v2?: boolean;
   promotion_delivery_v2?: boolean;
   canonical_source?: string;
@@ -152,9 +172,10 @@ export const DEFAULT_ALGORITHM_SETTINGS: AlgorithmSettings = {
   social_feed_batch_size: 20, social_exploration_percentage: 10, social_recency_weight: 8,
   social_watch_weight: 20, social_completion_weight: 18, social_save_weight: 12, social_share_weight: 10,
   social_comment_weight: 8, social_follow_weight: 8, social_friend_affinity: 14, social_creator_affinity: 10,
-  social_interest_weight: 14, social_trend_weight: 8, social_fresh_boost: 8, social_negative_penalty: 25,
-  social_creator_window: 10, social_creator_max_per_window: 2, social_category_window: 10,
-  social_category_max_per_window: 4, social_qualified_view_ms: 3000, social_fast_skip_ms: 1800,
+  social_interest_weight: 14, social_commerce_affinity_weight: 4, social_trend_weight: 8, social_fresh_boost: 8,
+  social_negative_penalty: 25, social_creator_window: 10, social_creator_max_per_window: 2,
+  social_category_window: 10, social_category_max_per_window: 4, social_qualified_view_ms: 3000,
+  social_fast_skip_ms: 1800,
 
   marketplace_relevance_weight: 30, marketplace_seller_verification_weight: 15,
   marketplace_listing_quality_weight: 10, marketplace_conversion_rate_weight: 15,
@@ -162,6 +183,13 @@ export const DEFAULT_ALGORITHM_SETTINGS: AlgorithmSettings = {
   marketplace_trending_weight: 5, marketplace_interest_weight: 22, marketplace_seller_affinity_weight: 10,
   marketplace_commerce_weight: 18, marketplace_exploration_percentage: 8, marketplace_page_size: 30,
   search_personalization_weight: 8,
+
+  jobs_page_size: 30, jobs_search_weight: 40, jobs_category_affinity_weight: 14, jobs_skills_weight: 20,
+  jobs_location_weight: 8, jobs_application_history_weight: 18, jobs_employer_affinity_weight: 8,
+  jobs_freshness_weight: 10, jobs_exploration_percentage: 8,
+
+  communities_interest_weight: 20, communities_friend_weight: 12, communities_activity_weight: 10,
+  communities_growth_weight: 8, communities_freshness_weight: 6, communities_exploration_percentage: 10,
 
   interest_half_life_days: 45, interest_score_cap: 100, interest_search_weight: 2, interest_view_weight: 3,
   interest_dwell_weight: 5, interest_completion_weight: 7, interest_reaction_weight: 5,
