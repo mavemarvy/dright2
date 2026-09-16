@@ -107,7 +107,7 @@ export function useMySupportTickets(userId?: string | null) {
       setTickets([]);
     } else {
       setError(null);
-      setTickets((data || []) as SupportTicket[]);
+      setTickets((data || []) as unknown as SupportTicket[]);
     }
     setLoading(false);
   }, [userId]);
@@ -152,7 +152,7 @@ export function useAdminSupportTickets(status?: SupportTicketStatus | 'all') {
       setTickets([]);
     } else {
       setError(null);
-      setTickets((data || []) as SupportTicket[]);
+      setTickets((data || []) as unknown as SupportTicket[]);
     }
     setLoading(false);
   }, [status]);
@@ -193,7 +193,7 @@ export function useTicketReplies(ticketId?: string | null) {
       setReplies([]);
     } else {
       setError(null);
-      setReplies((data || []) as TicketReply[]);
+      setReplies((data || []) as unknown as TicketReply[]);
     }
     setLoading(false);
   }, [ticketId]);
@@ -244,7 +244,7 @@ export async function createSupportTicket(input: {
     .single();
 
   if (error) throw error;
-  return data as SupportTicket;
+  return data as unknown as SupportTicket;
 }
 
 export async function replyToTicket(input: {
@@ -271,7 +271,7 @@ export async function replyToTicket(input: {
     .single();
 
   if (error) throw error;
-  return data as TicketReply;
+  return data as unknown as TicketReply;
 }
 
 export async function updateSupportTicket(
