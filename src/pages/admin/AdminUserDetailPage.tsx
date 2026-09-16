@@ -3,7 +3,7 @@ import { Link,useParams } from 'react-router-dom';
 import { ArrowLeft,User,ShieldCheck,ClipboardList,FileText,Scale,Activity,History,BriefcaseBusiness,Award,Trophy,CheckCircle2,AlertTriangle,XCircle,Eye,RefreshCw,BadgeCheck,LockKeyhole,Mail,Phone,MapPin,CalendarDays,Hash,ExternalLink } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { createKycDocumentSignedUrl,reviewKycDocument } from '../../lib/kycHooks';
-import type { KycDocument,KycProfile,KycSubmission } from '../../lib/kycTypes';
+import type { KycDocument,KycProfile } from '../../lib/kycTypes';
 import { KYC_DOC_TYPE_LABELS,KYC_STATUS_LABELS } from '../../lib/kycTypes';
 import SecureDocumentViewer from '../../components/admin/SecureDocumentViewer';
 
@@ -38,7 +38,7 @@ type ViewerState={title:string;mimeType:string|null;url:string;expiresAt:Date;me
 export default function AdminUserDetailPage(){
   const {userId}=useParams<{userId:string}>();const [tab,setTab]=useState<TabKey>('overview');const [loading,setLoading]=useState(true);const [error,setError]=useState<string|null>(null);const [permissions,setPermissions]=useState<PermissionMap>({});
   const [identity,setIdentity]=useState<IdentityBundle|null>(null);const [questionnaires,setQuestionnaires]=useState<QuestionnaireSubmission[]>([]);const [answers,setAnswers]=useState<QuestionnaireAnswer[]>([]);
-  const [kycProfile,setKycProfile]=useState<KycProfile|null>(null);const [kycSubmissions,setKycSubmissions]=useState<KycSubmission[]>([]);const [kycDocs,setKycDocs]=useState<KycDocument[]>([]);const [professionalDocs,setProfessionalDocs]=useState<ProfessionalDocument[]>([]);
+  const [kycProfile,setKycProfile]=useState<KycProfile|null>(null);const [kycDocs,setKycDocs]=useState<KycDocument[]>([]);const [professionalDocs,setProfessionalDocs]=useState<ProfessionalDocument[]>([]);
   const [eligibility,setEligibility]=useState<Eligibility[]>([]);const [achievements,setAchievements]=useState<Achievement[]>([]);const [evidence,setEvidence]=useState<Evidence[]>([]);const [assignments,setAssignments]=useState<BadgeAssignment[]>([]);const [badges,setBadges]=useState<BadgeRow[]>([]);const [growth,setGrowth]=useState<GrowthScore|null>(null);const [trust,setTrust]=useState<TrustScore|null>(null);const [audits,setAudits]=useState<AuditEvent[]>([]);const [viewer,setViewer]=useState<ViewerState>(null);const [busy,setBusy]=useState<string|null>(null);
 
   const can=(key:string)=>permissions[key]===true;
@@ -65,7 +65,7 @@ export default function AdminUserDetailPage(){
     const qs=val<QuestionnaireSubmission[]>(0)??[];setQuestionnaires(qs);
     if(qs.length){const {data}=await supabase.from('questionnaire_answers').select('*').in('submission_id',qs.map((s)=>s.id)).order('created_at');setAnswers((data??[]) as QuestionnaireAnswer[]);}else setAnswers([]);
     const kp=val<KycProfile>(1);setKycProfile(kp);
-    if(kp){const {data:subs}=await supabase.from('kyc_submissions').select('*').eq('profile_id',kp.id).eq('is_deleted',false).order('created_at',{ascending:false});setKycSubmissions((subs??[]) as KycSubmission[]);const ids=(subs??[]).map((s)=>s.id);if(ids.length){const {data:docs}=await supabase.from('kyc_documents').select('*').in('submission_id',ids).eq('is_deleted',false).order('created_at',{ascending:false});setKycDocs((docs??[]) as KycDocument[]);}else setKycDocs([]);}else{setKycSubmissions([]);setKycDocs([]);}
+    if(kp){const {data:subs}=await supabase.from('kyc_submissions').select('id').eq('profile_id',kp.id).eq('is_deleted',false).order('created_at',{ascending:false});const ids=(subs??[]).map((s)=>s.id);if(ids.length){const {data:docs}=await supabase.from('kyc_documents').select('*').in('submission_id',ids).eq('is_deleted',false).order('created_at',{ascending:false});setKycDocs((docs??[]) as KycDocument[]);}else setKycDocs([]);}else setKycDocs([]);
     setProfessionalDocs(val<ProfessionalDocument[]>(2)??[]);setEligibility(val<Eligibility[]>(3)??[]);setAchievements(val<Achievement[]>(4)??[]);setEvidence(val<Evidence[]>(5)??[]);setAssignments(val<BadgeAssignment[]>(6)??[]);setBadges(val<BadgeRow[]>(7)??[]);setGrowth(val<GrowthScore>(8));setTrust(val<TrustScore>(9));
     const activity=val<AuditEvent[]>(10)??[];const kycAudit=val<AuditEvent[]>(11)??[];setAudits([...activity,...kycAudit].sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()));
   }catch(e){setError(e instanceof Error?e.message:'Could not load user review data');}finally{setLoading(false);}},[userId,loadPermissions]);
