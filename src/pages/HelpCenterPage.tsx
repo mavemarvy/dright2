@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ChevronDown, Headphones, Mail, Phone, MessageCircle,
   Send, Clock, ArrowRight, HelpCircle, FileText, LifeBuoy,
 } from 'lucide-react';
 import SeoHead from '../components/SeoHead';
+import SupportAIChat from '../components/support/SupportAIChat';
+import SupportCenterPanel from '../components/support/SupportCenterPanel';
+import TelegramSupportLink from '../components/support/TelegramSupportLink';
 import { useHelpCategories, usePublishedHelpArticles, usePublishedFaqs, useSupportDepartments } from '../lib/contentHooks';
 import type { HelpArticle, FaqItem } from '../lib/contentTypes';
 
@@ -27,10 +29,11 @@ export default function HelpCenterPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   const filteredArticles = useMemo(() => {
-    if (!search) return articles;
+    const byCategory = selectedCategory ? articles.filter(article => article.category_id === selectedCategory) : articles;
+    if (!search) return byCategory;
     const q = search.toLowerCase();
-    return articles.filter(a => a.title.toLowerCase().includes(q) || (a.summary || '').toLowerCase().includes(q));
-  }, [articles, search]);
+    return byCategory.filter(a => a.title.toLowerCase().includes(q) || (a.summary || '').toLowerCase().includes(q));
+  }, [articles, search, selectedCategory]);
 
   const filteredFaqs = useMemo(() => {
     if (!search) return faqs;
@@ -38,18 +41,22 @@ export default function HelpCenterPage() {
     return faqs.filter(f => f.question.toLowerCase().includes(q) || f.answer.toLowerCase().includes(q));
   }, [faqs, search]);
 
-  const popularArticles = useMemo(() => [...filteredArticles].sort((a, b) => b.view_count - a.view_count).slice(0, 5), [filteredArticles]);
+  const displayedArticles = useMemo(
+    () => selectedCategory
+      ? filteredArticles
+      : [...filteredArticles].sort((a, b) => b.view_count - a.view_count).slice(0, 5),
+    [filteredArticles, selectedCategory],
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <SeoHead title="Help Center" description="Find answers, browse articles, and contact DRIGHT support." canonical="/help" />
 
-      {/* Hero */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white py-16 px-4">
         <div className="max-w-3xl mx-auto text-center">
           <LifeBuoy className="w-12 h-12 mx-auto mb-4 opacity-80" />
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">How can we help?</h1>
-          <p className="text-blue-100 mb-6">Search our help articles, browse FAQs, or contact support</p>
+          <p className="text-blue-100 mb-6">Search our help articles, browse FAQs, ask AI Support, or contact a support agent</p>
           <div className="relative max-w-xl mx-auto">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -64,7 +71,6 @@ export default function HelpCenterPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-12">
-        {/* Categories */}
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Categories</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
           {categories.map(cat => {
@@ -85,17 +91,16 @@ export default function HelpCenterPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Articles */}
           <div className="lg:col-span-2 space-y-6">
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                 {selectedCategory ? 'Category Articles' : 'Popular Articles'}
               </h2>
-              {popularArticles.length === 0 ? (
+              {displayedArticles.length === 0 ? (
                 <p className="text-gray-400 text-sm">No articles available yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {popularArticles.map(article => (
+                  {displayedArticles.map(article => (
                     <button
                       key={article.id}
                       onClick={() => setSelectedArticle(article)}
@@ -113,7 +118,6 @@ export default function HelpCenterPage() {
               )}
             </div>
 
-            {/* FAQs */}
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Frequently Asked Questions</h2>
               {filteredFaqs.length === 0 ? (
@@ -143,9 +147,9 @@ export default function HelpCenterPage() {
             </div>
           </div>
 
-          {/* Contact Support */}
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Contact Support</h2>
+            <TelegramSupportLink />
             {departments.filter(d => d.is_available).map(dept => (
               <div key={dept.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -165,14 +169,20 @@ export default function HelpCenterPage() {
                 </div>
               </div>
             ))}
-            <Link to="/support" className="block w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-center font-medium text-sm">
+            <a href="#support" className="block w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-center font-medium text-sm">
               Submit a Support Ticket
-            </Link>
+            </a>
+          </div>
+        </div>
+
+        <div className="mt-12 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+          <SupportAIChat />
+          <div id="support" className="scroll-mt-6">
+            <SupportCenterPanel />
           </div>
         </div>
       </div>
 
-      {/* Article Modal */}
       <AnimatePresence>
         {selectedArticle && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedArticle(null)} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
