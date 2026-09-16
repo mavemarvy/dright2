@@ -55,7 +55,17 @@ export async function updateKycProfile(id:string,updates:Partial<KycProfile>){co
 
 export function useKycSubmissions(profileId:string|null){
   const [submissions,setSubmissions]=useState<KycSubmission[]>([]);const [loading,setLoading]=useState(false);
-  const fetch=useCallback(async()=>{if(!profileId){setSubmissions([]);return;}setLoading(true);const {data}=await supabase.from('kyc_submissions').select('*').eq('profile_id',profileId).eq('is_deleted',false).order('created_at',{ascending:false});setSubmissions(ensure(data,[]) as KycSubmission[]);setLoading(false);},[profileId]);
+  const fetch=useCallback(async()=>{if(!profileId){setSubmissions([]);return;}setLoading(true);
+    const {data:{user}}=await supabase.auth.getUser();
+    const {data:profile}=await supabase.from('kyc_profiles').select('user_id').eq('id',profileId).maybeSingle();
+    if(profile?.user_id===user?.id){
+      const {data,error}=await supabase.rpc('get_my_kyc_submissions',{p_profile_id:profileId});
+      if(!error)setSubmissions((data??[]).map((row)=>({...row,provider_reference:null,provider_result:null,reviewer_id:null,reviewer_notes:null,is_deleted:false})) as KycSubmission[]);
+    }else{
+      const {data}=await supabase.from('kyc_submissions').select('*').eq('profile_id',profileId).eq('is_deleted',false).order('created_at',{ascending:false});setSubmissions(ensure(data,[]) as KycSubmission[]);
+    }
+    setLoading(false);
+  },[profileId]);
   useEffect(()=>{void fetch();},[fetch]);return {submissions,loading,refetch:fetch};
 }
 export async function createKycSubmission(profileId:string,_userId:string,providerId?:string):Promise<KycSubmission|null>{
@@ -68,7 +78,17 @@ export async function reviewKycSubmission(submissionId:string,_reviewerId:string
 
 export function useKycDocuments(submissionId:string|null){
   const [documents,setDocuments]=useState<KycDocument[]>([]);const [loading,setLoading]=useState(false);
-  const fetch=useCallback(async()=>{if(!submissionId){setDocuments([]);return;}setLoading(true);const {data}=await supabase.from('kyc_documents').select('*').eq('submission_id',submissionId).eq('is_deleted',false).order('created_at',{ascending:false});setDocuments(ensure(data,[]) as KycDocument[]);setLoading(false);},[submissionId]);
+  const fetch=useCallback(async()=>{if(!submissionId){setDocuments([]);return;}setLoading(true);
+    const {data:{user}}=await supabase.auth.getUser();
+    const {data:submission}=await supabase.from('kyc_submissions').select('user_id').eq('id',submissionId).maybeSingle();
+    if(submission?.user_id===user?.id){
+      const {data,error}=await supabase.rpc('get_my_kyc_documents',{p_submission_id:submissionId});
+      if(!error)setDocuments((data??[]).map((row)=>({...row,reviewer_id:null,reviewer_notes:null,is_deleted:false})) as KycDocument[]);
+    }else{
+      const {data}=await supabase.from('kyc_documents').select('*').eq('submission_id',submissionId).eq('is_deleted',false).order('created_at',{ascending:false});setDocuments(ensure(data,[]) as KycDocument[]);
+    }
+    setLoading(false);
+  },[submissionId]);
   useEffect(()=>{void fetch();},[fetch]);return {documents,loading,refetch:fetch};
 }
 
@@ -88,7 +108,11 @@ export async function uploadKycDocument(submissionId:string,userId:string,docTyp
   return data as KycDocument;
 }
 export async function replaceKycDocument(oldDocId:string,submissionId:string,userId:string,docType:string,file:File){return uploadKycDocument(submissionId,userId,docType,file,{replacesDocumentId:oldDocId});}
-export async function getDocumentVersions(submissionId:string,docType:string):Promise<KycDocument[]>{const {data,error}=await supabase.from('kyc_documents').select('*').eq('submission_id',submissionId).eq('doc_type',docType).order('version',{ascending:false});if(error)throw error;return ensure(data,[]) as KycDocument[];}
+export async function getDocumentVersions(submissionId:string,docType:string):Promise<KycDocument[]>{
+  const {data:{user}}=await supabase.auth.getUser();const {data:submission}=await supabase.from('kyc_submissions').select('user_id').eq('id',submissionId).maybeSingle();
+  if(submission?.user_id===user?.id){const {data,error}=await supabase.rpc('get_my_kyc_documents',{p_submission_id:submissionId});if(error)throw error;return ((data??[]).filter((d)=>d.doc_type===docType).map((row)=>({...row,reviewer_id:null,reviewer_notes:null,is_deleted:false})) as KycDocument[]).sort((a,b)=>b.version-a.version);}
+  const {data,error}=await supabase.from('kyc_documents').select('*').eq('submission_id',submissionId).eq('doc_type',docType).order('version',{ascending:false});if(error)throw error;return ensure(data,[]) as KycDocument[];
+}
 export async function createKycDocumentSignedUrl(document:KycDocument,expiresIn=300):Promise<string>{
   const path=document.storage_path||(!document.doc_url.startsWith('http')?document.doc_url:null);if(!path)throw new Error('Secure storage path is unavailable for this legacy document');
   const {data,error}=await supabase.storage.from(document.storage_bucket||'kyc-docs').createSignedUrl(path,expiresIn);if(error)throw error;return data.signedUrl;
@@ -102,7 +126,7 @@ export async function logKycAudit(_entry:{userId?:string;adminId?:string;action:
 export function useKycAuditLogs(userId?:string,limit=50){
   const [logs,setLogs]=useState<KycAuditLog[]>([]);const [loading,setLoading]=useState(false);
   const fetch=useCallback(async()=>{setLoading(true);const {data:{user}}=await supabase.auth.getUser();
-    if(userId&&user?.id===userId){const {data}=await supabase.from('kyc_review_user_history').select('*').eq('user_id',userId).order('created_at',{ascending:false}).limit(limit);setLogs((data??[]).map((row)=>({id:row.id,user_id:row.user_id,admin_id:null,action:row.action,entity_type:'review',entity_id:row.submission_id,ip_address:null,device_info:null,metadata:{user_visible_reason:row.user_visible_reason},created_at:row.created_at})) as KycAuditLog[]);}else{let query=supabase.from('kyc_audit_logs').select('*').order('created_at',{ascending:false}).limit(limit);if(userId)query=query.eq('user_id',userId);const {data}=await query;setLogs(ensure(data,[]) as KycAuditLog[]);}setLoading(false);},[userId,limit]);
+    if(userId&&user?.id===userId){const {data}=await supabase.rpc('get_my_kyc_review_history',{p_limit:limit});setLogs((data??[]).map((row)=>({id:row.id,user_id:user.id,admin_id:null,action:row.action,entity_type:'review',entity_id:row.submission_id,ip_address:null,device_info:null,metadata:{user_visible_reason:row.user_visible_reason},created_at:row.created_at})) as KycAuditLog[]);}else{let query=supabase.from('kyc_audit_logs').select('*').order('created_at',{ascending:false}).limit(limit);if(userId)query=query.eq('user_id',userId);const {data}=await query;setLogs(ensure(data,[]) as KycAuditLog[]);}setLoading(false);},[userId,limit]);
   useEffect(()=>{void fetch();},[fetch]);return {logs,loading,refetch:fetch};
 }
 
