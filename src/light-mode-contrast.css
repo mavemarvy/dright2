@@ -1,0 +1,30 @@
+/*
+ * Light-mode contrast safety net.
+ *
+ * DRIGHT has many intentionally-white labels on branded buttons, gradients and
+ * media overlays. Do not override those globally. These selectors only repair
+ * white/near-white text when the text itself is on a known light surface, or
+ * is a direct text child of one without its own background utility.
+ */
+html:not(.dark) :is(.bg-white,.bg-surface,.bg-surface-elevated,.bg-gray-50,.bg-gray-100):is(.text-white,.text-gray-50,.text-gray-100) {
+  color: var(--text-primary) !important;
+}
+
+html:not(.dark) :is(.bg-white,.bg-surface,.bg-surface-elevated,.bg-gray-50,.bg-gray-100) > :is(.text-white,.text-gray-50,.text-gray-100):not([class*="bg-"]) {
+  color: var(--text-primary) !important;
+}
+
+html:not(.dark) :is(.bg-white,.bg-surface,.bg-surface-elevated,.bg-gray-50,.bg-gray-100) > :is(p,span,label,h1,h2,h3,h4,h5,h6).text-white:not([class*="bg-"]) {
+  color: var(--text-primary) !important;
+}
+
+/* Form controls without a dark/branded background must stay readable in light mode. */
+html:not(.dark) :is(input,textarea,select).text-white:not([class*="bg-"]) {
+  color: var(--text-primary) !important;
+}
+
+/* Explicitly preserve intended white text on branded/dark visual surfaces. */
+html:not(.dark) :is([class*="bg-primary-"],[class*="bg-blue-"],[class*="bg-indigo-"],[class*="bg-slate-8"],[class*="bg-slate-9"],[class*="bg-gray-8"],[class*="bg-gray-9"],[class*="bg-black"],[class*="bg-gradient-"]) .text-white,
+html:not(.dark) :is([class*="bg-primary-"],[class*="bg-blue-"],[class*="bg-indigo-"],[class*="bg-slate-8"],[class*="bg-slate-9"],[class*="bg-gray-8"],[class*="bg-gray-9"],[class*="bg-black"],[class*="bg-gradient-"]).text-white {
+  color: #fff !important;
+}
