@@ -6,6 +6,28 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "";
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
+const SUPPORT_BUCKET = "support-attachments";
+const MAX_TELEGRAM_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
+  "video/mp4", "video/webm", "video/quicktime",
+  "audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4",
+  "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/rtf", "application/zip", "application/x-zip-compressed", "text/plain", "text/csv",
+]);
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic", heif: "image/heif",
+  mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+  mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", m4a: "audio/mp4",
+  pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  rtf: "application/rtf", zip: "application/zip", txt: "text/plain", csv: "text/csv",
+};
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -33,6 +55,43 @@ function stripHtml(value: unknown) {
     .replace(/&amp;/gi, "&")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function safeFileName(value: unknown, fallback: string) {
+  const normalized = clean(value, 180)
+    .replace(/[/\\]/g, "-")
+    .replace(/[^A-Za-z0-9._,'!&$@=;+?() -]/g, "_")
+    .replace(/\s+/g, " ")
+    .replace(/^\.+/, "")
+    .trim();
+  return normalized || fallback;
+}
+
+function extensionOf(fileName: string) {
+  const part = fileName.toLowerCase().split(".").pop() || "";
+  return part === fileName.toLowerCase() ? "" : part;
+}
+
+function normalizeMime(mime: unknown, fileName: string, fallback: string) {
+  const supplied = clean(mime, 160).toLowerCase();
+  if (ALLOWED_MIME_TYPES.has(supplied)) return supplied;
+  const inferred = MIME_BY_EXTENSION[extensionOf(fileName)];
+  if (inferred && ALLOWED_MIME_TYPES.has(inferred)) return inferred;
+  if (ALLOWED_MIME_TYPES.has(fallback)) return fallback;
+  return supplied || fallback;
+}
+
+function mediaTypeFor(mime: string) {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  return "document";
+}
+
+function humanBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "unknown size";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 async function sha256Hex(value: string) {
@@ -81,11 +140,7 @@ async function sendText(chatId: string, text: string, options: { userId?: string
   let lastResult: any = null;
   for (const chunk of chunks) {
     try {
-      lastResult = await telegram("sendMessage", {
-        chat_id: chatId,
-        text: chunk,
-        disable_web_page_preview: true,
-      });
+      lastResult = await telegram("sendMessage", { chat_id: chatId, text: chunk, disable_web_page_preview: true });
       await logDelivery({
         ticket_id: options.ticketId || null,
         user_id: options.userId || null,
@@ -127,32 +182,13 @@ function relevance(text: string, terms: string[]) {
 
 async function loadKnowledge(prompt: string) {
   const [articles, faqs] = await Promise.all([
-    supabase.from("help_articles")
-      .select("id,title,summary,content,tags")
-      .eq("is_published", true)
-      .eq("is_deleted", false)
-      .order("sort_order", { ascending: true })
-      .limit(40),
-    supabase.from("faq_items")
-      .select("id,question,answer,tags")
-      .eq("is_published", true)
-      .eq("is_deleted", false)
-      .order("sort_order", { ascending: true })
-      .limit(40),
+    supabase.from("help_articles").select("id,title,summary,content,tags").eq("is_published", true).eq("is_deleted", false).order("sort_order", { ascending: true }).limit(40),
+    supabase.from("faq_items").select("id,question,answer,tags").eq("is_published", true).eq("is_deleted", false).order("sort_order", { ascending: true }).limit(40),
   ]);
-
   const terms = supportTerms(prompt);
   return [
-    ...(articles.data || []).map((item: any) => ({
-      type: "article",
-      title: clean(item.title, 240),
-      text: `${clean(item.title, 240)} ${clean(item.summary, 1000)} ${stripHtml(item.content)} ${(item.tags || []).join(" ")}`,
-    })),
-    ...(faqs.data || []).map((item: any) => ({
-      type: "faq",
-      title: clean(item.question, 240),
-      text: `${clean(item.question, 500)} ${stripHtml(item.answer)} ${(item.tags || []).join(" ")}`,
-    })),
+    ...(articles.data || []).map((item: any) => ({ type: "article", title: clean(item.title, 240), text: `${clean(item.title, 240)} ${clean(item.summary, 1000)} ${stripHtml(item.content)} ${(item.tags || []).join(" ")}` })),
+    ...(faqs.data || []).map((item: any) => ({ type: "faq", title: clean(item.question, 240), text: `${clean(item.question, 500)} ${stripHtml(item.answer)} ${(item.tags || []).join(" ")}` })),
   ]
     .map(item => ({ ...item, score: relevance(item.text, terms) }))
     .sort((a, b) => b.score - a.score)
@@ -164,41 +200,23 @@ async function anonymousHelp(prompt: string) {
   const knowledge = await loadKnowledge(prompt);
   const best = knowledge[0];
   if (!best || best.score <= 0) {
-    return "I can answer general DRIGHT help questions here. For account-specific help, connect this Telegram account to DRIGHT first. Use /help to see the available commands.";
+    return "I can answer general DRIGHT help questions here. For account-specific help or file uploads, connect this Telegram account to DRIGHT first. Use /help to see the available commands.";
   }
   const body = best.text.replace(best.title, "").trim();
-  return `${best.title}\n\n${clean(body, 2500)}\n\nFor account-specific help, connect Telegram to your DRIGHT account.`;
+  return `${best.title}\n\n${clean(body, 2500)}\n\nFor account-specific help or file uploads, connect Telegram to your DRIGHT account.`;
 }
 
 async function buildSupportContext(userId: string, prompt: string) {
   const [knowledge, orders, payments, withdrawals, tickets] = await Promise.all([
     loadKnowledge(prompt),
-    supabase.from("orders")
-      .select("id,order_type,status,final_price,is_free_order,created_at,completed_at")
-      .eq("buyer_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase.from("paystack_transactions")
-      .select("id,amount,currency,channel,purpose,status,paid_at,created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase.from("withdrawal_requests")
-      .select("id,amount,payment_method,status,processed_at,created_at,withdrawal_method,failure_reason")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase.from("support_tickets")
-      .select("id,ticket_number,subject,status,priority,channel,created_at,last_activity_at,resolved_at,closed_at")
-      .eq("user_id", userId)
-      .order("last_activity_at", { ascending: false })
-      .limit(6),
+    supabase.from("orders").select("id,order_type,status,final_price,is_free_order,created_at,completed_at").eq("buyer_id", userId).order("created_at", { ascending: false }).limit(6),
+    supabase.from("paystack_transactions").select("id,amount,currency,channel,purpose,status,paid_at,created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(6),
+    supabase.from("withdrawal_requests").select("id,amount,payment_method,status,processed_at,created_at,withdrawal_method,failure_reason").eq("user_id", userId).order("created_at", { ascending: false }).limit(6),
+    supabase.from("support_tickets").select("id,ticket_number,subject,status,priority,channel,created_at,last_activity_at,resolved_at,closed_at").eq("user_id", userId).order("last_activity_at", { ascending: false }).limit(6),
   ]);
-
   const kb = knowledge.length
     ? knowledge.map((item, index) => `[KB${index + 1}] ${item.title}\n${clean(item.text, 1800)}`).join("\n\n")
     : "No relevant published DRIGHT help article or FAQ was found.";
-
   return clean([
     `DRIGHT KNOWLEDGE BASE:\n${kb}`,
     `AUTHENTICATED ACCOUNT CONTEXT:\nRecent buyer orders: ${JSON.stringify(orders.data || [])}`,
@@ -209,18 +227,13 @@ async function buildSupportContext(userId: string, prompt: string) {
   ].join("\n\n"), 22000);
 }
 
-const SUPPORT_SYSTEM = `You are DRIGHT Customer Support AI inside Telegram. Use only the supplied DRIGHT knowledge-base material and authenticated account context. Never invent a policy, transaction, order state, refund result, payment result, withdrawal result, verification result, ticket result, or staff action. Do not expose secrets or sensitive payment/account details. If context is insufficient, a manual or privileged action is required, or the user asks for a human, prefix the answer with exactly [ESCALATE]. Otherwise do not use that marker. Be concise, practical, and specific.`;
+const SUPPORT_SYSTEM = `You are DRIGHT Customer Support AI inside Telegram. Use only the supplied DRIGHT knowledge-base material and authenticated account context. Never invent a policy, transaction, order state, refund result, payment result, withdrawal result, verification result, ticket result, or staff action. Do not expose secrets or sensitive payment/account details. You cannot inspect Telegram attachments in this text-only support path. If context is insufficient, a manual or privileged action is required, or the user asks for a human, prefix the answer with exactly [ESCALATE]. Otherwise do not use that marker. Be concise, practical, and specific.`;
 
 async function callGroq(prompt: string) {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ_API_KEY}` },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "system", content: SUPPORT_SYSTEM }, { role: "user", content: prompt }],
-      max_completion_tokens: 1600,
-      temperature: 0.2,
-    }),
+    body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "system", content: SUPPORT_SYSTEM }, { role: "user", content: prompt }], max_completion_tokens: 1600, temperature: 0.2 }),
   });
   if (!response.ok) throw new Error(`GROQ_${response.status}`);
   const parsed = await response.json();
@@ -233,11 +246,7 @@ async function callGemini(prompt: string) {
   const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SUPPORT_SYSTEM }] },
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 1600, temperature: 0.2 },
-    }),
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: SUPPORT_SYSTEM }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 1600, temperature: 0.2 } }),
   });
   if (!response.ok) throw new Error(`GEMINI_${response.status}`);
   const parsed = await response.json();
@@ -250,12 +259,7 @@ async function callOpenAI(prompt: string) {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [{ role: "system", content: SUPPORT_SYSTEM }, { role: "user", content: prompt }],
-      max_tokens: 1600,
-      temperature: 0.2,
-    }),
+    body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "system", content: SUPPORT_SYSTEM }, { role: "user", content: prompt }], max_tokens: 1600, temperature: 0.2 }),
   });
   if (!response.ok) throw new Error(`OPENAI_${response.status}`);
   const parsed = await response.json();
@@ -268,7 +272,6 @@ async function supportAI(userId: string, userPrompt: string) {
   const context = await buildSupportContext(userId, userPrompt);
   const prompt = `Context:\n${context}\n\nCustomer request:\n${clean(userPrompt, 5000)}`;
   const errors: string[] = [];
-
   if (GROQ_API_KEY) {
     try { return { content: await callGroq(prompt), provider: "groq" }; } catch (error) { errors.push(error instanceof Error ? error.message : "GROQ_FAILED"); }
   }
@@ -278,7 +281,6 @@ async function supportAI(userId: string, userPrompt: string) {
   if (OPENAI_API_KEY) {
     try { return { content: await callOpenAI(prompt), provider: "openai" }; } catch (error) { errors.push(error instanceof Error ? error.message : "OPENAI_FAILED"); }
   }
-
   console.error(`[telegram-support] all AI providers failed: ${errors.join(",") || "no providers configured"}`);
   return { content: "DRIGHT AI Support is temporarily unavailable. You can use /agent followed by your issue to send it to a human support agent.", provider: "none" };
 }
@@ -302,28 +304,30 @@ async function activeTelegramTicket(userId: string, statuses = ["open", "pending
 }
 
 async function createOrAppendTicket(input: { userId: string; message: string; chatId: string; messageId: string; aiSummary?: string | null; reason?: string }) {
+  const ticketMessage = clean(input.message, 5000) || "Telegram support attachment";
   const existing = await activeTelegramTicket(input.userId);
   if (existing) {
-    await supabase.from("ticket_replies").insert({
+    const { data: reply, error: replyError } = await supabase.from("ticket_replies").insert({
       ticket_id: existing.id,
       author_id: input.userId,
       author_role: "user",
-      message: clean(input.message, 5000),
+      message: ticketMessage,
       channel: "telegram",
       is_internal: false,
       metadata: { source: "telegram", external_message_id: input.messageId, reason: input.reason || "customer_message" },
-    });
+    }).select("id").single();
+    if (replyError || !reply) throw new Error("TICKET_REPLY_CREATE_FAILED");
     if (input.aiSummary) {
       await supabase.from("support_tickets").update({ ai_handled: true, ai_summary: clean(input.aiSummary, 5000) }).eq("id", existing.id);
     }
-    return existing;
+    return { ...existing, replyId: reply.id as string };
   }
 
-  const subjectBase = clean(input.message.replace(/\s+/g, " "), 105) || "Telegram support request";
+  const subjectBase = clean(ticketMessage.replace(/\s+/g, " "), 105) || "Telegram support request";
   const { data: ticket, error } = await supabase.from("support_tickets").insert({
     user_id: input.userId,
     subject: `Telegram: ${subjectBase}`,
-    message: clean(input.message, 5000),
+    message: ticketMessage,
     status: "open",
     priority: "medium",
     category: "telegram_support",
@@ -335,35 +339,125 @@ async function createOrAppendTicket(input: { userId: string; message: string; ch
     metadata: { source: "telegram", reason: input.reason || "customer_message" },
   }).select("id,ticket_number,status,subject").single();
   if (error || !ticket) throw new Error("TICKET_CREATE_FAILED");
-  return ticket;
+  return { ...ticket, replyId: null as string | null };
+}
+
+type TelegramAttachment = {
+  kind: "image" | "video" | "audio" | "document";
+  telegramKind: string;
+  fileId: string;
+  fileUniqueId: string | null;
+  fileName: string;
+  mimeType: string;
+  declaredSize: number;
+};
+
+function extractTelegramAttachment(message: any): TelegramAttachment | null {
+  const messageId = String(message?.message_id || "file");
+  if (Array.isArray(message?.photo) && message.photo.length) {
+    const photo = message.photo[message.photo.length - 1];
+    return {
+      kind: "image", telegramKind: "photo", fileId: clean(photo?.file_id, 300), fileUniqueId: clean(photo?.file_unique_id, 300) || null,
+      fileName: `photo-${messageId}.jpg`, mimeType: "image/jpeg", declaredSize: Number(photo?.file_size || 0),
+    };
+  }
+  const candidates = [
+    { key: "video", kind: "video", fallbackMime: "video/mp4", ext: "mp4" },
+    { key: "video_note", kind: "video", fallbackMime: "video/mp4", ext: "mp4" },
+    { key: "animation", kind: "video", fallbackMime: "video/mp4", ext: "mp4" },
+    { key: "audio", kind: "audio", fallbackMime: "audio/mpeg", ext: "mp3" },
+    { key: "voice", kind: "audio", fallbackMime: "audio/ogg", ext: "ogg" },
+    { key: "document", kind: "document", fallbackMime: "application/octet-stream", ext: "bin" },
+  ] as const;
+  for (const item of candidates) {
+    const source = message?.[item.key];
+    if (!source?.file_id) continue;
+    const fallbackName = `${item.key}-${messageId}.${item.ext}`;
+    const fileName = safeFileName(source?.file_name, fallbackName);
+    const mimeType = normalizeMime(source?.mime_type, fileName, item.fallbackMime);
+    return {
+      kind: mediaTypeFor(mimeType) as TelegramAttachment["kind"], telegramKind: item.key, fileId: clean(source.file_id, 300), fileUniqueId: clean(source.file_unique_id, 300) || null,
+      fileName, mimeType, declaredSize: Number(source?.file_size || 0),
+    };
+  }
+  return null;
+}
+
+async function downloadTelegramAttachment(raw: TelegramAttachment) {
+  if (!raw.fileId) throw new Error("ATTACHMENT_FILE_ID_MISSING");
+  if (raw.declaredSize > MAX_TELEGRAM_DOWNLOAD_BYTES) throw new Error("ATTACHMENT_TOO_LARGE");
+  const mimeType = normalizeMime(raw.mimeType, raw.fileName, raw.kind === "image" ? "image/jpeg" : raw.kind === "video" ? "video/mp4" : raw.kind === "audio" ? "audio/ogg" : "application/octet-stream");
+  if (!ALLOWED_MIME_TYPES.has(mimeType)) throw new Error("ATTACHMENT_TYPE_NOT_ALLOWED");
+
+  const file = await telegram("getFile", { file_id: raw.fileId });
+  const providerSize = Number(file?.file_size || raw.declaredSize || 0);
+  if (providerSize > MAX_TELEGRAM_DOWNLOAD_BYTES) throw new Error("ATTACHMENT_TOO_LARGE");
+  const filePath = clean(file?.file_path, 1000);
+  if (!filePath) throw new Error("ATTACHMENT_FILE_PATH_MISSING");
+
+  const response = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`);
+  if (!response.ok) throw new Error(`ATTACHMENT_DOWNLOAD_${response.status}`);
+  const declaredContentLength = Number(response.headers.get("content-length") || 0);
+  if (declaredContentLength > MAX_TELEGRAM_DOWNLOAD_BYTES) throw new Error("ATTACHMENT_TOO_LARGE");
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength > MAX_TELEGRAM_DOWNLOAD_BYTES) throw new Error("ATTACHMENT_TOO_LARGE");
+  return { ...raw, mimeType, bytes: new Uint8Array(buffer), fileSize: buffer.byteLength };
+}
+
+async function storeTelegramAttachment(input: {
+  attachment: Awaited<ReturnType<typeof downloadTelegramAttachment>>;
+  ticketId: string;
+  replyId?: string | null;
+  userId: string;
+  externalMessageId: string;
+  caption?: string | null;
+}) {
+  const fileName = safeFileName(input.attachment.fileName, `attachment-${input.externalMessageId}`);
+  const storagePath = `${input.userId}/${input.ticketId}/${crypto.randomUUID()}-${fileName}`;
+  const { error: uploadError } = await supabase.storage.from(SUPPORT_BUCKET).upload(storagePath, input.attachment.bytes, {
+    contentType: input.attachment.mimeType,
+    upsert: false,
+    cacheControl: "3600",
+  });
+  if (uploadError) throw new Error(`ATTACHMENT_STORAGE_${uploadError.message || "FAILED"}`);
+
+  const { data, error } = await supabase.from("support_attachments").insert({
+    ticket_id: input.ticketId,
+    reply_id: input.replyId || null,
+    user_id: input.userId,
+    uploaded_by: input.userId,
+    uploaded_by_role: "user",
+    channel: "telegram",
+    direction: "inbound",
+    media_type: input.attachment.kind,
+    file_name: fileName,
+    mime_type: input.attachment.mimeType,
+    file_size: input.attachment.fileSize,
+    storage_bucket: SUPPORT_BUCKET,
+    storage_path: storagePath,
+    telegram_file_id: input.attachment.fileId,
+    telegram_file_unique_id: input.attachment.fileUniqueId,
+    external_message_id: input.externalMessageId,
+    caption: clean(input.caption, 2000) || null,
+    status: "stored",
+    metadata: { telegram_kind: input.attachment.telegramKind },
+  }).select("id,file_name,media_type,file_size").single();
+
+  if (error || !data) {
+    await supabase.storage.from(SUPPORT_BUCKET).remove([storagePath]);
+    throw new Error("ATTACHMENT_RECORD_FAILED");
+  }
+  return data;
 }
 
 async function linkTelegramAccount(input: { code: string; telegramUserId: string; chatId: string; username?: string | null }) {
   const code = clean(input.code, 32).toUpperCase();
   if (!/^[A-Z2-9]{8}$/.test(code)) return { ok: false, message: "That link code is not valid. Create a new Telegram link from DRIGHT Help Center and try again." };
-
   const hash = await sha256Hex(`telegram:${code}`);
-  const { data: link } = await supabase.from("support_channel_link_codes")
-    .select("id,user_id,expires_at,attempts")
-    .eq("channel", "telegram")
-    .eq("code_hash", hash)
-    .is("used_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .maybeSingle();
-
-  if (!link || Number(link.attempts || 0) >= 5) {
-    return { ok: false, message: "That link code is invalid or expired. Generate a new code in DRIGHT Help Center." };
-  }
-
-  const { data: externalOwner } = await supabase.from("support_channel_identities")
-    .select("user_id,status")
-    .eq("channel", "telegram")
-    .eq("external_user_id", input.telegramUserId)
-    .maybeSingle();
-
-  if (externalOwner && externalOwner.user_id !== link.user_id) {
-    return { ok: false, message: "This Telegram account is already associated with another DRIGHT account. Revoke that connection before linking a different account." };
-  }
+  const { data: link } = await supabase.from("support_channel_link_codes").select("id,user_id,expires_at,attempts").eq("channel", "telegram").eq("code_hash", hash).is("used_at", null).gt("expires_at", new Date().toISOString()).maybeSingle();
+  if (!link || Number(link.attempts || 0) >= 5) return { ok: false, message: "That link code is invalid or expired. Generate a new code in DRIGHT Help Center." };
+  const { data: externalOwner } = await supabase.from("support_channel_identities").select("user_id,status").eq("channel", "telegram").eq("external_user_id", input.telegramUserId).maybeSingle();
+  if (externalOwner && externalOwner.user_id !== link.user_id) return { ok: false, message: "This Telegram account is already associated with another DRIGHT account. Revoke that connection before linking a different account." };
 
   const now = new Date().toISOString();
   const { error: identityError } = await supabase.from("support_channel_identities").upsert({
@@ -379,36 +473,24 @@ async function linkTelegramAccount(input: { code: string; telegramUserId: string
     metadata: { source: "telegram_link_code" },
     updated_at: now,
   }, { onConflict: "user_id,channel" });
-
   if (identityError) return { ok: false, message: "I could not link this Telegram account. Generate a fresh code in DRIGHT and try again." };
-
   await supabase.from("support_channel_link_codes").update({ used_at: now, attempts: Number(link.attempts || 0) + 1 }).eq("id", link.id);
-  return { ok: true, userId: link.user_id, message: "Telegram is now securely connected to your DRIGHT account. You can ask account-specific support questions here." };
+  return { ok: true, userId: link.user_id, message: "Telegram is now securely connected to your DRIGHT account. You can ask account-specific support questions and send support attachments here." };
 }
 
 async function getIdentity(telegramUserId: string) {
-  const { data } = await supabase.from("support_channel_identities")
-    .select("id,user_id,external_chat_id,external_username,status")
-    .eq("channel", "telegram")
-    .eq("external_user_id", telegramUserId)
-    .eq("status", "active")
-    .maybeSingle();
+  const { data } = await supabase.from("support_channel_identities").select("id,user_id,external_chat_id,external_username,status").eq("channel", "telegram").eq("external_user_id", telegramUserId).eq("status", "active").maybeSingle();
   return data;
 }
 
-const helpText = `DRIGHT Support commands\n\n/help — show these commands\n/link CODE — connect this Telegram account to DRIGHT\n/ticket YOUR ISSUE — create or update a support ticket\n/agent YOUR ISSUE — send your issue to a human support agent\n/status — show your latest active Telegram support ticket\n/ai YOUR QUESTION — ask DRIGHT AI Support\n/unlink — disconnect this Telegram account\n\nYou can also type a normal question. General help works before linking; private account information requires a secure DRIGHT link.`;
+const helpText = `DRIGHT Support commands\n\n/help — show these commands\n/link CODE — connect this Telegram account to DRIGHT\n/ticket YOUR ISSUE — create or update a support ticket\n/agent YOUR ISSUE — send your issue to a human support agent\n/status — show your latest active Telegram support ticket\n/ai YOUR QUESTION — ask DRIGHT AI Support\n/unlink — disconnect this Telegram account\n\nAttachments: after linking, you can send photos, screenshots, videos, voice/audio, PDFs and common office/document files up to 20 MB. Attachments are stored privately with your support ticket and routed to a human support agent.\n\nYou can also type a normal question. General help works before linking; private account information and file uploads require a secure DRIGHT link.`;
 
 async function setupTelegramWebhook() {
   if (!TELEGRAM_BOT_TOKEN) return { success: false, configured: false, error: "TELEGRAM_BOT_TOKEN is not configured" };
   const bot = await telegram("getMe");
   const secret = await webhookSecret();
   const webhookUrl = `${SUPABASE_URL}/functions/v1/telegram-support-webhook`;
-  await telegram("setWebhook", {
-    url: webhookUrl,
-    secret_token: secret,
-    allowed_updates: ["message"],
-    drop_pending_updates: true,
-  });
+  await telegram("setWebhook", { url: webhookUrl, secret_token: secret, allowed_updates: ["message"], drop_pending_updates: false });
   await telegram("setMyCommands", {
     commands: [
       { command: "start", description: "Start DRIGHT Support" },
@@ -430,6 +512,13 @@ async function setupTelegramWebhook() {
   };
 }
 
+async function markInboundProcessed(logId: string | null, update: any, extra: Record<string, unknown> = {}) {
+  if (!logId) return;
+  await supabase.from("support_channel_delivery_logs").update({
+    metadata: { update_id: update?.update_id || null, processed: true, ...extra },
+  }).eq("id", logId);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     try { return json(await setupTelegramWebhook()); }
@@ -438,7 +527,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, configured: !!TELEGRAM_BOT_TOKEN, error: "Telegram webhook setup failed" }, 500);
     }
   }
-
   if (req.method !== "POST") return json({ success: false, error: "Method not allowed" }, 405);
   if (!TELEGRAM_BOT_TOKEN) return json({ success: false, error: "Telegram is not configured" }, 503);
 
@@ -449,13 +537,14 @@ Deno.serve(async (req: Request) => {
   let update: any;
   try { update = await req.json(); } catch { return json({ success: true, ignored: true }); }
   const message = update?.message;
-  const text = clean(message?.text, 5000);
+  const text = clean(message?.text || message?.caption, 5000);
+  const attachment = extractTelegramAttachment(message);
   const chatId = String(message?.chat?.id || "");
   const telegramUserId = String(message?.from?.id || "");
   const externalMessageId = String(message?.message_id || "");
   const username = clean(message?.from?.username, 120) || null;
 
-  if (!text || !chatId || !telegramUserId || message?.from?.is_bot) return json({ success: true, ignored: true });
+  if ((!text && !attachment) || !chatId || !telegramUserId || message?.from?.is_bot) return json({ success: true, ignored: true });
 
   const { data: existingInbound } = await supabase.from("support_channel_delivery_logs")
     .select("id,metadata")
@@ -475,7 +564,7 @@ Deno.serve(async (req: Request) => {
       external_chat_id: chatId,
       external_message_id: externalMessageId,
       provider: "telegram_bot_api",
-      metadata: { update_id: update?.update_id || null, processed: false },
+      metadata: { update_id: update?.update_id || null, processed: false, attachment_kind: attachment?.telegramKind || null },
     });
     inboundLogId = logged?.data?.id || null;
   }
@@ -483,12 +572,7 @@ Deno.serve(async (req: Request) => {
   try {
     let identity = await getIdentity(telegramUserId);
     if (identity) {
-      await supabase.from("support_channel_identities").update({
-        external_chat_id: chatId,
-        external_username: username,
-        last_seen_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq("id", identity.id);
+      await supabase.from("support_channel_identities").update({ external_chat_id: chatId, external_username: username, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", identity.id);
       if (inboundLogId) await supabase.from("support_channel_delivery_logs").update({ user_id: identity.user_id }).eq("id", inboundLogId);
     }
 
@@ -496,54 +580,88 @@ Deno.serve(async (req: Request) => {
     const command = commandMatch?.[1]?.toLowerCase() || "";
     const argument = clean(commandMatch?.[2], 5000);
 
+    if (attachment && !["start", "help", "link", "unlink", "status"].includes(command)) {
+      if (!identity) {
+        await sendText(chatId, "For privacy and abuse protection, link this Telegram account to DRIGHT before sending support files. Open DRIGHT Help Center, create a Telegram link code, then use /link CODE here.");
+        await markInboundProcessed(inboundLogId, update, { attachment_rejected: "not_linked" });
+        return json({ success: true });
+      }
+
+      let downloaded: Awaited<ReturnType<typeof downloadTelegramAttachment>>;
+      try {
+        downloaded = await downloadTelegramAttachment(attachment);
+      } catch (error) {
+        const code = error instanceof Error ? error.message : "ATTACHMENT_FAILED";
+        const messageText = code === "ATTACHMENT_TOO_LARGE"
+          ? "That file is larger than Telegram's 20 MB bot-download limit. Please send a smaller file."
+          : code === "ATTACHMENT_TYPE_NOT_ALLOWED"
+            ? "That file type is not accepted for DRIGHT support. Send an image, video, audio/voice file, PDF, text/CSV, ZIP, or common Microsoft Office document."
+            : "I could not download that attachment from Telegram. Please try sending it again.";
+        await sendText(chatId, messageText, { userId: identity.user_id });
+        await markInboundProcessed(inboundLogId, update, { attachment_rejected: code });
+        return json({ success: true });
+      }
+
+      const description = argument || (text && !text.startsWith("/") ? text : "") || `[${downloaded.kind} attachment] ${downloaded.fileName}`;
+      const ticket = await createOrAppendTicket({
+        userId: identity.user_id,
+        message: description,
+        chatId,
+        messageId: externalMessageId,
+        reason: command === "agent" ? "human_requested_with_attachment" : command === "ticket" ? "ticket_attachment" : "telegram_attachment",
+      });
+      const stored = await storeTelegramAttachment({
+        attachment: downloaded,
+        ticketId: ticket.id,
+        replyId: ticket.replyId,
+        userId: identity.user_id,
+        externalMessageId,
+        caption: text || null,
+      });
+      if (inboundLogId) await supabase.from("support_channel_delivery_logs").update({ ticket_id: ticket.id }).eq("id", inboundLogId);
+      await sendText(chatId, `Attachment received securely.\nFile: ${stored.file_name}\nSize: ${humanBytes(Number(stored.file_size))}\nTicket: ${ticket.ticket_number || ticket.id.slice(0, 8)}\n\nA DRIGHT support agent can view it in the ticket.`, { userId: identity.user_id, ticketId: ticket.id });
+      await markInboundProcessed(inboundLogId, update, { attachment_id: stored.id, ticket_id: ticket.id });
+      return json({ success: true });
+    }
+
     if (command === "start") {
       if (argument.startsWith("link_")) {
         const linked = await linkTelegramAccount({ code: argument.slice(5), telegramUserId, chatId, username });
         await sendText(chatId, linked.message, { userId: linked.ok ? linked.userId : null });
         if (linked.ok) identity = await getIdentity(telegramUserId);
       } else {
-        await sendText(chatId, `Welcome to DRIGHT Support.\n\nI can answer general help questions, connect you with DRIGHT AI Support, and create support tickets. Account-specific help requires linking this Telegram account to DRIGHT.\n\n${helpText}`, { userId: identity?.user_id || null });
+        await sendText(chatId, `Welcome to DRIGHT Support.\n\nI can answer general help questions, connect you with DRIGHT AI Support, accept secure ticket attachments, and create support tickets. Account-specific help and uploads require linking this Telegram account to DRIGHT.\n\n${helpText}`, { userId: identity?.user_id || null });
       }
     } else if (command === "help") {
       await sendText(chatId, helpText, { userId: identity?.user_id || null });
     } else if (command === "link") {
-      if (!argument) {
-        await sendText(chatId, "Create a Telegram link code from DRIGHT Help Center, then send /link followed by the 8-character code.");
-      } else {
+      if (!argument) await sendText(chatId, "Create a Telegram link code from DRIGHT Help Center, then send /link followed by the 8-character code.");
+      else {
         const linked = await linkTelegramAccount({ code: argument, telegramUserId, chatId, username });
         await sendText(chatId, linked.message, { userId: linked.ok ? linked.userId : null });
         if (linked.ok) identity = await getIdentity(telegramUserId);
       }
     } else if (command === "unlink") {
-      if (!identity) {
-        await sendText(chatId, "This Telegram account is not currently linked to DRIGHT.");
-      } else {
+      if (!identity) await sendText(chatId, "This Telegram account is not currently linked to DRIGHT.");
+      else {
         await supabase.from("support_channel_identities").update({ status: "revoked", updated_at: new Date().toISOString() }).eq("id", identity.id);
         await sendText(chatId, "Telegram has been disconnected from your DRIGHT account. General help is still available here.");
         identity = null;
       }
     } else if (command === "status") {
-      if (!identity) {
-        await sendText(chatId, "Link this Telegram account to DRIGHT before checking private support tickets. Use /help for instructions.");
-      } else {
+      if (!identity) await sendText(chatId, "Link this Telegram account to DRIGHT before checking private support tickets. Use /help for instructions.");
+      else {
         const ticket = await activeTelegramTicket(identity.user_id);
         await sendText(chatId, ticket
           ? `Latest active ticket: ${ticket.ticket_number || ticket.id.slice(0, 8)}\nStatus: ${String(ticket.status).replace(/_/g, " ")}\nSubject: ${ticket.subject}`
           : "You do not currently have an active Telegram support ticket.", { userId: identity.user_id, ticketId: ticket?.id || null });
       }
     } else if (command === "ticket" || command === "agent") {
-      if (!identity) {
-        await sendText(chatId, "Link this Telegram account to DRIGHT before creating a private support ticket. Use /help for instructions.");
-      } else if (!argument) {
-        await sendText(chatId, `Send /${command} followed by a description of the issue.`, { userId: identity.user_id });
-      } else {
-        const ticket = await createOrAppendTicket({
-          userId: identity.user_id,
-          message: argument,
-          chatId,
-          messageId: externalMessageId,
-          reason: command === "agent" ? "human_requested" : "ticket_command",
-        });
+      if (!identity) await sendText(chatId, "Link this Telegram account to DRIGHT before creating a private support ticket. Use /help for instructions.");
+      else if (!argument) await sendText(chatId, `Send /${command} followed by a description of the issue. You can also attach a photo, video, audio/voice message, PDF, or document.`, { userId: identity.user_id });
+      else {
+        const ticket = await createOrAppendTicket({ userId: identity.user_id, message: argument, chatId, messageId: externalMessageId, reason: command === "agent" ? "human_requested" : "ticket_command" });
+        if (inboundLogId) await supabase.from("support_channel_delivery_logs").update({ ticket_id: ticket.id }).eq("id", inboundLogId);
         await sendText(chatId, `Your message was sent to DRIGHT Support.\nTicket: ${ticket.ticket_number || ticket.id.slice(0, 8)}\nStatus: ${String(ticket.status).replace(/_/g, " ")}`, { userId: identity.user_id, ticketId: ticket.id });
       }
     } else {
@@ -551,20 +669,12 @@ Deno.serve(async (req: Request) => {
         await sendText(chatId, await anonymousHelp(command === "ai" ? argument : text));
       } else {
         const aiPrompt = command === "ai" ? argument : text;
-        if (!aiPrompt) {
-          await sendText(chatId, "Send /ai followed by your support question.", { userId: identity.user_id });
-        } else {
+        if (!aiPrompt) await sendText(chatId, "Send /ai followed by your support question.", { userId: identity.user_id });
+        else {
           const waitingTicket = command !== "ai" ? await activeTelegramTicket(identity.user_id, ["pending_customer"]) : null;
           if (waitingTicket) {
-            await supabase.from("ticket_replies").insert({
-              ticket_id: waitingTicket.id,
-              author_id: identity.user_id,
-              author_role: "user",
-              message: aiPrompt,
-              channel: "telegram",
-              is_internal: false,
-              metadata: { source: "telegram", external_message_id: externalMessageId, reason: "pending_customer_reply" },
-            });
+            await supabase.from("ticket_replies").insert({ ticket_id: waitingTicket.id, author_id: identity.user_id, author_role: "user", message: aiPrompt, channel: "telegram", is_internal: false, metadata: { source: "telegram", external_message_id: externalMessageId, reason: "pending_customer_reply" } });
+            if (inboundLogId) await supabase.from("support_channel_delivery_logs").update({ ticket_id: waitingTicket.id }).eq("id", inboundLogId);
             await sendText(chatId, `Your reply was added to ticket ${waitingTicket.ticket_number || waitingTicket.id.slice(0, 8)}. DRIGHT Support has been notified.`, { userId: identity.user_id, ticketId: waitingTicket.id });
           } else {
             const result = await supportAI(identity.user_id, aiPrompt);
@@ -572,14 +682,8 @@ Deno.serve(async (req: Request) => {
             const modelEscalated = /^\[ESCALATE\]/i.test(content);
             content = content.replace(/^\[ESCALATE\]\s*/i, "").trim();
             if (modelEscalated || asksForHuman(aiPrompt)) {
-              const ticket = await createOrAppendTicket({
-                userId: identity.user_id,
-                message: aiPrompt,
-                chatId,
-                messageId: externalMessageId,
-                aiSummary: content,
-                reason: modelEscalated ? "ai_escalation" : "human_requested",
-              });
+              const ticket = await createOrAppendTicket({ userId: identity.user_id, message: aiPrompt, chatId, messageId: externalMessageId, aiSummary: content, reason: modelEscalated ? "ai_escalation" : "human_requested" });
+              if (inboundLogId) await supabase.from("support_channel_delivery_logs").update({ ticket_id: ticket.id }).eq("id", inboundLogId);
               await sendText(chatId, `${content || "This request needs a support agent to review it."}\n\nI created or updated ticket ${ticket.ticket_number || ticket.id.slice(0, 8)}. DRIGHT Support has been notified.`, { userId: identity.user_id, ticketId: ticket.id });
             } else {
               await sendText(chatId, content, { userId: identity.user_id });
@@ -589,14 +693,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (inboundLogId) {
-      await supabase.from("support_channel_delivery_logs").update({
-        metadata: { update_id: update?.update_id || null, processed: true },
-      }).eq("id", inboundLogId);
-    }
+    await markInboundProcessed(inboundLogId, update);
     return json({ success: true });
   } catch (error) {
-    console.error("[telegram-support] webhook processing failed", error instanceof Error ? error.message : String(error));
+    const code = error instanceof Error ? error.message : String(error);
+    console.error("[telegram-support] webhook processing failed", code);
     try { await sendText(chatId, "DRIGHT Support could not process that message right now. Please try again, or use /help to see support options."); } catch { /* Telegram may also be unavailable. */ }
     return json({ success: false, error: "Webhook processing failed" }, 500);
   }
