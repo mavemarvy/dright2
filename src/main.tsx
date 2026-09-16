@@ -6,6 +6,7 @@ import { CurrencyProvider } from './contexts/CurrencyContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import './lib/socialTokenAutocomplete';
 import './index.css';
+import './light-mode-contrast.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
