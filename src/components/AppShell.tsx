@@ -7,7 +7,7 @@ import {
   MessageCircle, Users, Bell, Activity, TrendingUp, Wallet, Target,
   Settings as SettingsGear, HelpCircle, GraduationCap, Trophy,
   ChevronLeft, ChevronRight, Search, Heart, ScrollText,
-  Gift, Newspaper, Rocket,
+  Gift, Newspaper, Rocket, AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage, type TranslationKey } from '../contexts/LanguageContext';
@@ -20,6 +20,7 @@ import AbandonedPaymentBanner from './AbandonedPaymentBanner';
 import { CompactPromoStrip } from './promotion/PromotionSurfaces';
 import LanguageSwitcher from './LanguageSwitcher';
 import { DrightBrand, MetallicNavIcon } from './DrightBrand';
+import ErrorBoundary from './ErrorBoundary';
 
 type NavEntry = {
   path: string;
@@ -123,12 +124,12 @@ function NavItem({ item, collapsed, onClick, t }: {
   );
 }
 
-function NavGroup({ group, collapsed, sidebarOpen, t, query }: {
+function NavGroup({ group, collapsed, t, query, onNavigate }: {
   group: { title: TranslationKey; items: NavEntry[] };
   collapsed: boolean;
-  sidebarOpen: boolean;
   t: (key: TranslationKey) => string;
   query: string;
+  onNavigate?: () => void;
 }) {
   const filtered = query
     ? group.items.filter(item => navLabel(item, t).toLowerCase().includes(query.toLowerCase()))
@@ -143,8 +144,25 @@ function NavGroup({ group, collapsed, sidebarOpen, t, query }: {
         </p>
       )}
       {filtered.map(item => (
-        <NavItem key={item.path} item={item} collapsed={collapsed} onClick={sidebarOpen ? () => {} : undefined} t={t} />
+        <NavItem key={item.path} item={item} collapsed={collapsed} onClick={onNavigate} t={t} />
       ))}
+    </div>
+  );
+}
+
+function RouteFailureCard() {
+  return (
+    <div className="p-4 md:p-8">
+      <div className="max-w-xl mx-auto rounded-2xl border border-red-200 bg-white dark:bg-gray-900 p-6 shadow-sm">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-6 h-6 text-red-500 shrink-0" />
+          <div className="flex-1">
+            <h2 className="font-bold text-gray-900 dark:text-gray-100">This page could not be displayed</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">The navigation shell is still working. Reload this page, or choose another menu item. This prevents a page error from leaving the app completely blank.</p>
+            <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 rounded-xl bg-primary-600 text-white text-sm font-semibold">Reload page</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -190,10 +208,10 @@ export default function AppShell() {
         )}
 
         <nav className="flex-1 py-3 px-2 overflow-y-auto">
-          {filteredGroups.map(group => <NavGroup key={group.title} group={group} collapsed={collapsed} sidebarOpen={false} t={t} query={searchQuery} />)}
+          {filteredGroups.map(group => <NavGroup key={group.title} group={group} collapsed={collapsed} t={t} query={searchQuery} />)}
           {!collapsed && <UIPreferencesToggles />}
           {isAdmin && (
-            <div className="pt-2 mt-2 border-t border-gray-100">
+            <div className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-700">
               <NavLink to="/admin" className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all ${collapsed ? 'justify-center' : ''} ${isActive ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200' : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50/80 dark:hover:bg-amber-900/10'}`} title={collapsed ? t('adminPanel') : undefined}>
                 {({ isActive }) => <><MetallicNavIcon icon={Shield} active={isActive} variant="admin" compact={collapsed} />{!collapsed && <span className="text-sm">{t('adminPanel')}</span>}</>}
               </NavLink>
@@ -201,27 +219,27 @@ export default function AppShell() {
           )}
         </nav>
 
-        <div className="border-t border-gray-100 p-3">
+        <div className="border-t border-gray-100 dark:border-gray-700 p-3">
           {!collapsed && (
             <div className="flex items-center gap-3 px-1 py-2 mb-2">
               <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0 ring-1 ring-slate-200">
                 {profile?.avatar_url ? <img src={profile.avatar_url} alt={profile?.full_name || 'User'} className="w-full h-full object-cover" /> : <span className="text-primary-700 font-semibold text-sm">{getInitials()}</span>}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2"><p className="text-sm font-medium text-gray-900 truncate">{profile?.full_name || 'Promoter'}</p>{isAdmin && <span className="px-1.5 py-0.5 text-xs font-semibold bg-warning-muted text-warning rounded">ADMIN</span>}</div>
-                <p className="text-xs text-gray-500 truncate">{profile?.email}</p>
+                <div className="flex items-center gap-2"><p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{profile?.full_name || 'Promoter'}</p>{isAdmin && <span className="px-1.5 py-0.5 text-xs font-semibold bg-warning-muted text-warning rounded">ADMIN</span>}</div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{profile?.email}</p>
               </div>
             </div>
           )}
           <div className={`flex ${collapsed ? 'flex-col' : 'items-center'} gap-2`}>
-            {collapsed ? <><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><button onClick={signOut} className="p-2 text-gray-600 hover:text-error hover:bg-error-muted rounded-xl transition-colors" aria-label={t('signOut')} title={t('signOut')}><LogOut className="w-5 h-5" /></button></> : <><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><button onClick={signOut} className="flex-1 flex items-center gap-2 px-3 py-2.5 text-sm text-gray-600 hover:text-error hover:bg-error-muted rounded-xl transition-colors"><LogOut className="w-4 h-4" />{t('signOut')}</button></>}
+            {collapsed ? <><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><button onClick={signOut} className="p-2 text-gray-600 dark:text-gray-300 hover:text-error hover:bg-error-muted rounded-xl transition-colors" aria-label={t('signOut')} title={t('signOut')}><LogOut className="w-5 h-5" /></button></> : <><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><button onClick={signOut} className="flex-1 flex items-center gap-2 px-3 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:text-error hover:bg-error-muted rounded-xl transition-colors"><LogOut className="w-4 h-4" />{t('signOut')}</button></>}
           </div>
         </div>
       </aside>}
 
       {!immersiveSocial && <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 shadow-sm safe-area-top">
         <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 min-h-[56px]">
-          <button onClick={() => setSidebarOpen(true)} className="p-2.5 -ml-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Open menu"><Menu className="w-6 h-6" /></button>
+          <button onClick={() => setSidebarOpen(true)} className="p-2.5 -ml-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Open menu"><Menu className="w-6 h-6" /></button>
           <DrightBrand size={31} />
           <div className="flex items-center gap-1 sm:gap-2"><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0 ring-1 ring-slate-200">{profile?.avatar_url ? <img src={profile.avatar_url} alt={profile?.full_name || 'User'} className="w-full h-full object-cover" /> : <span className="text-primary-700 font-semibold text-sm">{getInitials()}</span>}</div></div>
         </div>
@@ -235,7 +253,7 @@ export default function AppShell() {
               <div className="shrink-0 flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700"><DrightBrand size={54} /><button onClick={() => setSidebarOpen(false)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close menu"><X className="w-6 h-6" /></button></div>
               <div className="px-3 pt-4"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={t('searchMenu')} className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:bg-white dark:focus:bg-gray-900 focus:border-slate-400 outline-none transition-colors text-gray-900 dark:text-gray-100" /></div></div>
               <nav className="flex-1 overflow-y-auto py-3 px-2">
-                {filteredGroups.map(group => <NavGroup key={group.title} group={group} collapsed={false} sidebarOpen={true} t={t} query={searchQuery} />)}
+                {filteredGroups.map(group => <NavGroup key={group.title} group={group} collapsed={false} t={t} query={searchQuery} onNavigate={() => setSidebarOpen(false)} />)}
                 {isAdmin && <div className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-700"><NavLink to="/admin" onClick={() => setSidebarOpen(false)} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all ${isActive ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200' : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50/80 dark:hover:bg-amber-900/10'}`}>{({ isActive }) => <><MetallicNavIcon icon={Shield} active={isActive} variant="admin" /><span className="text-sm">{t('adminPanel')}</span></>}</NavLink></div>}
                 <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-700 space-y-2"><LanguageSwitcher variant="sidebar" /><UIPreferencesToggles /></div>
               </nav>
@@ -249,7 +267,9 @@ export default function AppShell() {
         {!immersiveSocial && <><CompactPromoStrip /><AbandonedPaymentBanner /></>}
         <AnimatePresence mode="wait">
           <motion.div key={location.pathname} initial={{ opacity: 0, y: immersiveSocial ? 0 : 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: immersiveSocial ? 0 : -8 }} transition={{ duration: 0.2 }}>
-            <Outlet />
+            <ErrorBoundary key={location.pathname} fallback={<RouteFailureCard />}>
+              <Outlet />
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>
