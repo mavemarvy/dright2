@@ -7,6 +7,7 @@ import {
 import SeoHead from '../components/SeoHead';
 import SupportAIChat from '../components/support/SupportAIChat';
 import SupportCenterPanel from '../components/support/SupportCenterPanel';
+import TelegramSupportLink from '../components/support/TelegramSupportLink';
 import { useHelpCategories, usePublishedHelpArticles, usePublishedFaqs, useSupportDepartments } from '../lib/contentHooks';
 import type { HelpArticle, FaqItem } from '../lib/contentTypes';
 
@@ -148,6 +149,7 @@ export default function HelpCenterPage() {
 
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Contact Support</h2>
+            <TelegramSupportLink />
             {departments.filter(d => d.is_available).map(dept => (
               <div key={dept.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
                 <div className="flex items-center gap-2 mb-2">
