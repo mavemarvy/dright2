@@ -49,7 +49,8 @@ export async function testKycConnection(providerId:string):Promise<{success:bool
   ]);
   if(provider?.slug==='manual')return {success:true,message:'Manual DRIGHT verification is available.'};
   if(error)return {success:false,message:error.message};
-  const setting=(settings??[] as KycProviderSetting[]).find((s)=>s.provider_id===providerId);
+  const providerSettings=(settings??[]) as KycProviderSetting[];
+  const setting=providerSettings.find((s:KycProviderSetting)=>s.provider_id===providerId);
   if(setting?.is_connected&&setting.health_status==='healthy')return {success:true,message:'Server-side provider health is currently healthy.'};
   return {success:false,message:'Automated provider testing is server-side only. Configure provider credentials/webhooks in approved server secrets and the provider Edge Function.'};
 }
