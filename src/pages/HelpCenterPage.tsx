@@ -5,6 +5,7 @@ import {
   Send, Clock, ArrowRight, HelpCircle, FileText, LifeBuoy,
 } from 'lucide-react';
 import SeoHead from '../components/SeoHead';
+import SupportAIChat from '../components/support/SupportAIChat';
 import SupportCenterPanel from '../components/support/SupportCenterPanel';
 import { useHelpCategories, usePublishedHelpArticles, usePublishedFaqs, useSupportDepartments } from '../lib/contentHooks';
 import type { HelpArticle, FaqItem } from '../lib/contentTypes';
@@ -54,7 +55,7 @@ export default function HelpCenterPage() {
         <div className="max-w-3xl mx-auto text-center">
           <LifeBuoy className="w-12 h-12 mx-auto mb-4 opacity-80" />
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">How can we help?</h1>
-          <p className="text-blue-100 mb-6">Search our help articles, browse FAQs, or contact support</p>
+          <p className="text-blue-100 mb-6">Search our help articles, browse FAQs, ask AI Support, or contact a support agent</p>
           <div className="relative max-w-xl mx-auto">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -172,8 +173,11 @@ export default function HelpCenterPage() {
           </div>
         </div>
 
-        <div id="support" className="mt-12 scroll-mt-6">
-          <SupportCenterPanel />
+        <div className="mt-12 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+          <SupportAIChat />
+          <div id="support" className="scroll-mt-6">
+            <SupportCenterPanel />
+          </div>
         </div>
       </div>
 
