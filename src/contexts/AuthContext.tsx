@@ -6,6 +6,7 @@ import { emitEvent } from '../lib/notificationEvents';
 import type { StoreTheme } from '../lib/storeThemes';
 import { logger, ErrorCategory } from '../lib/logger';
 import { getDeviceFingerprint, getBrowserName, getRedirectPath } from '../lib/authSecurity';
+import { resumePendingSignupOnboarding } from '../lib/onboarding';
 
 export type AdminRole =
   | 'super_admin' | 'platform_admin' | 'user_management_admin' | 'marketplace_admin' | 'marketplace_moderator'
@@ -118,22 +119,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchProfile(authUser.id);
   };
 
+  const resumeOnboarding = async () => {
+    try { await resumePendingSignupOnboarding(); }
+    catch (error) { console.warn('Pending signup onboarding could not be resumed yet:', error); }
+  };
+
   useEffect(() => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession(); setSession(session); setUser(session?.user ?? null);
-      if (session?.user) { await fetchProfile(session.user.id); } else setLoading(false);
+      if (session?.user) {
+        await createMissingProfile(session.user);
+        await fetchProfile(session.user.id);
+        await resumeOnboarding();
+      } else setLoading(false);
     };
-    getSession();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      (async () => {
-        setSession(session); setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
+    void getSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, authSession) => {
+      void (async () => {
+        setSession(authSession); setUser(authSession?.user ?? null);
+        if (authSession?.user) {
+          await createMissingProfile(authSession.user);
+          await fetchProfile(authSession.user.id);
+          await resumeOnboarding();
           if (event === 'SIGNED_IN') {
-            await createMissingProfile(session.user);
             await logAuthActivity('login', true);
-            await supabase.rpc('reset_login_attempts', { p_email: session.user.email || '' });
-            try { await emitEvent({ module: 'security', eventType: 'new_login', recipientIds: session.user.id, metadata: { device: getBrowserName(), location: 'unknown' } }); } catch { /* non-critical */ }
+            await supabase.rpc('reset_login_attempts', { p_email: authSession.user.email || '' });
+            try { await emitEvent({ module: 'security', eventType: 'new_login', recipientIds: authSession.user.id, metadata: { device: getBrowserName(), location: 'unknown' } }); } catch { /* non-critical */ }
           } else if (event === 'TOKEN_REFRESHED') await logAuthActivity('session_refresh', true);
         } else {
           if (event === 'SIGNED_OUT') await logAuthActivity('logout', true); setProfile(null); setLoading(false);
@@ -159,27 +170,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       else { shouldBeAdmin = true; adminStatus = 'pending'; adminRoleValue = null; }
     }
     const normalizedEmail = email.trim().toLowerCase();
-    const { error: profileError } = await supabase.from('users').insert({
-      id: userId, email: normalizedEmail, full_name: fullName || null, phone: phone || null,
-      role: shouldBeAdmin ? 'admin' : 'affiliate', is_admin: shouldBeAdmin, admin_status: adminStatus,
-      admin_role: adminRoleValue, balance: 0,
-      location: location || null, preferred_currency: preferredCurrency || 'USD', username: generateUsername(normalizedEmail, userId),
-    });
-    if (profileError) { console.error('Error creating profile:', profileError); return { error: profileError }; }
+    const { data: existingProfile } = await supabase.from('users').select('id').eq('id', userId).maybeSingle();
+    if (!existingProfile) {
+      const { error: profileError } = await supabase.from('users').insert({
+        id: userId, email: normalizedEmail, full_name: fullName || null, phone: phone || null,
+        role: shouldBeAdmin ? 'admin' : 'affiliate', is_admin: shouldBeAdmin, admin_status: adminStatus,
+        admin_role: adminRoleValue, balance: 0,
+        location: location || null, preferred_currency: preferredCurrency || 'USD', username: generateUsername(normalizedEmail, userId),
+      });
+      if (profileError) { console.error('Error creating profile:', profileError); return { error: profileError }; }
+    }
 
-    // Referral identity is assigned by the database from auth signup metadata.
-    // Read the canonical result only; never use browser-resolved sponsor identity
-    // or a browser-generated referral code as referral authority.
     const { data: canonicalProfile } = await supabase
       .from('users')
       .select('referred_by, referral_code, full_name, email')
       .eq('id', userId)
       .maybeSingle();
 
-    // Compatibility bridge: until the ST-4D migration is confirmed live, make
-    // sure the existing generic link exists using only the DB-generated code.
-    // Once the server trigger is live it creates the row first, making this a
-    // no-op. This does not choose sponsor identity or commission state.
     if ((!shouldBeAdmin || adminStatus === 'pending') && canonicalProfile?.referral_code) {
       const { data: existingLinks } = await supabase
         .from('referral_links')
@@ -224,12 +231,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         data: {
           full_name: fullName,
+          phone: phone || null,
+          location: location || null,
+          preferred_currency: preferredCurrency || 'USD',
           wants_admin: asAdmin || false,
           signup_referral_code: refCode || null,
         },
       },
     });
-    if (!error && data.user) {
+    if (!error && data.user && data.session) {
       const result = await createProfile(data.user.id, normalizedEmail, fullName, phone, asAdmin, location, preferredCurrency);
       if (result.error) return { error: result.error as unknown as AuthError };
     }
@@ -249,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger.warn(ErrorCategory.AUTH, 'Failed login attempt', { email: normalizedEmail, error: error.message });
       return { error };
     }
-    if (data.user) await createMissingProfile(data.user);
+    if (data.user) { await createMissingProfile(data.user); await fetchProfile(data.user.id); await resumeOnboarding(); }
     try { await supabase.rpc('record_login_attempt', { p_email: normalizedEmail, p_success: true, p_user_agent: navigator.userAgent }); } catch { /* non-critical */ }
     const redirect = getRedirectPath(); if (redirect) { /* consumed by sign-in page */ }
     return { error: null };

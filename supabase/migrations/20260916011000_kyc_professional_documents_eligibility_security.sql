@@ -1,0 +1,610 @@
+/*
+  DRIGHT2 KYC/document security + professional documents + explainable eligibility.
+  Extends the existing kyc_* architecture. No existing verification history is deleted.
+*/
+
+-- ---------------------------------------------------------------------
+-- Separate private professional-document storage.
+-- ---------------------------------------------------------------------
+INSERT INTO storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
+VALUES (
+  'professional-docs','professional-docs',false,20971520,
+  ARRAY['application/pdf','image/jpeg','image/png','image/webp']::text[]
+)
+ON CONFLICT (id) DO UPDATE SET
+  public=false,
+  file_size_limit=EXCLUDED.file_size_limit,
+  allowed_mime_types=EXCLUDED.allowed_mime_types;
+
+CREATE TABLE IF NOT EXISTS public.professional_documents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  profile_type text,
+  document_type text NOT NULL CHECK (document_type IN ('cv','resume','certificate','qualification','portfolio','business_registration','professional_license','media_kit','other')),
+  title text,
+  storage_bucket text NOT NULL DEFAULT 'professional-docs',
+  storage_path text NOT NULL,
+  original_file_name text,
+  mime_type text,
+  size_bytes bigint,
+  version integer NOT NULL DEFAULT 1 CHECK (version > 0),
+  replaces_document_id uuid REFERENCES public.professional_documents(id),
+  status text NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted','under_review','verified','rejected','needs_resubmission','expired')),
+  user_visible_reason text,
+  reviewer_id uuid REFERENCES public.users(id),
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  is_deleted boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT professional_storage_bucket CHECK (storage_bucket='professional-docs')
+);
+CREATE INDEX IF NOT EXISTS idx_professional_documents_user ON public.professional_documents(user_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_professional_documents_status ON public.professional_documents(status,created_at DESC);
+ALTER TABLE public.professional_documents ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.professional_document_reviews (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id uuid NOT NULL REFERENCES public.professional_documents(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  reviewer_id uuid NOT NULL REFERENCES public.users(id),
+  previous_status text,
+  decision text NOT NULL,
+  new_status text NOT NULL,
+  user_visible_reason text,
+  internal_note text,
+  checklist jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_professional_document_reviews_doc ON public.professional_document_reviews(document_id,created_at DESC);
+ALTER TABLE public.professional_document_reviews ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS professional_documents_own_read ON public.professional_documents;
+CREATE POLICY professional_documents_own_read ON public.professional_documents
+FOR SELECT TO authenticated USING (user_id=auth.uid() AND is_deleted=false);
+DROP POLICY IF EXISTS professional_documents_admin_read ON public.professional_documents;
+CREATE POLICY professional_documents_admin_read ON public.professional_documents
+FOR SELECT TO authenticated USING (public.has_dright_permission('professional_documents','view'));
+DROP POLICY IF EXISTS professional_documents_own_insert ON public.professional_documents;
+CREATE POLICY professional_documents_own_insert ON public.professional_documents
+FOR INSERT TO authenticated WITH CHECK (
+  user_id=auth.uid() AND storage_bucket='professional-docs' AND status='submitted' AND reviewer_id IS NULL AND reviewed_at IS NULL
+);
+DROP POLICY IF EXISTS professional_documents_admin_update ON public.professional_documents;
+CREATE POLICY professional_documents_admin_update ON public.professional_documents
+FOR UPDATE TO authenticated USING (public.has_dright_permission('professional_documents','review'))
+WITH CHECK (public.has_dright_permission('professional_documents','review'));
+
+DROP POLICY IF EXISTS professional_document_reviews_admin_read ON public.professional_document_reviews;
+CREATE POLICY professional_document_reviews_admin_read ON public.professional_document_reviews
+FOR SELECT TO authenticated USING (public.has_dright_permission('professional_documents','view'));
+DROP POLICY IF EXISTS professional_document_reviews_own_read ON public.professional_document_reviews;
+CREATE POLICY professional_document_reviews_own_read ON public.professional_document_reviews
+FOR SELECT TO authenticated USING (user_id=auth.uid());
+
+DROP POLICY IF EXISTS users_upload_own_professional_docs ON storage.objects;
+CREATE POLICY users_upload_own_professional_docs ON storage.objects
+FOR INSERT TO authenticated WITH CHECK (
+  bucket_id='professional-docs' AND owner=auth.uid() AND (storage.foldername(name))[1]=auth.uid()::text
+);
+DROP POLICY IF EXISTS users_read_own_professional_docs ON storage.objects;
+CREATE POLICY users_read_own_professional_docs ON storage.objects
+FOR SELECT TO authenticated USING (
+  bucket_id='professional-docs' AND owner=auth.uid() AND (storage.foldername(name))[1]=auth.uid()::text
+);
+DROP POLICY IF EXISTS reviewers_read_professional_docs ON storage.objects;
+CREATE POLICY reviewers_read_professional_docs ON storage.objects
+FOR SELECT TO authenticated USING (
+  bucket_id='professional-docs' AND public.has_dright_permission('professional_documents','view')
+);
+
+-- ---------------------------------------------------------------------
+-- Extend KYC without replacing existing normalized tables.
+-- ---------------------------------------------------------------------
+ALTER TABLE public.kyc_rules ADD COLUMN IF NOT EXISTS required_document_types text[] NOT NULL DEFAULT '{}'::text[];
+ALTER TABLE public.kyc_rules ADD COLUMN IF NOT EXISTS required_checks text[] NOT NULL DEFAULT '{}'::text[];
+ALTER TABLE public.kyc_rules ADD COLUMN IF NOT EXISTS proof_of_address_max_age_days integer;
+ALTER TABLE public.kyc_rules ADD COLUMN IF NOT EXISTS reverification_after_days integer;
+ALTER TABLE public.kyc_rules ADD COLUMN IF NOT EXISTS policy jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS storage_bucket text NOT NULL DEFAULT 'kyc-docs';
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS storage_path text;
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS issuing_country text;
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS document_number_last4 text;
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS document_side text;
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS user_visible_reason text;
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS review_source text NOT NULL DEFAULT 'manual';
+ALTER TABLE public.kyc_documents ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+-- Recover object paths from old getPublicUrl values where possible. The original value remains for audit/backward compatibility.
+UPDATE public.kyc_documents
+SET storage_path = regexp_replace(doc_url, '^.*?/kyc-docs/', '')
+WHERE storage_path IS NULL AND doc_url LIKE '%/kyc-docs/%';
+UPDATE public.kyc_documents
+SET storage_path = doc_url
+WHERE storage_path IS NULL AND doc_url IS NOT NULL AND doc_url NOT LIKE 'http%';
+
+CREATE INDEX IF NOT EXISTS idx_kyc_documents_status_created ON public.kyc_documents(status,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_kyc_documents_expiry ON public.kyc_documents(expires_at) WHERE expires_at IS NOT NULL AND is_deleted=false;
+CREATE INDEX IF NOT EXISTS idx_kyc_documents_storage_path ON public.kyc_documents(storage_path) WHERE storage_path IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public.kyc_document_reviews (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id uuid NOT NULL REFERENCES public.kyc_documents(id) ON DELETE CASCADE,
+  submission_id uuid NOT NULL REFERENCES public.kyc_submissions(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  reviewer_id uuid NOT NULL REFERENCES public.users(id),
+  previous_status text,
+  decision text NOT NULL CHECK (decision IN ('under_review','verified','rejected','needs_resubmission','unreadable','expired','suspected_fraud')),
+  new_status text NOT NULL,
+  user_visible_reason text,
+  internal_note text,
+  checklist jsonb NOT NULL DEFAULT '{}'::jsonb,
+  source text NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','provider','system')),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_kyc_document_reviews_document ON public.kyc_document_reviews(document_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_kyc_document_reviews_user ON public.kyc_document_reviews(user_id,created_at DESC);
+ALTER TABLE public.kyc_document_reviews ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS kyc_document_reviews_admin_read ON public.kyc_document_reviews;
+CREATE POLICY kyc_document_reviews_admin_read ON public.kyc_document_reviews
+FOR SELECT TO authenticated USING (public.has_dright_permission('kyc','audit_view'));
+
+-- User-safe review history excludes internal reviewer notes.
+CREATE OR REPLACE VIEW public.kyc_review_user_history
+WITH (security_invoker=true)
+AS
+SELECT r.id,r.submission_id,s.user_id,r.action,r.notes AS user_visible_reason,r.created_at
+FROM public.kyc_reviews r
+JOIN public.kyc_submissions s ON s.id=r.submission_id
+WHERE r.is_deleted=false;
+GRANT SELECT ON public.kyc_review_user_history TO authenticated;
+
+-- Safe provider-settings surface: never returns provider credentials, error payloads or webhook secrets.
+CREATE OR REPLACE VIEW public.kyc_provider_safe_settings
+WITH (security_invoker=true)
+AS
+SELECT id,provider_id,is_connected,is_enabled,is_active,mode,health_status,last_sync_at,
+       CASE WHEN last_error IS NULL THEN NULL ELSE 'Provider reported an error' END AS last_error,
+       created_at,updated_at
+FROM public.kyc_provider_settings
+WHERE is_deleted=false;
+GRANT SELECT ON public.kyc_provider_safe_settings TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- Replace permissive KYC table policies with permission-aware policies.
+-- ---------------------------------------------------------------------
+DROP POLICY IF EXISTS read_kyc_provider_settings ON public.kyc_provider_settings;
+DROP POLICY IF EXISTS insert_kyc_provider_setting ON public.kyc_provider_settings;
+DROP POLICY IF EXISTS update_kyc_provider_setting ON public.kyc_provider_settings;
+DROP POLICY IF EXISTS super_admin_delete_kyc_provider_setting ON public.kyc_provider_settings;
+CREATE POLICY kyc_provider_settings_manage ON public.kyc_provider_settings
+FOR ALL TO authenticated
+USING (public.has_dright_permission('kyc','manage_providers'))
+WITH CHECK (public.has_dright_permission('kyc','manage_providers'));
+
+DROP POLICY IF EXISTS insert_kyc_provider ON public.kyc_providers;
+DROP POLICY IF EXISTS update_kyc_provider ON public.kyc_providers;
+DROP POLICY IF EXISTS super_admin_delete_kyc_provider ON public.kyc_providers;
+-- Provider names/descriptions are safe for authenticated users; management is permission-gated.
+DROP POLICY IF EXISTS read_kyc_providers ON public.kyc_providers;
+CREATE POLICY kyc_providers_read ON public.kyc_providers FOR SELECT TO authenticated USING (is_deleted=false);
+CREATE POLICY kyc_providers_manage ON public.kyc_providers FOR ALL TO authenticated
+USING (public.has_dright_permission('kyc','manage_providers'))
+WITH CHECK (public.has_dright_permission('kyc','manage_providers'));
+
+DROP POLICY IF EXISTS insert_kyc_rule ON public.kyc_rules;
+DROP POLICY IF EXISTS update_kyc_rule ON public.kyc_rules;
+DROP POLICY IF EXISTS super_admin_delete_kyc_rule ON public.kyc_rules;
+DROP POLICY IF EXISTS read_kyc_rules ON public.kyc_rules;
+CREATE POLICY kyc_rules_read ON public.kyc_rules FOR SELECT TO authenticated USING (is_deleted=false);
+CREATE POLICY kyc_rules_manage ON public.kyc_rules FOR ALL TO authenticated
+USING (public.has_dright_permission('kyc','manage_rules'))
+WITH CHECK (public.has_dright_permission('kyc','manage_rules'));
+
+DROP POLICY IF EXISTS update_own_kyc_profile ON public.kyc_profiles;
+DROP POLICY IF EXISTS admin_read_all_kyc_profiles ON public.kyc_profiles;
+DROP POLICY IF EXISTS admin_update_all_kyc_profiles ON public.kyc_profiles;
+DROP POLICY IF EXISTS insert_own_kyc_profile ON public.kyc_profiles;
+DROP POLICY IF EXISTS select_own_kyc_profile ON public.kyc_profiles;
+CREATE POLICY kyc_profiles_own_read ON public.kyc_profiles FOR SELECT TO authenticated USING (user_id=auth.uid() AND is_deleted=false);
+CREATE POLICY kyc_profiles_admin_read ON public.kyc_profiles FOR SELECT TO authenticated USING (public.has_dright_permission('kyc','view'));
+CREATE POLICY kyc_profiles_own_insert ON public.kyc_profiles FOR INSERT TO authenticated WITH CHECK (
+  user_id=auth.uid() AND status IN ('not_started','pending_submission') AND reviewer_id IS NULL AND last_reviewed_at IS NULL
+);
+CREATE POLICY kyc_profiles_admin_update ON public.kyc_profiles FOR UPDATE TO authenticated
+USING (public.has_dright_permission('kyc','review')) WITH CHECK (public.has_dright_permission('kyc','review'));
+
+DROP POLICY IF EXISTS update_own_kyc_submission ON public.kyc_submissions;
+DROP POLICY IF EXISTS admin_read_all_kyc_submissions ON public.kyc_submissions;
+DROP POLICY IF EXISTS admin_update_all_kyc_submissions ON public.kyc_submissions;
+DROP POLICY IF EXISTS insert_own_kyc_submission ON public.kyc_submissions;
+DROP POLICY IF EXISTS select_own_kyc_submission ON public.kyc_submissions;
+CREATE POLICY kyc_submissions_own_read ON public.kyc_submissions FOR SELECT TO authenticated USING (user_id=auth.uid() AND is_deleted=false);
+CREATE POLICY kyc_submissions_admin_read ON public.kyc_submissions FOR SELECT TO authenticated USING (public.has_dright_permission('kyc','view'));
+CREATE POLICY kyc_submissions_own_insert ON public.kyc_submissions FOR INSERT TO authenticated WITH CHECK (
+  user_id=auth.uid() AND status='pending' AND reviewer_id IS NULL AND reviewed_at IS NULL
+  AND provider_reference IS NULL AND provider_result IS NULL
+  AND EXISTS (SELECT 1 FROM public.kyc_profiles p WHERE p.id=profile_id AND p.user_id=auth.uid())
+);
+CREATE POLICY kyc_submissions_admin_update ON public.kyc_submissions FOR UPDATE TO authenticated
+USING (public.has_dright_permission('kyc','review')) WITH CHECK (public.has_dright_permission('kyc','review'));
+
+DROP POLICY IF EXISTS update_own_kyc_document ON public.kyc_documents;
+DROP POLICY IF EXISTS admin_read_all_kyc_documents ON public.kyc_documents;
+DROP POLICY IF EXISTS admin_update_all_kyc_documents ON public.kyc_documents;
+DROP POLICY IF EXISTS insert_own_kyc_document ON public.kyc_documents;
+DROP POLICY IF EXISTS select_own_kyc_document ON public.kyc_documents;
+CREATE POLICY kyc_documents_own_read ON public.kyc_documents FOR SELECT TO authenticated USING (user_id=auth.uid() AND is_deleted=false);
+CREATE POLICY kyc_documents_admin_read ON public.kyc_documents FOR SELECT TO authenticated USING (public.has_dright_permission('kyc','view'));
+CREATE POLICY kyc_documents_own_insert ON public.kyc_documents FOR INSERT TO authenticated WITH CHECK (
+  user_id=auth.uid() AND status='pending' AND reviewer_id IS NULL AND reviewed_at IS NULL AND storage_bucket='kyc-docs'
+  AND EXISTS (SELECT 1 FROM public.kyc_submissions s WHERE s.id=submission_id AND s.user_id=auth.uid())
+);
+CREATE POLICY kyc_documents_admin_update ON public.kyc_documents FOR UPDATE TO authenticated
+USING (public.has_dright_permission('kyc','review')) WITH CHECK (public.has_dright_permission('kyc','review'));
+
+DROP POLICY IF EXISTS select_own_kyc_review ON public.kyc_reviews;
+DROP POLICY IF EXISTS insert_kyc_review ON public.kyc_reviews;
+DROP POLICY IF EXISTS admin_read_all_kyc_reviews ON public.kyc_reviews;
+CREATE POLICY kyc_reviews_admin_read ON public.kyc_reviews FOR SELECT TO authenticated USING (public.has_dright_permission('kyc','audit_view'));
+-- Inserts are performed by authoritative review functions only.
+
+DROP POLICY IF EXISTS select_own_kyc_audit ON public.kyc_audit_logs;
+DROP POLICY IF EXISTS insert_kyc_audit_log ON public.kyc_audit_logs;
+DROP POLICY IF EXISTS admin_read_all_kyc_audit_logs ON public.kyc_audit_logs;
+CREATE POLICY kyc_audit_admin_read ON public.kyc_audit_logs FOR SELECT TO authenticated USING (public.has_dright_permission('kyc','audit_view'));
+
+-- Storage is private. Users can create/read their own originals; originals are immutable to users.
+DROP POLICY IF EXISTS admin_read_all_kyc_storage ON storage.objects;
+DROP POLICY IF EXISTS users_update_own_kyc_docs ON storage.objects;
+DROP POLICY IF EXISTS users_upload_own_kyc_docs ON storage.objects;
+DROP POLICY IF EXISTS users_read_own_kyc_docs ON storage.objects;
+CREATE POLICY users_upload_own_kyc_docs ON storage.objects
+FOR INSERT TO authenticated WITH CHECK (
+  bucket_id='kyc-docs' AND owner=auth.uid() AND (storage.foldername(name))[1]=auth.uid()::text
+);
+CREATE POLICY users_read_own_kyc_docs ON storage.objects
+FOR SELECT TO authenticated USING (
+  bucket_id='kyc-docs' AND owner=auth.uid() AND (storage.foldername(name))[1]=auth.uid()::text
+);
+CREATE POLICY authorized_reviewers_read_kyc_docs ON storage.objects
+FOR SELECT TO authenticated USING (
+  bucket_id='kyc-docs' AND public.has_dright_permission('kyc','view_documents')
+);
+
+-- ---------------------------------------------------------------------
+-- Document-by-document authoritative review.
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.recalculate_kyc_submission(p_submission_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=public,pg_temp
+AS $$
+DECLARE
+  v_submission public.kyc_submissions%ROWTYPE;
+  v_profile public.kyc_profiles%ROWTYPE;
+  v_rule public.kyc_rules%ROWTYPE;
+  v_required text[];
+  v_missing integer := 0;
+  v_rejected integer := 0;
+  v_new text;
+BEGIN
+  SELECT * INTO v_submission FROM public.kyc_submissions WHERE id=p_submission_id FOR UPDATE;
+  IF v_submission.id IS NULL THEN RAISE EXCEPTION 'submission not found'; END IF;
+  SELECT * INTO v_profile FROM public.kyc_profiles WHERE id=v_submission.profile_id;
+  SELECT * INTO v_rule FROM public.kyc_rules WHERE user_type=v_profile.user_type AND is_deleted=false LIMIT 1;
+  v_required := coalesce(v_rule.required_document_types,'{}'::text[]);
+
+  IF cardinality(v_required)=0 THEN
+    RETURN v_submission.status; -- no rule-defined document set: explicit submission review remains authoritative
+  END IF;
+
+  SELECT count(*) INTO v_missing
+  FROM unnest(v_required) req
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.kyc_documents d
+    WHERE d.submission_id=p_submission_id AND d.doc_type=req AND d.is_deleted=false
+      AND d.status='verified' AND (d.expires_at IS NULL OR d.expires_at>now())
+  );
+
+  SELECT count(*) INTO v_rejected
+  FROM public.kyc_documents d
+  WHERE d.submission_id=p_submission_id AND d.is_deleted=false
+    AND d.doc_type=ANY(v_required)
+    AND d.status IN ('rejected','needs_resubmission','unreadable','expired','suspected_fraud');
+
+  IF v_rejected>0 THEN v_new:='more_info_required';
+  ELSIF v_missing=0 THEN v_new:='approved';
+  ELSE v_new:='under_review'; END IF;
+
+  UPDATE public.kyc_submissions SET status=v_new,updated_at=now(),
+    reviewed_at=CASE WHEN v_new='approved' THEN now() ELSE reviewed_at END
+  WHERE id=p_submission_id;
+  RETURN v_new;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.recalculate_kyc_submission(uuid) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION public.recalculate_kyc_profile(p_profile_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=public,pg_temp
+AS $$
+DECLARE v_status text; v_submission public.kyc_submissions%ROWTYPE;
+BEGIN
+  SELECT * INTO v_submission FROM public.kyc_submissions
+  WHERE profile_id=p_profile_id AND is_deleted=false ORDER BY version DESC,submitted_at DESC LIMIT 1;
+  IF v_submission.id IS NULL THEN v_status:='not_started';
+  ELSIF v_submission.status='approved' THEN v_status:='approved';
+  ELSIF v_submission.status='rejected' THEN v_status:='rejected';
+  ELSIF v_submission.status='more_info_required' THEN v_status:='more_info_required';
+  ELSE v_status:=CASE WHEN v_submission.status='pending' THEN 'submitted' ELSE v_submission.status END;
+  END IF;
+  UPDATE public.kyc_profiles SET status=v_status,updated_at=now(),
+    last_reviewed_at=CASE WHEN v_status IN ('approved','rejected','more_info_required') THEN now() ELSE last_reviewed_at END
+  WHERE id=p_profile_id;
+  RETURN v_status;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.recalculate_kyc_profile(uuid) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION public.review_kyc_document(
+  p_document_id uuid,
+  p_decision text,
+  p_user_visible_reason text DEFAULT NULL,
+  p_internal_note text DEFAULT NULL,
+  p_checklist jsonb DEFAULT '{}'::jsonb
+) RETURNS public.kyc_documents
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=public,pg_temp
+AS $$
+DECLARE
+  v_doc public.kyc_documents%ROWTYPE;
+  v_old text;
+  v_required_permission text;
+  v_submission_status text;
+BEGIN
+  IF p_decision NOT IN ('under_review','verified','rejected','needs_resubmission','unreadable','expired','suspected_fraud') THEN
+    RAISE EXCEPTION 'invalid decision';
+  END IF;
+  v_required_permission := CASE
+    WHEN p_decision='verified' THEN 'verify'
+    WHEN p_decision='rejected' THEN 'reject'
+    WHEN p_decision='needs_resubmission' THEN 'request_resubmission'
+    ELSE 'review' END;
+  IF NOT public.has_dright_permission('kyc',v_required_permission) THEN RAISE EXCEPTION 'permission denied'; END IF;
+  IF p_decision IN ('rejected','needs_resubmission','unreadable','expired')
+     AND nullif(trim(coalesce(p_user_visible_reason,'')),'') IS NULL THEN
+    RAISE EXCEPTION 'user-visible reason is required';
+  END IF;
+
+  SELECT * INTO v_doc FROM public.kyc_documents WHERE id=p_document_id AND is_deleted=false FOR UPDATE;
+  IF v_doc.id IS NULL THEN RAISE EXCEPTION 'document not found'; END IF;
+  v_old := v_doc.status;
+
+  UPDATE public.kyc_documents
+  SET status=p_decision,reviewer_id=auth.uid(),reviewed_at=now(),reviewer_notes=p_internal_note,
+      user_visible_reason=p_user_visible_reason,review_source='manual',updated_by=auth.uid(),updated_at=now()
+  WHERE id=p_document_id RETURNING * INTO v_doc;
+
+  INSERT INTO public.kyc_document_reviews(document_id,submission_id,user_id,reviewer_id,previous_status,decision,new_status,user_visible_reason,internal_note,checklist,source)
+  VALUES(v_doc.id,v_doc.submission_id,v_doc.user_id,auth.uid(),v_old,p_decision,p_decision,p_user_visible_reason,p_internal_note,coalesce(p_checklist,'{}'::jsonb),'manual');
+
+  INSERT INTO public.kyc_audit_logs(user_id,admin_id,action,entity_type,entity_id,metadata)
+  VALUES(v_doc.user_id,auth.uid(),'document_'||p_decision,'kyc_document',v_doc.id,
+    jsonb_build_object('previous_status',v_old,'new_status',p_decision,'doc_type',v_doc.doc_type));
+
+  v_submission_status := public.recalculate_kyc_submission(v_doc.submission_id);
+  PERFORM public.recalculate_kyc_profile((SELECT profile_id FROM public.kyc_submissions WHERE id=v_doc.submission_id));
+
+  INSERT INTO public.notifications(user_id,title,message,notification_type,related_id,category,priority,metadata)
+  VALUES(
+    v_doc.user_id,
+    CASE WHEN p_decision='verified' THEN 'Verification document approved' ELSE 'Verification document update' END,
+    CASE WHEN p_decision='verified' THEN 'Your '||replace(v_doc.doc_type,'_',' ')||' passed review.'
+         ELSE 'Your '||replace(v_doc.doc_type,'_',' ')||' requires attention. '||coalesce(p_user_visible_reason,'Please review your verification center.') END,
+    'verification_update',v_doc.id,'security',CASE WHEN p_decision='verified' THEN 'normal' ELSE 'high' END,
+    jsonb_build_object('document_type',v_doc.doc_type,'status',p_decision,'submission_status',v_submission_status)
+  );
+
+  RETURN v_doc;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.review_kyc_document(uuid,text,text,text,jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.review_kyc_document(uuid,text,text,text,jsonb) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.review_kyc_submission_authoritative(
+  p_submission_id uuid,
+  p_action text,
+  p_user_visible_reason text DEFAULT NULL,
+  p_internal_note text DEFAULT NULL
+) RETURNS public.kyc_submissions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=public,pg_temp
+AS $$
+DECLARE
+  v_row public.kyc_submissions%ROWTYPE;
+  v_old text;
+  v_new text;
+  v_perm text;
+BEGIN
+  IF p_action NOT IN ('approved','rejected','more_info_requested','under_review') THEN RAISE EXCEPTION 'invalid action'; END IF;
+  v_perm := CASE WHEN p_action='approved' THEN 'verify' WHEN p_action='rejected' THEN 'reject' WHEN p_action='more_info_requested' THEN 'request_resubmission' ELSE 'review' END;
+  IF NOT public.has_dright_permission('kyc',v_perm) THEN RAISE EXCEPTION 'permission denied'; END IF;
+  IF p_action IN ('rejected','more_info_requested') AND nullif(trim(coalesce(p_user_visible_reason,'')),'') IS NULL THEN
+    RAISE EXCEPTION 'user-visible reason is required';
+  END IF;
+
+  SELECT * INTO v_row FROM public.kyc_submissions WHERE id=p_submission_id AND is_deleted=false FOR UPDATE;
+  IF v_row.id IS NULL THEN RAISE EXCEPTION 'submission not found'; END IF;
+  v_old:=v_row.status;
+  v_new:=CASE WHEN p_action='more_info_requested' THEN 'more_info_required' ELSE p_action END;
+
+  -- If a document set is explicitly configured, approval cannot bypass missing/rejected required documents.
+  IF p_action='approved' AND cardinality(coalesce((
+      SELECT r.required_document_types FROM public.kyc_rules r
+      JOIN public.kyc_profiles p ON p.user_type=r.user_type
+      WHERE p.id=v_row.profile_id AND r.is_deleted=false LIMIT 1
+    ),'{}'::text[]))>0 THEN
+    PERFORM public.recalculate_kyc_submission(p_submission_id);
+    SELECT * INTO v_row FROM public.kyc_submissions WHERE id=p_submission_id;
+    IF v_row.status<>'approved' THEN RAISE EXCEPTION 'required KYC checks are not complete'; END IF;
+  ELSE
+    UPDATE public.kyc_submissions
+    SET status=v_new,reviewer_id=auth.uid(),reviewer_notes=p_internal_note,rejection_reason=CASE WHEN v_new IN ('rejected','more_info_required') THEN p_user_visible_reason ELSE NULL END,
+        reviewed_at=now(),updated_by=auth.uid(),updated_at=now()
+    WHERE id=p_submission_id RETURNING * INTO v_row;
+  END IF;
+
+  INSERT INTO public.kyc_reviews(submission_id,reviewer_id,action,notes,internal_notes)
+  VALUES(p_submission_id,auth.uid(),p_action,p_user_visible_reason,p_internal_note);
+  INSERT INTO public.kyc_audit_logs(user_id,admin_id,action,entity_type,entity_id,metadata)
+  VALUES(v_row.user_id,auth.uid(),'submission_'||p_action,'kyc_submission',v_row.id,jsonb_build_object('previous_status',v_old,'new_status',v_row.status));
+  PERFORM public.recalculate_kyc_profile(v_row.profile_id);
+
+  INSERT INTO public.notifications(user_id,title,message,notification_type,related_id,category,priority,metadata)
+  VALUES(v_row.user_id,'KYC review update',
+    CASE WHEN v_row.status='approved' THEN 'Your identity verification is complete.'
+         WHEN v_row.status='rejected' THEN 'Your verification was not approved. '||coalesce(p_user_visible_reason,'Review the verification center for details.')
+         WHEN v_row.status='more_info_required' THEN 'More verification information is required. '||coalesce(p_user_visible_reason,'')
+         ELSE 'Your verification is under review.' END,
+    'kyc_status',v_row.id,'security',CASE WHEN v_row.status IN ('rejected','more_info_required') THEN 'high' ELSE 'normal' END,
+    jsonb_build_object('status',v_row.status));
+  RETURN v_row;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.review_kyc_submission_authoritative(uuid,text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.review_kyc_submission_authoritative(uuid,text,text,text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.review_professional_document(
+  p_document_id uuid,p_decision text,p_user_visible_reason text DEFAULT NULL,p_internal_note text DEFAULT NULL,p_checklist jsonb DEFAULT '{}'::jsonb
+) RETURNS public.professional_documents
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
+AS $$
+DECLARE v_doc public.professional_documents%ROWTYPE; v_old text;
+BEGIN
+  IF NOT public.has_dright_permission('professional_documents','review') THEN RAISE EXCEPTION 'permission denied'; END IF;
+  IF p_decision NOT IN ('under_review','verified','rejected','needs_resubmission','expired') THEN RAISE EXCEPTION 'invalid decision'; END IF;
+  IF p_decision IN ('rejected','needs_resubmission','expired') AND nullif(trim(coalesce(p_user_visible_reason,'')),'') IS NULL THEN RAISE EXCEPTION 'reason required'; END IF;
+  SELECT * INTO v_doc FROM public.professional_documents WHERE id=p_document_id AND is_deleted=false FOR UPDATE;
+  IF v_doc.id IS NULL THEN RAISE EXCEPTION 'document not found'; END IF;
+  v_old:=v_doc.status;
+  UPDATE public.professional_documents SET status=p_decision,user_visible_reason=p_user_visible_reason,reviewer_id=auth.uid(),reviewed_at=now(),updated_at=now()
+  WHERE id=p_document_id RETURNING * INTO v_doc;
+  INSERT INTO public.professional_document_reviews(document_id,user_id,reviewer_id,previous_status,decision,new_status,user_visible_reason,internal_note,checklist)
+  VALUES(v_doc.id,v_doc.user_id,auth.uid(),v_old,p_decision,p_decision,p_user_visible_reason,p_internal_note,coalesce(p_checklist,'{}'::jsonb));
+  INSERT INTO public.admin_activity_logs(admin_id,action,resource_type,resource_id,details)
+  VALUES(auth.uid(),'professional_document_'||p_decision,'professional_document',v_doc.id,jsonb_build_object('user_id',v_doc.user_id,'previous_status',v_old));
+  RETURN v_doc;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.review_professional_document(uuid,text,text,text,jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.review_professional_document(uuid,text,text,text,jsonb) TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- Explainable eligibility snapshot. No opaque AI score controls access.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.user_eligibility (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  profile_type text NOT NULL,
+  action_key text NOT NULL DEFAULT 'general',
+  status text NOT NULL CHECK (status IN ('eligible','limited','more_information_required','ineligible')),
+  reasons jsonb NOT NULL DEFAULT '[]'::jsonb,
+  calculated_at timestamptz NOT NULL DEFAULT now(),
+  calculated_by text NOT NULL DEFAULT 'rules',
+  UNIQUE(user_id,profile_type,action_key)
+);
+CREATE INDEX IF NOT EXISTS idx_user_eligibility_status ON public.user_eligibility(status,profile_type);
+ALTER TABLE public.user_eligibility ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS eligibility_own_read ON public.user_eligibility;
+CREATE POLICY eligibility_own_read ON public.user_eligibility FOR SELECT TO authenticated USING (user_id=auth.uid());
+DROP POLICY IF EXISTS eligibility_admin_read ON public.user_eligibility;
+CREATE POLICY eligibility_admin_read ON public.user_eligibility FOR SELECT TO authenticated USING (public.has_dright_permission('eligibility','view'));
+
+CREATE OR REPLACE FUNCTION public.recalculate_user_eligibility(p_user_id uuid,p_profile_type text,p_action_key text DEFAULT 'general')
+RETURNS public.user_eligibility
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,auth,pg_temp
+AS $$
+DECLARE
+  v_private public.user_private_profiles%ROWTYPE;
+  v_user public.users%ROWTYPE;
+  v_age_rule public.age_eligibility_rules%ROWTYPE;
+  v_kyc_rule public.kyc_rules%ROWTYPE;
+  v_kyc public.kyc_profiles%ROWTYPE;
+  v_reasons jsonb := '[]'::jsonb;
+  v_ok boolean := true;
+  v_more boolean := false;
+  v_status text;
+  v_q_status text;
+  v_email_verified boolean := false;
+  v_row public.user_eligibility%ROWTYPE;
+BEGIN
+  IF auth.uid() IS DISTINCT FROM p_user_id AND NOT public.has_dright_permission('eligibility','recalculate') THEN RAISE EXCEPTION 'permission denied'; END IF;
+  SELECT * INTO v_user FROM public.users WHERE id=p_user_id;
+  SELECT * INTO v_private FROM public.user_private_profiles WHERE user_id=p_user_id;
+  SELECT * INTO v_age_rule FROM public.age_eligibility_rules WHERE profile_type=p_profile_type AND is_active=true;
+  SELECT * INTO v_kyc_rule FROM public.kyc_rules WHERE user_type=p_profile_type AND is_deleted=false LIMIT 1;
+  SELECT * INTO v_kyc FROM public.kyc_profiles WHERE user_id=p_user_id AND user_type=p_profile_type AND is_deleted=false ORDER BY updated_at DESC LIMIT 1;
+  SELECT qs.status INTO v_q_status FROM public.questionnaire_submissions qs
+    WHERE qs.user_id=p_user_id AND qs.profile_type=p_profile_type ORDER BY qs.created_at DESC LIMIT 1;
+  SELECT (email_confirmed_at IS NOT NULL) INTO v_email_verified FROM auth.users WHERE id=p_user_id;
+
+  IF v_user.id IS NULL THEN RAISE EXCEPTION 'user not found'; END IF;
+
+  IF v_private.date_of_birth IS NULL THEN v_ok:=false;v_more:=true;v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','age','ok',false,'message','Date of birth is required'));
+  ELSIF v_age_rule.profile_type IS NOT NULL AND public.dright_age_on(v_private.date_of_birth)<v_age_rule.minimum_age THEN v_ok:=false;v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','age','ok',false,'message','Minimum age requirement is not satisfied'));
+  ELSE v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','age','ok',true,'message','Minimum age satisfied')); END IF;
+
+  IF v_q_status IS NULL THEN v_ok:=false;v_more:=true;v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','questionnaire','ok',false,'message','Required questionnaire is missing'));
+  ELSIF v_q_status IN ('rejected','returned_for_changes','more_information_required') THEN v_ok:=false;v_more:=true;v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','questionnaire','ok',false,'message','Questionnaire requires review or changes','status',v_q_status));
+  ELSE v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','questionnaire','ok',true,'message','Questionnaire completed','status',v_q_status)); END IF;
+
+  IF coalesce(v_kyc_rule.is_required,false) THEN
+    IF v_kyc.status='approved' AND (v_kyc.expires_at IS NULL OR v_kyc.expires_at>now()) THEN
+      v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','kyc','ok',true,'message','KYC verified'));
+    ELSE
+      v_ok:=false;v_more:=true;v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','kyc','ok',false,'message','Required KYC is not verified','status',coalesce(v_kyc.status,'not_started')));
+    END IF;
+  ELSE
+    v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','kyc','ok',true,'message','KYC not required for this profile action'));
+  END IF;
+
+  IF NOT v_email_verified THEN v_ok:=false;v_more:=true;v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','email','ok',false,'message','Email verification required'));
+  ELSE v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','email','ok',true,'message','Email verified')); END IF;
+
+  IF v_user.account_status <> 'ACTIVE' THEN v_ok:=false;v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','account','ok',false,'message','Account has an active restriction','status',v_user.account_status));
+  ELSE v_reasons:=v_reasons||jsonb_build_array(jsonb_build_object('key','account','ok',true,'message','No blocking account restriction')); END IF;
+
+  v_status:=CASE WHEN v_ok THEN 'eligible' WHEN v_more THEN 'more_information_required' ELSE 'ineligible' END;
+  INSERT INTO public.user_eligibility(user_id,profile_type,action_key,status,reasons,calculated_at,calculated_by)
+  VALUES(p_user_id,p_profile_type,coalesce(nullif(p_action_key,''),'general'),v_status,v_reasons,now(),'rules')
+  ON CONFLICT(user_id,profile_type,action_key) DO UPDATE SET status=EXCLUDED.status,reasons=EXCLUDED.reasons,calculated_at=now(),calculated_by='rules'
+  RETURNING * INTO v_row;
+  RETURN v_row;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.recalculate_user_eligibility(uuid,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.recalculate_user_eligibility(uuid,text,text) TO authenticated;
+
+-- Expired documents can no longer silently satisfy configured requirements.
+CREATE OR REPLACE FUNCTION public.mark_expired_kyc_documents()
+RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
+AS $$
+DECLARE v_count integer;
+BEGIN
+  UPDATE public.kyc_documents SET status='expired',updated_at=now(),review_source='system'
+  WHERE is_deleted=false AND expires_at IS NOT NULL AND expires_at<=now() AND status='verified';
+  GET DIAGNOSTICS v_count=ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.mark_expired_kyc_documents() FROM PUBLIC;
