@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Tailwind v4 defaults dark: utilities to the operating-system color scheme.
+ * DRIGHT has its own theme toggle, so dark utilities must follow the .dark class
+ * controlled by ThemeContext. Without this, iOS dark appearance can keep
+ * dark:text-* and dark:bg-* active even after the user selects the light theme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* ─── Brand Colors ──────────────────────────────────────────── */
   --color-primary-50: #eff6ff;
