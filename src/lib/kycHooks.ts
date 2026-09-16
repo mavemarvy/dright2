@@ -3,10 +3,20 @@ import { supabase } from './supabase';
 import type { KycProvider,KycProviderSetting,KycRule,KycProfile,KycSubmission,KycDocument,KycAuditLog,KycStatus } from './kycTypes';
 
 const ensure=<T,>(data:T|null|undefined,fallback:T):T=>data??fallback;
-
 type SubmissionRpcRow=Partial<KycSubmission>&Record<string,unknown>;
 type DocumentRpcRow=Partial<KycDocument>&Record<string,unknown>;
+type SafeProfileRpcRow=Partial<KycProfile>&Record<string,unknown>;
 type ReviewHistoryRpcRow={id:string;action:string;submission_id:string|null;user_visible_reason:string|null;created_at:string};
+
+const mapSafeProfile=(row:SafeProfileRpcRow):KycProfile=>({
+  ...(row as Partial<KycProfile>),reviewer_id:null,notes:null,is_deleted:false,
+}) as KycProfile;
+const mapSafeSubmission=(row:SubmissionRpcRow):KycSubmission=>({
+  ...(row as Partial<KycSubmission>),provider_reference:null,provider_result:null,reviewer_id:null,reviewer_notes:null,is_deleted:false,
+}) as KycSubmission;
+const mapSafeDocument=(row:DocumentRpcRow):KycDocument=>({
+  ...(row as Partial<KycDocument>),reviewer_id:null,reviewer_notes:null,is_deleted:false,
+}) as KycDocument;
 
 export function useKycProviders(){
   const [providers,setProviders]=useState<KycProvider[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState<string|null>(null);
@@ -14,28 +24,34 @@ export function useKycProviders(){
   useEffect(()=>{void fetch();},[fetch]);return {providers,loading,error,refetch:fetch};
 }
 
-/** Browser receives only the credential-free provider settings view. */
+/** Credential columns never cross the browser boundary. */
 export function useKycProviderSettings(){
   const [settings,setSettings]=useState<KycProviderSetting[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState<string|null>(null);
-  const fetch=useCallback(async()=>{setLoading(true);const {data,error}=await supabase.from('kyc_provider_safe_settings').select('*');if(error)setError(error.message);else{setSettings(ensure(data,[]) as KycProviderSetting[]);setError(null);}setLoading(false);},[]);
+  const fetch=useCallback(async()=>{setLoading(true);const {data,error}=await supabase.rpc('get_kyc_provider_safe_settings');if(error)setError(error.message);else{setSettings(ensure(data,[]) as KycProviderSetting[]);setError(null);}setLoading(false);},[]);
   useEffect(()=>{void fetch();},[fetch]);return {settings,loading,error,refetch:fetch};
 }
 
-const SAFE_PROVIDER_KEYS=new Set(['is_connected','is_enabled','is_active','mode','health_status','last_sync_at']);
 export async function updateKycProviderSetting(id:string,updates:Partial<KycProviderSetting>):Promise<void>{
-  const safe=Object.fromEntries(Object.entries(updates).filter(([key])=>SAFE_PROVIDER_KEYS.has(key)));
-  const {error}=await supabase.from('kyc_provider_settings').update({...safe,updated_at:new Date().toISOString()}).eq('id',id);if(error)throw error;
+  const {error}=await supabase.rpc('update_kyc_provider_runtime_setting',{
+    p_setting_id:id,
+    p_is_enabled:typeof updates.is_enabled==='boolean'?updates.is_enabled:null,
+    p_mode:updates.mode??null,
+  });
+  if(error)throw error;
 }
 export async function setActiveKycProvider(providerId:string):Promise<void>{
-  const {data:all,error:readError}=await supabase.from('kyc_provider_safe_settings').select('id,provider_id');if(readError)throw readError;
-  for(const setting of all??[]){const {error}=await supabase.from('kyc_provider_settings').update({is_active:setting.provider_id===providerId,updated_at:new Date().toISOString()}).eq('id',setting.id);if(error)throw error;}
+  const {error}=await supabase.rpc('set_active_kyc_provider_runtime',{p_provider_id:providerId});if(error)throw error;
 }
 export async function testKycConnection(providerId:string):Promise<{success:boolean;message:string}>{
-  const {data:provider}=await supabase.from('kyc_providers').select('slug').eq('id',providerId).maybeSingle();
+  const [{data:provider},{data:settings,error}]=await Promise.all([
+    supabase.from('kyc_providers').select('slug').eq('id',providerId).maybeSingle(),
+    supabase.rpc('get_kyc_provider_safe_settings'),
+  ]);
   if(provider?.slug==='manual')return {success:true,message:'Manual DRIGHT verification is available.'};
-  const {data:setting}=await supabase.from('kyc_provider_safe_settings').select('health_status,is_connected').eq('provider_id',providerId).maybeSingle();
+  if(error)return {success:false,message:error.message};
+  const setting=(settings??[] as KycProviderSetting[]).find((s)=>s.provider_id===providerId);
   if(setting?.is_connected&&setting.health_status==='healthy')return {success:true,message:'Server-side provider health is currently healthy.'};
-  return {success:false,message:'Automated provider testing is server-side only. Configure provider credentials/webhooks in Supabase/Vercel secrets and the provider Edge Function.'};
+  return {success:false,message:'Automated provider testing is server-side only. Configure provider credentials/webhooks in approved server secrets and the provider Edge Function.'};
 }
 
 export function useKycRules(){
@@ -47,28 +63,32 @@ export async function updateKycRule(id:string,updates:Partial<KycRule>){const {e
 
 export function useKycProfile(userId:string|null){
   const [profile,setProfile]=useState<KycProfile|null>(null);const [loading,setLoading]=useState(false);
-  const fetch=useCallback(async()=>{if(!userId){setProfile(null);return;}setLoading(true);const {data,error}=await supabase.from('kyc_profiles').select('*').eq('user_id',userId).eq('is_deleted',false).maybeSingle();if(!error)setProfile(data as KycProfile|null);setLoading(false);},[userId]);
+  const fetch=useCallback(async()=>{if(!userId){setProfile(null);return;}setLoading(true);
+    const {data:{user}}=await supabase.auth.getUser();
+    if(user?.id===userId){
+      const {data,error}=await supabase.rpc('get_my_kyc_profile');const row=(data??[] as SafeProfileRpcRow[])[0];
+      if(!error)setProfile(row?mapSafeProfile(row):null);
+    }else{
+      const {data,error}=await supabase.from('kyc_profiles').select('*').eq('user_id',userId).eq('is_deleted',false).maybeSingle();if(!error)setProfile(data as KycProfile|null);
+    }
+    setLoading(false);
+  },[userId]);
   useEffect(()=>{void fetch();},[fetch]);return {profile,loading,refetch:fetch};
 }
 export async function createKycProfile(userId:string,userType:string,profileTypes?:string[]):Promise<KycProfile|null>{
   const {data:{user}}=await supabase.auth.getUser();if(!user||user.id!==userId)throw new Error('Authentication mismatch');
   const {data,error}=await supabase.rpc('create_kyc_profile_for_current_user',{p_primary_type:userType,p_profile_types:profileTypes??[userType]});if(error)throw error;return data as KycProfile;
 }
-/** Admin-only after the security migration; ordinary users cannot set status/reviewer fields directly. */
-export async function updateKycProfile(id:string,updates:Partial<KycProfile>){const {error}=await supabase.from('kyc_profiles').update({...updates,updated_at:new Date().toISOString()}).eq('id',id);if(error)throw error;}
+/** Direct status mutation is intentionally disabled; use authoritative review RPCs. */
+export async function updateKycProfile(_id:string,_updates:Partial<KycProfile>):Promise<void>{throw new Error('Direct KYC profile updates are disabled. Use the authoritative KYC workflow.');}
 
 export function useKycSubmissions(profileId:string|null){
   const [submissions,setSubmissions]=useState<KycSubmission[]>([]);const [loading,setLoading]=useState(false);
   const fetch=useCallback(async()=>{if(!profileId){setSubmissions([]);return;}setLoading(true);
-    const {data:{user}}=await supabase.auth.getUser();
-    const {data:profile}=await supabase.from('kyc_profiles').select('user_id').eq('id',profileId).maybeSingle();
-    if(profile?.user_id===user?.id){
-      const {data,error}=await supabase.rpc('get_my_kyc_submissions',{p_profile_id:profileId});
-      const rows=(data??[]) as SubmissionRpcRow[];
-      if(!error)setSubmissions(rows.map((row)=>({...row,provider_reference:null,provider_result:null,reviewer_id:null,reviewer_notes:null,is_deleted:false})) as KycSubmission[]);
-    }else{
-      const {data}=await supabase.from('kyc_submissions').select('*').eq('profile_id',profileId).eq('is_deleted',false).order('created_at',{ascending:false});setSubmissions(ensure(data,[]) as KycSubmission[]);
-    }
+    const {data:safe,error:safeError}=await supabase.rpc('get_my_kyc_submissions',{p_profile_id:profileId});
+    const safeRows=(safe??[]) as SubmissionRpcRow[];
+    if(!safeError&&safeRows.length>0){setSubmissions(safeRows.map(mapSafeSubmission));}
+    else{const {data}=await supabase.from('kyc_submissions').select('*').eq('profile_id',profileId).eq('is_deleted',false).order('created_at',{ascending:false});setSubmissions(ensure(data,[]) as KycSubmission[]);}
     setLoading(false);
   },[profileId]);
   useEffect(()=>{void fetch();},[fetch]);return {submissions,loading,refetch:fetch};
@@ -84,15 +104,10 @@ export async function reviewKycSubmission(submissionId:string,_reviewerId:string
 export function useKycDocuments(submissionId:string|null){
   const [documents,setDocuments]=useState<KycDocument[]>([]);const [loading,setLoading]=useState(false);
   const fetch=useCallback(async()=>{if(!submissionId){setDocuments([]);return;}setLoading(true);
-    const {data:{user}}=await supabase.auth.getUser();
-    const {data:submission}=await supabase.from('kyc_submissions').select('user_id').eq('id',submissionId).maybeSingle();
-    if(submission?.user_id===user?.id){
-      const {data,error}=await supabase.rpc('get_my_kyc_documents',{p_submission_id:submissionId});
-      const rows=(data??[]) as DocumentRpcRow[];
-      if(!error)setDocuments(rows.map((row)=>({...row,reviewer_id:null,reviewer_notes:null,is_deleted:false})) as KycDocument[]);
-    }else{
-      const {data}=await supabase.from('kyc_documents').select('*').eq('submission_id',submissionId).eq('is_deleted',false).order('created_at',{ascending:false});setDocuments(ensure(data,[]) as KycDocument[]);
-    }
+    const {data:safe,error:safeError}=await supabase.rpc('get_my_kyc_documents',{p_submission_id:submissionId});
+    const safeRows=(safe??[]) as DocumentRpcRow[];
+    if(!safeError&&safeRows.length>0){setDocuments(safeRows.map(mapSafeDocument));}
+    else{const {data}=await supabase.from('kyc_documents').select('*').eq('submission_id',submissionId).eq('is_deleted',false).order('created_at',{ascending:false});setDocuments(ensure(data,[]) as KycDocument[]);}
     setLoading(false);
   },[submissionId]);
   useEffect(()=>{void fetch();},[fetch]);return {documents,loading,refetch:fetch};
@@ -115,8 +130,8 @@ export async function uploadKycDocument(submissionId:string,userId:string,docTyp
 }
 export async function replaceKycDocument(oldDocId:string,submissionId:string,userId:string,docType:string,file:File){return uploadKycDocument(submissionId,userId,docType,file,{replacesDocumentId:oldDocId});}
 export async function getDocumentVersions(submissionId:string,docType:string):Promise<KycDocument[]>{
-  const {data:{user}}=await supabase.auth.getUser();const {data:submission}=await supabase.from('kyc_submissions').select('user_id').eq('id',submissionId).maybeSingle();
-  if(submission?.user_id===user?.id){const {data,error}=await supabase.rpc('get_my_kyc_documents',{p_submission_id:submissionId});if(error)throw error;const rows=(data??[]) as DocumentRpcRow[];return (rows.filter((d)=>d.doc_type===docType).map((row)=>({...row,reviewer_id:null,reviewer_notes:null,is_deleted:false})) as KycDocument[]).sort((a,b)=>b.version-a.version);}
+  const {data:safe,error:safeError}=await supabase.rpc('get_my_kyc_documents',{p_submission_id:submissionId});const safeRows=(safe??[]) as DocumentRpcRow[];
+  if(!safeError&&safeRows.length>0)return safeRows.filter((d)=>d.doc_type===docType).map(mapSafeDocument).sort((a,b)=>b.version-a.version);
   const {data,error}=await supabase.from('kyc_documents').select('*').eq('submission_id',submissionId).eq('doc_type',docType).order('version',{ascending:false});if(error)throw error;return ensure(data,[]) as KycDocument[];
 }
 export async function createKycDocumentSignedUrl(document:KycDocument,expiresIn=300):Promise<string>{
@@ -127,7 +142,7 @@ export async function reviewKycDocument(documentId:string,decision:'under_review
   const {data,error}=await supabase.rpc('review_kyc_document',{p_document_id:documentId,p_decision:decision,p_user_visible_reason:userVisibleReason??null,p_internal_note:internalNote??null,p_checklist:checklist});if(error)throw error;return data as KycDocument;
 }
 
-/** Client code no longer writes KYC audit rows. Authoritative RPCs generate immutable audit events. */
+/** Authoritative RPCs create immutable KYC audit events. */
 export async function logKycAudit(_entry:{userId?:string;adminId?:string;action:string;entity_type?:string;entity_id?:string;metadata?:Record<string,unknown>}):Promise<void>{return;}
 export function useKycAuditLogs(userId?:string,limit=50){
   const [logs,setLogs]=useState<KycAuditLog[]>([]);const [loading,setLoading]=useState(false);
