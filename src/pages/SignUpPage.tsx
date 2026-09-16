@@ -1,7 +1,7 @@
 import { useEffect,useMemo,useState } from 'react';
 import { Link,useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail,Lock,Phone,User,ArrowRight,ArrowLeft,Loader2,AtSign,Calendar,Globe2,Briefcase,FileText,CheckCircle2,XCircle,Search,Upload,ShieldCheck,Sparkles } from 'lucide-react';
+import { Mail,Lock,Phone,User,ArrowRight,ArrowLeft,Loader2,AtSign,Calendar,Briefcase,FileText,CheckCircle2,XCircle,Search,Upload,ShieldCheck,Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getPendingRedirect,clearPendingRedirect } from '../lib/affiliate';
 import TurnstileWidget from '../components/TurnstileWidget';
@@ -105,7 +105,7 @@ function Field({label,icon,children}:{label:string;icon:React.ReactElement;child
 function ReviewRow({label,value}:{label:string;value:string}){return <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3 border-b border-gray-100 dark:border-gray-700"><span className="text-sm text-gray-500">{label}</span><span className="text-sm font-medium text-gray-900 dark:text-gray-100 sm:text-right">{value}</span></div>;}
 function QuestionField({question,value,onChange}:{question:QuestionnaireQuestion;value:unknown;onChange:(value:unknown)=>void}){
   const options=Array.isArray(question.options)?question.options.map(String):[];const label=<label className="label">{question.label}{question.is_required&&<span className="text-red-500"> *</span>}</label>;
-  if(question.answer_type==='yes_no')return <div>{label}<select value={String(value??'')} onChange={(e)=>onChange(e.target.value==='yes')} className="base-input px-3"><option value="">Select…</option><option value="yes">Yes</option><option value="false">No</option></select></div>;
+  if(question.answer_type==='yes_no')return <div>{label}<select value={value===true?'true':value===false?'false':''} onChange={(e)=>onChange(e.target.value==='true')} className="base-input px-3"><option value="">Select…</option><option value="true">Yes</option><option value="false">No</option></select></div>;
   if(question.answer_type==='single_select'&&options.length)return <div>{label}<select value={String(value??'')} onChange={(e)=>onChange(e.target.value)} className="base-input px-3"><option value="">Select…</option>{options.map((o)=><option key={o} value={o}>{o.replace(/_/g,' ')}</option>)}</select></div>;
   if(question.answer_type==='multi_select'&&options.length){const selected=Array.isArray(value)?value.map(String):[];return <div>{label}<div className="flex flex-wrap gap-2">{options.map((o)=><button key={o} type="button" onClick={()=>onChange(selected.includes(o)?selected.filter((v)=>v!==o):[...selected,o])} className={`px-3 py-2 rounded-full text-sm border ${selected.includes(o)?'bg-primary-600 text-white border-primary-600':'border-gray-200 dark:border-gray-700'}`}>{o.replace(/_/g,' ')}</button>)}</div></div>;}
   if(question.answer_type==='long_text')return <div>{label}<textarea rows={3} value={String(value??'')} onChange={(e)=>onChange(e.target.value)} className="base-input px-3 resize-none"/>{question.description&&<p className="helper">{question.description}</p>}</div>;
