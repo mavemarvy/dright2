@@ -256,15 +256,28 @@ export async function replyToTicket(input: {
   is_internal?: boolean;
   metadata?: Record<string, unknown>;
 }): Promise<TicketReply> {
+  if (input.author_role === 'admin') {
+    const { data, error } = await supabase.functions.invoke('support-ticket-reply', {
+      body: {
+        ticket_id: input.ticket_id,
+        message: input.message.trim(),
+        is_internal: !!input.is_internal,
+      },
+    });
+    if (error) throw error;
+    if (!data?.success || !data?.reply) throw new Error(data?.error || 'Could not send support reply.');
+    return data.reply as TicketReply;
+  }
+
   const { data, error } = await supabase
     .from('ticket_replies')
     .insert({
       ticket_id: input.ticket_id,
       author_id: input.author_id,
-      author_role: input.author_role,
+      author_role: 'user',
       message: input.message.trim(),
       channel: input.channel || 'web',
-      is_internal: input.author_role === 'admin' ? !!input.is_internal : false,
+      is_internal: false,
       metadata: input.metadata || {},
     })
     .select('*')
