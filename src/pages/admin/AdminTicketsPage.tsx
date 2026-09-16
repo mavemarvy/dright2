@@ -1,23 +1,37 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
   CheckCircle2,
   Clock3,
+  ExternalLink,
+  FileText,
   Headphones,
+  Image as ImageIcon,
   Loader2,
+  Music,
+  Paperclip,
   Search,
   Send,
   ShieldAlert,
+  Trash2,
   UserCheck,
+  Video,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  deleteUnsentSupportAttachment,
   replyToTicket,
+  supportAttachmentSignedUrl,
+  SUPPORT_ATTACHMENT_MAX_BYTES,
+  SUPPORT_ATTACHMENT_MAX_PER_REPLY,
   updateSupportTicket,
+  uploadSupportAttachment,
   useAdminSupportTickets,
+  useSupportAttachments,
   useTicketReplies,
+  type SupportAttachment,
   type SupportTicket,
   type SupportTicketStatus,
 } from '../../lib/supportHooks';
@@ -42,6 +56,13 @@ const STATUS_CLASS: Record<SupportTicketStatus, string> = {
 
 type QueueFilter = 'needs_support' | SupportTicketStatus | 'all';
 
+const ATTACHMENT_ACCEPT = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4',
+  'application/pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.rtf', '.zip', '.txt', '.csv',
+].join(',');
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleString('en-US', {
     month: 'short',
@@ -50,6 +71,103 @@ function formatDate(dateStr: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return 'Unknown size';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function AttachmentIcon({ attachment }: { attachment: SupportAttachment }) {
+  if (attachment.media_type === 'image') return <ImageIcon className="w-4 h-4" />;
+  if (attachment.media_type === 'video') return <Video className="w-4 h-4" />;
+  if (attachment.media_type === 'audio') return <Music className="w-4 h-4" />;
+  return <FileText className="w-4 h-4" />;
+}
+
+function TicketAttachment({
+  attachment,
+  compact = false,
+  onRemove,
+  removing = false,
+}: {
+  attachment: SupportAttachment;
+  compact?: boolean;
+  onRemove?: () => void;
+  removing?: boolean;
+}) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setSignedUrl(null);
+    setUrlError(null);
+    void supportAttachmentSignedUrl(attachment, 10 * 60)
+      .then(url => { if (active) setSignedUrl(url); })
+      .catch(() => { if (active) setUrlError('Could not open file'); });
+    return () => { active = false; };
+  }, [attachment.id, attachment.storage_bucket, attachment.storage_path]);
+
+  const statusLabel = attachment.direction === 'outbound'
+    ? attachment.status === 'sent' ? 'Sent' : attachment.status === 'failed' ? 'Delivery failed' : 'Ready to send'
+    : 'Customer upload';
+
+  return (
+    <div className={`rounded-xl border border-gray-200 bg-white overflow-hidden ${compact ? 'mt-2' : ''}`}>
+      {attachment.media_type === 'image' && signedUrl && (
+        <a href={signedUrl} target="_blank" rel="noreferrer" className="block bg-gray-50">
+          <img src={signedUrl} alt={attachment.file_name} className="max-h-64 w-full object-contain" />
+        </a>
+      )}
+      {attachment.media_type === 'video' && signedUrl && (
+        <video src={signedUrl} controls preload="metadata" className="max-h-64 w-full bg-black" />
+      )}
+      {attachment.media_type === 'audio' && signedUrl && (
+        <div className="p-3 bg-gray-50"><audio src={signedUrl} controls className="w-full" /></div>
+      )}
+
+      <div className="flex items-center gap-2 p-3 min-w-0">
+        <span className="shrink-0 w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center">
+          <AttachmentIcon attachment={attachment} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-gray-800 truncate">{attachment.file_name}</p>
+          <p className="text-[11px] text-gray-400 truncate">
+            {formatFileSize(Number(attachment.file_size))} · {statusLabel}
+          </p>
+          {attachment.status === 'failed' && attachment.error_code && (
+            <p className="text-[11px] text-red-600 truncate">{attachment.error_code}</p>
+          )}
+          {urlError && <p className="text-[11px] text-red-600">{urlError}</p>}
+        </div>
+        {signedUrl && (
+          <a
+            href={signedUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="p-2 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50"
+            aria-label={`Open ${attachment.file_name}`}
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={removing}
+            className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+            aria-label={`Remove ${attachment.file_name}`}
+          >
+            {removing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function TicketDetail({
@@ -63,13 +181,87 @@ function TicketDetail({
 }) {
   const { user } = useAuth();
   const { replies, loading, error, refetch } = useTicketReplies(ticket.id);
+  const {
+    attachments,
+    loading: attachmentsLoading,
+    error: attachmentsError,
+    refetch: refetchAttachments,
+  } = useSupportAttachments(ticket.id);
   const [replyText, setReplyText] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<SupportAttachment[]>([]);
   const [sendingReply, setSendingReply] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [removingAttachmentId, setRemovingAttachmentId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setPendingAttachments([]);
+    setReplyText('');
+    setActionError(null);
+  }, [ticket.id]);
+
+  const initialAttachments = useMemo(
+    () => attachments.filter(item => !item.reply_id && item.direction === 'inbound'),
+    [attachments],
+  );
+
+  const attachmentsByReply = useMemo(() => {
+    const grouped = new Map<string, SupportAttachment[]>();
+    attachments.forEach(item => {
+      if (!item.reply_id) return;
+      const current = grouped.get(item.reply_id) || [];
+      current.push(item);
+      grouped.set(item.reply_id, current);
+    });
+    return grouped;
+  }, [attachments]);
+
+  const handleAttachmentSelection = async (files: FileList | null) => {
+    if (!user || !files?.length || uploadingAttachments) return;
+    const selected = Array.from(files);
+    if (pendingAttachments.length + selected.length > SUPPORT_ATTACHMENT_MAX_PER_REPLY) {
+      setActionError(`You can attach up to ${SUPPORT_ATTACHMENT_MAX_PER_REPLY} files to one reply.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setUploadingAttachments(true);
+    setActionError(null);
+    try {
+      for (const file of selected) {
+        if (file.size > SUPPORT_ATTACHMENT_MAX_BYTES) {
+          throw new Error(`${file.name} is larger than 20 MB.`);
+        }
+        const attachment = await uploadSupportAttachment({ ticket, uploaderId: user.id, file });
+        setPendingAttachments(current => [...current, attachment]);
+      }
+      await refetchAttachments();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not upload one of the attachments.');
+    } finally {
+      setUploadingAttachments(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const removePendingAttachment = async (attachment: SupportAttachment) => {
+    setRemovingAttachmentId(attachment.id);
+    setActionError(null);
+    try {
+      await deleteUnsentSupportAttachment(attachment);
+      setPendingAttachments(current => current.filter(item => item.id !== attachment.id));
+      await refetchAttachments();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not remove the attachment.');
+    } finally {
+      setRemovingAttachmentId(null);
+    }
+  };
 
   const sendReply = async () => {
-    if (!user || !replyText.trim() || sendingReply) return;
+    if (!user || (!replyText.trim() && pendingAttachments.length === 0) || sendingReply || uploadingAttachments) return;
     setSendingReply(true);
     setActionError(null);
     try {
@@ -79,11 +271,14 @@ function TicketDetail({
         author_role: 'admin',
         message: replyText,
         channel: 'web',
+        attachment_ids: pendingAttachments.map(item => item.id),
       });
       setReplyText('');
-      await Promise.all([refetch(), onChanged()]);
+      setPendingAttachments([]);
+      await Promise.all([refetch(), refetchAttachments(), onChanged()]);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not send the reply.');
+      await refetchAttachments();
     } finally {
       setSendingReply(false);
     }
@@ -206,31 +401,39 @@ function TicketDetail({
 
       <div className="flex-1 overflow-y-auto p-5 space-y-3">
         <div className="flex justify-start">
-          <div className="max-w-[90%] rounded-2xl rounded-tl-md bg-gray-50 border border-gray-100 px-4 py-3">
+          <div className="max-w-[90%] rounded-2xl rounded-tl-md bg-gray-50 border border-gray-100 px-4 py-3 min-w-0">
             <p className="text-xs text-gray-400 mb-1">{userName} · {formatDate(ticket.created_at)}</p>
             <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{ticket.message}</p>
+            {initialAttachments.map(attachment => <TicketAttachment key={attachment.id} attachment={attachment} compact />)}
           </div>
         </div>
 
-        {loading && <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-gray-400" /></div>}
-        {error && <p className="text-xs text-red-600 text-center">{error}</p>}
+        {(loading || attachmentsLoading) && <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-gray-400" /></div>}
+        {(error || attachmentsError) && <p className="text-xs text-red-600 text-center">{error || attachmentsError}</p>}
 
         {replies.map(reply => {
           const adminReply = reply.author_role === 'admin';
           const authorName = reply.author?.full_name || reply.author?.username || reply.author?.email || (adminReply ? 'Support Agent' : userName);
+          const replyAttachments = attachmentsByReply.get(reply.id) || [];
           if (reply.is_internal) {
             return (
               <div key={reply.id} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                 <p className="text-[11px] font-medium text-amber-700">Internal note · {authorName}</p>
                 <p className="text-sm text-amber-900 mt-1 whitespace-pre-wrap">{reply.message}</p>
+                {replyAttachments.map(attachment => <TicketAttachment key={attachment.id} attachment={attachment} compact />)}
               </div>
             );
           }
           return (
             <div key={reply.id} className={`flex ${adminReply ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[90%] rounded-2xl px-4 py-3 ${adminReply ? 'rounded-tr-md bg-primary-600 text-white' : 'rounded-tl-md bg-gray-50 border border-gray-100 text-gray-800'}`}>
+              <div className={`max-w-[90%] rounded-2xl px-4 py-3 min-w-0 ${adminReply ? 'rounded-tr-md bg-primary-600 text-white' : 'rounded-tl-md bg-gray-50 border border-gray-100 text-gray-800'}`}>
                 <p className={`text-xs mb-1 ${adminReply ? 'text-white/70' : 'text-gray-400'}`}>{authorName} · {formatDate(reply.created_at)}</p>
                 <p className="text-sm whitespace-pre-wrap break-words">{reply.message}</p>
+                {replyAttachments.length > 0 && (
+                  <div className="space-y-2 mt-2">
+                    {replyAttachments.map(attachment => <TicketAttachment key={attachment.id} attachment={attachment} />)}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -245,6 +448,18 @@ function TicketDetail({
 
       {canReply && (
         <div className="p-4 border-t border-gray-100">
+          {pendingAttachments.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {pendingAttachments.map(attachment => (
+                <TicketAttachment
+                  key={attachment.id}
+                  attachment={attachment}
+                  onRemove={() => void removePendingAttachment(attachment)}
+                  removing={removingAttachmentId === attachment.id}
+                />
+              ))}
+            </div>
+          )}
           <textarea
             value={replyText}
             onChange={event => setReplyText(event.target.value)}
@@ -253,11 +468,31 @@ function TicketDetail({
             maxLength={5000}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none text-gray-900 resize-none"
           />
-          <div className="flex justify-end mt-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={ATTACHMENT_ACCEPT}
+            className="hidden"
+            onChange={event => void handleAttachmentSelection(event.target.files)}
+          />
+          <div className="flex items-center justify-between gap-2 mt-2">
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAttachments || sendingReply || pendingAttachments.length >= SUPPORT_ATTACHMENT_MAX_PER_REPLY}
+                className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium disabled:opacity-50"
+              >
+                {uploadingAttachments ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                Attach file
+              </button>
+              <p className="text-[10px] text-gray-400 mt-1">Up to 10 files · 20 MB each{ticket.channel === 'telegram' ? ' · sent back to Telegram' : ' · stored in ticket'}</p>
+            </div>
             <button
               onClick={sendReply}
-              disabled={sendingReply || !replyText.trim() || !user}
-              className="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50 min-h-[42px]"
+              disabled={sendingReply || uploadingAttachments || (!replyText.trim() && pendingAttachments.length === 0) || !user}
+              className="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50 min-h-[42px] shrink-0"
             >
               {sendingReply ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               Send Reply
