@@ -2,9 +2,9 @@
   Column-safe user read surfaces.
   PostgreSQL RLS controls rows, not columns, so user-facing review reads use SECURITY DEFINER
   functions that return only explicitly safe fields. Internal notes/provider results stay admin-only.
+  Achievement-evidence review surfaces are added after those tables are created.
 */
 
--- Questionnaire submissions contain internal_notes; remove direct owner row access.
 DROP POLICY IF EXISTS questionnaire_submissions_own_read ON public.questionnaire_submissions;
 DROP POLICY IF EXISTS questionnaire_review_events_own_read ON public.questionnaire_review_events;
 
@@ -41,7 +41,6 @@ $$;
 REVOKE ALL ON FUNCTION public.get_my_questionnaire_review_events(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_my_questionnaire_review_events(uuid) TO authenticated;
 
--- KYC submissions contain reviewer_notes and provider_result; documents contain reviewer_notes.
 DROP POLICY IF EXISTS kyc_submissions_own_read ON public.kyc_submissions;
 DROP POLICY IF EXISTS kyc_documents_own_read ON public.kyc_documents;
 
@@ -87,7 +86,6 @@ $$;
 REVOKE ALL ON FUNCTION public.get_my_kyc_documents(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_my_kyc_documents(uuid) TO authenticated;
 
--- Replace the security-invoker user history view with an explicit safe RPC.
 REVOKE ALL ON public.kyc_review_user_history FROM authenticated;
 CREATE OR REPLACE FUNCTION public.get_my_kyc_review_history(p_limit integer DEFAULT 50)
 RETURNS TABLE(
@@ -105,7 +103,6 @@ $$;
 REVOKE ALL ON FUNCTION public.get_my_kyc_review_history(integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_my_kyc_review_history(integer) TO authenticated;
 
--- Professional/achievement review tables both contain private internal_note fields.
 DROP POLICY IF EXISTS professional_document_reviews_own_read ON public.professional_document_reviews;
 CREATE OR REPLACE FUNCTION public.get_my_professional_document_reviews(p_document_id uuid DEFAULT NULL)
 RETURNS TABLE(id uuid,document_id uuid,decision text,new_status text,user_visible_reason text,created_at timestamptz)
@@ -118,16 +115,3 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION public.get_my_professional_document_reviews(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_my_professional_document_reviews(uuid) TO authenticated;
-
-DROP POLICY IF EXISTS achievement_evidence_reviews_own_read ON public.achievement_evidence_reviews;
-CREATE OR REPLACE FUNCTION public.get_my_achievement_evidence_reviews(p_evidence_id uuid DEFAULT NULL)
-RETURNS TABLE(id uuid,evidence_id uuid,decision text,new_status text,user_visible_reason text,created_at timestamptz)
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp
-AS $$
-  SELECT r.id,r.evidence_id,r.decision,r.new_status,r.user_visible_reason,r.created_at
-  FROM public.achievement_evidence_reviews r
-  WHERE r.user_id=auth.uid() AND (p_evidence_id IS NULL OR r.evidence_id=p_evidence_id)
-  ORDER BY r.created_at DESC;
-$$;
-REVOKE ALL ON FUNCTION public.get_my_achievement_evidence_reviews(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_my_achievement_evidence_reviews(uuid) TO authenticated;
