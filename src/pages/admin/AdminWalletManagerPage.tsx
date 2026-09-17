@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Wallet, Search, Lock, ArrowUpRight, ArrowDownLeft,
   RefreshCw, Loader2, Download, TrendingUp, TrendingDown,
-  DollarSign, Eye,
+  DollarSign, Eye, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency, exportTransactionsCSV, downloadCSV } from '../../lib/walletEngine';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface AdminWallet {
   id: string; user_id: string; balance: number; pending_balance: number;
@@ -18,10 +19,11 @@ interface AdminWallet {
 
 interface AdminTransaction {
   id: string; wallet_id: string; user_id: string; type: string; amount: number;
-  balance_after: number | null; description: string | null; metadata: any; created_at: string;
+  balance_after: number | null; description: string | null; metadata: unknown; created_at: string;
 }
 
 export default function AdminWalletManagerPage() {
+  const { user } = useAuth();
   const [wallets, setWallets] = useState<AdminWallet[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -30,11 +32,19 @@ export default function AdminWalletManagerPage() {
   const [adjustment, setAdjustment] = useState({ type: 'credit', amount: '', description: '', balanceField: 'balance' });
   const [freezeReason, setFreezeReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('cc_wallets').select('*').order('updated_at', { ascending: false }).limit(100);
-    if (error) console.error('Failed to load wallets:', error);
+    const { data, error } = await supabase
+      .from('cc_wallets')
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .limit(100);
+    if (error) {
+      console.error('Failed to load wallets:', error);
+      setActionError(error.message);
+    }
     setWallets((data as AdminWallet[]) || []);
     setLoading(false);
   }, []);
@@ -42,43 +52,95 @@ export default function AdminWalletManagerPage() {
   useEffect(() => { load(); }, [load]);
 
   const loadTransactions = useCallback(async (walletId: string) => {
-    const { data, error } = await supabase.from('cc_transactions').select('*').eq('wallet_id', walletId).order('created_at', { ascending: false }).limit(50);
-    if (error) console.error('Failed to load transactions:', error);
+    const { data, error } = await supabase
+      .from('cc_transactions')
+      .select('*')
+      .eq('wallet_id', walletId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) {
+      console.error('Failed to load transactions:', error);
+      setActionError(error.message);
+    }
     setTransactions((data as AdminTransaction[]) || []);
   }, []);
 
-  const handleSelect = (w: AdminWallet) => { setSelectedWallet(w); loadTransactions(w.id); };
+  const handleSelect = (wallet: AdminWallet) => {
+    setSelectedWallet(wallet);
+    setActionError(null);
+    loadTransactions(wallet.id);
+  };
+
+  const refreshSelectedWallet = async (walletId: string) => {
+    const { data } = await supabase.from('cc_wallets').select('*').eq('id', walletId).maybeSingle();
+    if (data) setSelectedWallet(data as AdminWallet);
+    await Promise.all([load(), loadTransactions(walletId)]);
+  };
 
   const handleFreeze = async () => {
-    if (!selectedWallet) return;
+    if (!selectedWallet || !user?.id) return;
     setActionLoading(true);
+    setActionError(null);
     const { error } = await supabase.rpc('admin_freeze_wallet', {
-      p_admin_id: null, p_wallet_id: selectedWallet.id,
-      p_freeze: !selectedWallet.is_frozen, p_reason: freezeReason || null,
+      p_admin_id: user.id,
+      p_wallet_id: selectedWallet.id,
+      p_freeze: !selectedWallet.is_frozen,
+      p_reason: freezeReason.trim() || null,
     });
     setActionLoading(false);
-    if (error) { console.error('Freeze failed:', error); return; }
-    setFreezeReason(''); load(); if (selectedWallet) handleSelect({ ...selectedWallet, is_frozen: !selectedWallet.is_frozen });
+    if (error) {
+      console.error('Freeze failed:', error);
+      setActionError(error.message);
+      return;
+    }
+    setFreezeReason('');
+    await refreshSelectedWallet(selectedWallet.id);
   };
 
-  const handleAdjustment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedWallet) return;
+  const handleAdjustment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedWallet || !user?.id) return;
+
+    const amount = Number(adjustment.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setActionError('Adjustment amount must be greater than zero.');
+      return;
+    }
+    if (!adjustment.description.trim()) {
+      setActionError('A reason is required for every manual adjustment.');
+      return;
+    }
+
     setActionLoading(true);
-    const { error } = await supabase.rpc('admin_manual_adjustment', {
-      p_admin_id: null, p_user_id: selectedWallet.user_id, p_wallet_id: selectedWallet.id,
-      p_type: adjustment.type, p_amount: parseFloat(adjustment.amount),
-      p_description: adjustment.description, p_balance_field: adjustment.balanceField,
+    setActionError(null);
+    const { data, error } = await supabase.rpc('admin_manual_adjustment', {
+      p_admin_id: user.id,
+      p_user_id: selectedWallet.user_id,
+      p_wallet_id: selectedWallet.id,
+      p_type: adjustment.type,
+      p_amount: amount,
+      p_description: adjustment.description.trim(),
+      p_balance_field: adjustment.balanceField,
     });
     setActionLoading(false);
-    if (error) { console.error('Adjustment failed:', error); return; }
+
+    const result = data as { success?: boolean; error?: string } | null;
+    if (error || result?.success === false) {
+      const message = result?.error || error?.message || 'Adjustment failed';
+      console.error('Adjustment failed:', message);
+      setActionError(message);
+      return;
+    }
+
     setAdjustment({ type: 'credit', amount: '', description: '', balanceField: 'balance' });
-    load(); loadTransactions(selectedWallet.id);
+    await refreshSelectedWallet(selectedWallet.id);
   };
 
-  const filtered = wallets.filter(w => !search || w.user_id.includes(search));
+  const filtered = wallets.filter((wallet) => !search || wallet.user_id.toLowerCase().includes(search.toLowerCase()));
 
-  if (loading) return <div className="p-8 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
+  if (loading) {
+    return <div className="p-8 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -88,46 +150,61 @@ export default function AdminWalletManagerPage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Wallet Manager</h1>
-          <p className="text-sm text-gray-500">View wallets, manage balances, freeze/unfreeze, manual adjustments</p>
+          <p className="text-sm text-gray-500">View wallets, freeze access, and make audited balance adjustments</p>
         </div>
       </div>
 
-      {/* Platform stats */}
+      {actionError && (
+        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-red-700 text-sm flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{actionError}</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <StatCard icon={DollarSign} label="Total Balance" value={formatCurrency(wallets.reduce((s, w) => s + Number(w.balance), 0))} color="emerald" />
-        <StatCard icon={TrendingUp} label="Total Deposited" value={formatCurrency(wallets.reduce((s, w) => s + Number(w.total_deposited), 0))} color="blue" />
-        <StatCard icon={TrendingDown} label="Total Withdrawn" value={formatCurrency(wallets.reduce((s, w) => s + Number(w.total_withdrawn), 0))} color="amber" />
-        <StatCard icon={Lock} label="Frozen Wallets" value={wallets.filter(w => w.is_frozen).length.toString()} color="red" />
+        <StatCard icon={DollarSign} label="Total Balance" value={formatCurrency(wallets.reduce((sum, wallet) => sum + Number(wallet.balance), 0))} color="emerald" />
+        <StatCard icon={TrendingUp} label="Total Deposited" value={formatCurrency(wallets.reduce((sum, wallet) => sum + Number(wallet.total_deposited), 0))} color="blue" />
+        <StatCard icon={TrendingDown} label="Total Withdrawn" value={formatCurrency(wallets.reduce((sum, wallet) => sum + Number(wallet.total_withdrawn), 0))} color="amber" />
+        <StatCard icon={Lock} label="Frozen Wallets" value={wallets.filter((wallet) => wallet.is_frozen).length.toString()} color="red" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Wallet list */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-gray-900 dark:text-white">All Wallets ({filtered.length})</h2>
-            <button onClick={load} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><RefreshCw className="w-4 h-4 text-gray-400" /></button>
+            <button onClick={load} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Refresh wallets">
+              <RefreshCw className="w-4 h-4 text-gray-400" />
+            </button>
           </div>
           <div className="relative mb-3">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by user ID..."
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:border-emerald-500" />
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by user ID..."
+              className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:border-emerald-500"
+            />
           </div>
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {filtered.map(w => (
-              <div key={w.id} onClick={() => handleSelect(w)}
-                className={`p-3 rounded-lg cursor-pointer transition-colors ${selectedWallet?.id === w.id ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30 border border-transparent'}`}>
+            {filtered.map((wallet) => (
+              <button
+                type="button"
+                key={wallet.id}
+                onClick={() => handleSelect(wallet)}
+                className={`w-full text-left p-3 rounded-lg transition-colors ${selectedWallet?.id === wallet.id ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30 border border-transparent'}`}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono text-gray-500">{w.user_id.slice(0, 8)}...</span>
-                  {w.is_frozen && <span className="px-1.5 py-0.5 text-xs rounded bg-red-100 text-red-600">Frozen</span>}
+                  <span className="text-xs font-mono text-gray-500">{wallet.user_id.slice(0, 8)}...</span>
+                  {wallet.is_frozen && <span className="px-1.5 py-0.5 text-xs rounded bg-red-100 text-red-600">Frozen</span>}
                 </div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{formatCurrency(Number(w.balance), w.currency)}</p>
-                <p className="text-xs text-gray-400">Updated {new Date(w.updated_at).toLocaleDateString()}</p>
-              </div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{formatCurrency(Number(wallet.balance), wallet.currency)}</p>
+                <p className="text-xs text-gray-400">Updated {new Date(wallet.updated_at).toLocaleDateString()}</p>
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Selected wallet detail */}
         {selectedWallet ? (
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
@@ -138,37 +215,42 @@ export default function AdminWalletManagerPage() {
                   ['Locked', selectedWallet.locked_balance], ['Escrow', selectedWallet.escrow_balance],
                   ['Referral', selectedWallet.referral_balance], ['Affiliate', selectedWallet.affiliate_balance],
                   ['Creator', selectedWallet.creator_balance], ['Seller', selectedWallet.seller_earnings],
-                ].map(([label, val]) => (
+                ].map(([label, value]) => (
                   <div key={label as string} className="p-2 rounded-lg bg-gray-50 dark:bg-gray-700/30">
                     <p className="text-xs text-gray-400">{label}</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{formatCurrency(Number(val), selectedWallet.currency)}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{formatCurrency(Number(value), selectedWallet.currency)}</p>
                   </div>
                 ))}
               </div>
               <div className="flex items-center gap-2 mt-4">
-                <button onClick={handleFreeze} disabled={actionLoading}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium ${selectedWallet.is_frozen ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-red-500 text-white hover:bg-red-600'} disabled:opacity-50`}>
-                  {actionLoading ? '...' : selectedWallet.is_frozen ? 'Unfreeze' : 'Freeze'}
+                <button
+                  onClick={handleFreeze}
+                  disabled={actionLoading || !user?.id}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium ${selectedWallet.is_frozen ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-red-500 text-white hover:bg-red-600'} disabled:opacity-50`}
+                >
+                  {actionLoading ? 'Processing...' : selectedWallet.is_frozen ? 'Unfreeze' : 'Freeze'}
                 </button>
                 {!selectedWallet.is_frozen && (
-                  <input type="text" value={freezeReason} onChange={e => setFreezeReason(e.target.value)} placeholder="Freeze reason (optional)"
-                    className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs" />
+                  <input
+                    type="text"
+                    value={freezeReason}
+                    onChange={(event) => setFreezeReason(event.target.value)}
+                    placeholder="Freeze reason (optional)"
+                    className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs"
+                  />
                 )}
               </div>
             </div>
 
-            {/* Manual adjustment */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
               <h3 className="font-bold text-gray-900 dark:text-white mb-3">Manual Adjustment</h3>
               <form onSubmit={handleAdjustment} className="space-y-2">
-                <div className="flex gap-2">
-                  <select value={adjustment.type} onChange={e => setAdjustment({ ...adjustment, type: e.target.value })}
-                    className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select value={adjustment.type} onChange={(event) => setAdjustment({ ...adjustment, type: event.target.value })} className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
                     <option value="credit">Credit (Add)</option>
                     <option value="debit">Debit (Remove)</option>
                   </select>
-                  <select value={adjustment.balanceField} onChange={e => setAdjustment({ ...adjustment, balanceField: e.target.value })}
-                    className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                  <select value={adjustment.balanceField} onChange={(event) => setAdjustment({ ...adjustment, balanceField: event.target.value })} className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
                     <option value="balance">Available</option>
                     <option value="pending_balance">Pending</option>
                     <option value="locked_balance">Locked</option>
@@ -178,34 +260,35 @@ export default function AdminWalletManagerPage() {
                     <option value="creator_balance">Creator</option>
                     <option value="seller_earnings">Seller</option>
                   </select>
-                  <input type="number" step="0.01" value={adjustment.amount} onChange={e => setAdjustment({ ...adjustment, amount: e.target.value })} placeholder="Amount" required
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                  <input type="number" min="0.01" step="0.01" value={adjustment.amount} onChange={(event) => setAdjustment({ ...adjustment, amount: event.target.value })} placeholder="Amount" required className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
                 </div>
-                <input type="text" value={adjustment.description} onChange={e => setAdjustment({ ...adjustment, description: e.target.value })} placeholder="Description / reason" required
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
-                <button type="submit" disabled={actionLoading} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+                <input type="text" value={adjustment.description} onChange={(event) => setAdjustment({ ...adjustment, description: event.target.value })} placeholder="Description / reason" required className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                <button type="submit" disabled={actionLoading || !user?.id} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
                   {actionLoading ? 'Processing...' : 'Apply Adjustment'}
                 </button>
               </form>
             </div>
 
-            {/* Transaction history */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-gray-900 dark:text-white">Recent Transactions</h3>
-                <button onClick={() => downloadCSV('admin-transactions.csv', exportTransactionsCSV(transactions as any))} className="text-xs text-gray-500 flex items-center gap-1"><Download className="w-3.5 h-3.5" /> Export</button>
+                <button onClick={() => downloadCSV('admin-transactions.csv', exportTransactionsCSV(transactions as never))} className="text-xs text-gray-500 flex items-center gap-1">
+                  <Download className="w-3.5 h-3.5" /> Export
+                </button>
               </div>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {transactions.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">No transactions.</p> : transactions.map(t => (
-                  <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${t.type === 'credit' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                      {t.type === 'credit' ? <ArrowDownLeft className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
+                {transactions.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">No transactions.</p> : transactions.map((transaction) => (
+                  <div key={transaction.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${transaction.type === 'credit' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                      {transaction.type === 'credit' ? <ArrowDownLeft className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{t.description || t.type}</p>
-                      <p className="text-xs text-gray-400">{new Date(t.created_at).toLocaleString()}</p>
+                      <p className="text-xs font-medium truncate">{transaction.description || transaction.type}</p>
+                      <p className="text-xs text-gray-400">{new Date(transaction.created_at).toLocaleString()}</p>
                     </div>
-                    <p className={`text-xs font-semibold ${t.type === 'credit' ? 'text-emerald-600' : 'text-red-600'}`}>{t.type === 'credit' ? '+' : '-'}{formatCurrency(Number(t.amount))}</p>
+                    <p className={`text-xs font-semibold ${transaction.type === 'credit' ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(Number(transaction.amount), selectedWallet.currency)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -221,8 +304,13 @@ export default function AdminWalletManagerPage() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
-  const colors: Record<string, string> = { emerald: 'bg-emerald-50 text-emerald-600', blue: 'bg-blue-50 text-blue-600', amber: 'bg-amber-50 text-amber-600', red: 'bg-red-50 text-red-600' };
+function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string; color: string }) {
+  const colors: Record<string, string> = {
+    emerald: 'bg-emerald-50 text-emerald-600',
+    blue: 'bg-blue-50 text-blue-600',
+    amber: 'bg-amber-50 text-amber-600',
+    red: 'bg-red-50 text-red-600',
+  };
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${colors[color]}`}><Icon className="w-4 h-4" /></div>
