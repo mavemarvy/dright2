@@ -37,11 +37,9 @@ export async function getWalletSummary(userId: string): Promise<WalletSummary | 
 }
 
 export async function getOrCreateWallet(userId: string): Promise<string | null> {
-  const { data: existing } = await supabase.from('cc_wallets').select('id').eq('user_id', userId).maybeSingle();
-  if (existing?.id) return existing.id;
-  const { data: created, error } = await supabase.from('cc_wallets').insert({ user_id: userId }).select('id').single();
-  if (error) { console.error('Failed to create wallet:', error); return null; }
-  return created.id;
+  const { data, error } = await supabase.rpc('get_or_create_wallet', { p_user_id: userId });
+  if (error) { console.error('Failed to get or create wallet:', error); return null; }
+  return typeof data === 'string' ? data : null;
 }
 
 export async function processTransaction(params: {
