@@ -1,13 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  DollarSign,
-  Search,
-  CheckCircle,
-  Clock,
-  Loader2,
-  Percent,
-  Save,
+  DollarSign, Search, CheckCircle, Clock, Loader2,
+  Percent, Save, AlertTriangle, X,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { emitEvent } from '../../lib/notificationEvents';
@@ -31,6 +26,14 @@ interface PayoutRecord {
   user_name?: string;
 }
 
+type PayoutRpcResult = {
+  success?: boolean;
+  already_processed?: boolean;
+  status?: string;
+  approved_amount?: number;
+  balance_after?: number;
+};
+
 export default function AdminPayoutsPage() {
   const { user } = useAuth();
   const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
@@ -42,47 +45,44 @@ export default function AdminPayoutsPage() {
   const [selectedPayout, setSelectedPayout] = useState<PayoutRecord | null>(null);
   const [approvalPercentage, setApprovalPercentage] = useState('100');
   const [approvalNotes, setApprovalNotes] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayouts();
-  }, [user, statusFilter]);
+  }, [statusFilter]);
 
   const fetchPayouts = async () => {
     setLoading(true);
+    setActionError(null);
     try {
-      let query = supabase
-        .from('payout_records')
-        .select('*');
-
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
+      let query = supabase.from('payout_records').select('*');
+      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
       query = query.order('created_at', { ascending: false });
 
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) throw error;
 
       if (data && data.length > 0) {
-        const userIds = [...new Set(data.map((p: PayoutRecord) => p.user_id))];
-        const { data: users } = await supabase
+        const userIds = [...new Set((data as PayoutRecord[]).map((payout) => payout.user_id))];
+        const { data: users, error: usersError } = await supabase
           .from('users')
           .select('id, email, full_name')
           .in('id', userIds);
+        if (usersError) throw usersError;
 
-        const userMap = new Map(
-          users?.map(u => [u.id, { email: u.email, name: u.full_name }]) || []
-        );
-
-        setPayouts(data.map((p: PayoutRecord) => ({
-          ...p,
-          user_email: userMap.get(p.user_id)?.email || 'Unknown',
-          user_name: userMap.get(p.user_id)?.name || 'Unknown',
+        const userMap = new Map((users || []).map((item) => [item.id, { email: item.email, name: item.full_name }]));
+        setPayouts((data as PayoutRecord[]).map((payout) => ({
+          ...payout,
+          user_email: userMap.get(payout.user_id)?.email || 'Unknown',
+          user_name: userMap.get(payout.user_id)?.name || 'Unknown',
         })));
       } else {
         setPayouts([]);
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load payouts';
       console.error('Error fetching payouts:', error);
+      setActionError(message);
     } finally {
       setLoading(false);
     }
@@ -92,142 +92,116 @@ export default function AdminPayoutsPage() {
     setSelectedPayout(payout);
     setApprovalPercentage('100');
     setApprovalNotes('');
+    setActionError(null);
     setShowApprovalModal(true);
   };
 
   const approvePayout = async () => {
-    if (!selectedPayout) return;
+    if (!selectedPayout || !user?.id) return;
+
+    const percentage = Number(approvalPercentage);
+    if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
+      setActionError('Approval percentage must be greater than 0 and no more than 100.');
+      return;
+    }
 
     setProcessingId(selectedPayout.id);
+    setActionError(null);
     try {
-      const percentage = parseFloat(approvalPercentage) || 100;
-      const approvedAmount = (selectedPayout.amount * percentage) / 100;
+      const { data, error } = await supabase.rpc('admin_approve_payout_record', {
+        p_payout_id: selectedPayout.id,
+        p_approval_percentage: percentage,
+        p_notes: approvalNotes.trim() || null,
+      });
+      if (error) throw error;
 
-      // Update payout status
-      await supabase
-        .from('payout_records')
-        .update({
-          status: 'approved',
-          admin_approval_percentage: percentage,
-          notes: approvalNotes.trim() || null,
-          processed_by: user?.id,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedPayout.id);
+      const result = (data || {}) as PayoutRpcResult;
+      const approvedAmount = result.approved_amount ?? (selectedPayout.amount * percentage) / 100;
 
-      // Add amount to user balance
-      const { data: userData } = await supabase
-        .from('users')
-        .select('balance')
-        .eq('id', selectedPayout.user_id)
-        .single();
-
-      if (userData) {
-        const newBalance = (userData.balance || 0) + approvedAmount;
-        await supabase
-          .from('users')
-          .update({ balance: newBalance })
-          .eq('id', selectedPayout.user_id);
+      if (!result.already_processed) {
+        await emitEvent({
+          module: 'wallet',
+          eventType: 'payment_received',
+          recipientIds: selectedPayout.user_id,
+          actorId: user.id,
+          metadata: {
+            amount: approvedAmount,
+            currency: 'USD',
+            reference: selectedPayout.id,
+          },
+        });
       }
-
-      // Log action
-      await supabase.from('admin_logs').insert({
-        admin_id: user?.id,
-        action_type: 'approve_payout',
-        target_id: selectedPayout.id,
-        target_type: 'payout_record',
-        details: {
-          payout_id: selectedPayout.id,
-          original_amount: selectedPayout.amount,
-          approved_amount: approvedAmount,
-          percentage: percentage,
-        },
-      });
-
-      // Notify user
-      await emitEvent({
-        module: 'wallet',
-        eventType: 'withdrawal_completed',
-        recipientIds: selectedPayout.user_id,
-        actorId: user?.id,
-        metadata: {
-          amount: approvedAmount,
-          currency: 'USD',
-          reference: selectedPayout.id,
-        },
-      });
 
       setShowApprovalModal(false);
       setSelectedPayout(null);
-      fetchPayouts();
+      await fetchPayouts();
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to approve payout';
       console.error('Error approving payout:', error);
+      setActionError(message);
     } finally {
       setProcessingId(null);
     }
   };
 
   const markAsPaid = async (payout: PayoutRecord) => {
+    if (!user?.id) return;
     setProcessingId(payout.id);
+    setActionError(null);
     try {
-      await supabase
-        .from('payout_records')
-        .update({
-          status: 'paid',
-          processed_by: user?.id,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', payout.id);
-
-      await supabase.from('admin_logs').insert({
-        admin_id: user?.id,
-        action_type: 'mark_paid',
-        target_id: payout.id,
-        target_type: 'payout_record',
-        details: { payout_id: payout.id },
+      const { data, error } = await supabase.rpc('admin_mark_payout_paid', {
+        p_payout_id: payout.id,
       });
+      if (error) throw error;
 
-      await emitEvent({
-        module: 'wallet',
-        eventType: 'withdrawal_completed',
-        recipientIds: payout.user_id,
-        actorId: user?.id,
-        metadata: {
-          amount: payout.amount,
-          currency: 'USD',
-          reference: payout.id,
-        },
-      });
+      const result = (data || {}) as PayoutRpcResult;
+      if (!result.already_processed) {
+        const approvedAmount = payout.amount * (Number(payout.admin_approval_percentage || 100) / 100);
+        await emitEvent({
+          module: 'wallet',
+          eventType: 'withdrawal_completed',
+          recipientIds: payout.user_id,
+          actorId: user.id,
+          metadata: {
+            amount: approvedAmount,
+            currency: 'USD',
+            reference: payout.id,
+          },
+        });
+      }
 
-      fetchPayouts();
+      await fetchPayouts();
     } catch (error) {
-      console.error('Error marking as paid:', error);
+      const message = error instanceof Error ? error.message : 'Failed to mark payout as paid';
+      console.error('Error marking payout as paid:', error);
+      setActionError(message);
     } finally {
       setProcessingId(null);
     }
   };
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-
-  const filteredPayouts = payouts.filter(p => {
-    const q = searchQuery.toLowerCase();
-    return p.user_email?.toLowerCase().includes(q) || p.payout_type.toLowerCase().includes(q);
+  const filteredPayouts = payouts.filter((payout) => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    return payout.user_email?.toLowerCase().includes(query)
+      || payout.user_name?.toLowerCase().includes(query)
+      || payout.payout_type.toLowerCase().includes(query);
   });
 
   return (
     <div className="p-4 md:p-8">
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Payout Records</h1>
-        <p className="text-gray-500 mt-1">Review and approve commission payouts</p>
+        <p className="text-gray-500 mt-1">Review payout records through atomic wallet operations</p>
       </div>
 
-      {/* Filters */}
+      {actionError && (
+        <div className="mb-4 p-3 rounded-xl border border-red-100 bg-red-50 text-red-700 text-sm flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{actionError}</span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -235,20 +209,16 @@ export default function AdminPayoutsPage() {
             type="text"
             placeholder="Search by user or type..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all bg-white text-gray-900"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {(['pending', 'approved', 'paid', 'all'] as const).map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-4 py-3 rounded-xl font-medium transition-all min-h-[48px] ${
-                statusFilter === status
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:border-primary-300'
-              }`}
+              className={`px-4 py-3 rounded-xl font-medium transition-all min-h-[48px] ${statusFilter === status ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary-300'}`}
             >
               {status.charAt(0).toUpperCase() + status.slice(1)}
             </button>
@@ -256,28 +226,15 @@ export default function AdminPayoutsPage() {
         </div>
       </div>
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-10 h-10 border-4 border-gray-300 border-t-warning rounded-full animate-spin" />
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && filteredPayouts.length === 0 && (
+      {loading ? (
+        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
+      ) : filteredPayouts.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
           <DollarSign className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-900 font-semibold text-lg">No payout records</p>
-          <p className="text-sm text-gray-500 mt-1">
-            {statusFilter === 'pending'
-              ? 'Approved verifications will create payout records'
-              : 'Try a different filter'}
-          </p>
+          <p className="text-sm text-gray-500 mt-1">{statusFilter === 'pending' ? 'Pending payout records will appear here.' : 'Try a different filter.'}</p>
         </div>
-      )}
-
-      {/* Payout List */}
-      {!loading && filteredPayouts.length > 0 && (
+      ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -288,89 +245,39 @@ export default function AdminPayoutsPage() {
                   <th className="text-right px-6 py-4 text-sm font-semibold text-gray-600">Amount</th>
                   <th className="text-center px-6 py-4 text-sm font-semibold text-gray-600">Approval %</th>
                   <th className="text-center px-6 py-4 text-sm font-semibold text-gray-600">Status</th>
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Date</th>
                   <th className="text-center px-6 py-4 text-sm font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredPayouts.map((payout, index) => (
-                  <motion.tr
-                    key={payout.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.03 }}
-                    className="hover:bg-gray-50"
-                  >
+                  <motion.tr key={payout.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.02 }} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <p className="font-medium text-gray-900">{payout.user_name || 'Unknown'}</p>
                       <p className="text-xs text-gray-500">{payout.user_email}</p>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {payout.payout_type.replace('_', ' ')}
-                    </td>
-                    <td className="px-6 py-4 text-right font-semibold text-gray-900">
-                      {formatCurrency(payout.amount)}
+                    <td className="px-6 py-4 text-gray-600 capitalize">{payout.payout_type.replace(/_/g, ' ')}</td>
+                    <td className="px-6 py-4 text-right font-semibold text-gray-900">{formatCurrency(Number(payout.amount))}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{Number(payout.admin_approval_percentage || 0)}%</span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        payout.admin_approval_percentage >= 100
-                          ? 'bg-success-muted text-success'
-                          : payout.admin_approval_percentage > 0
-                          ? 'bg-warning-muted text-warning'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {payout.admin_approval_percentage}%
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                        payout.status === 'paid'
-                          ? 'bg-success-muted text-success'
-                          : payout.status === 'approved'
-                          ? 'bg-primary-100 text-primary-600'
-                          : 'bg-warning-muted text-warning'
-                      }`}>
-                        {payout.status === 'paid' && <CheckCircle className="w-3 h-3" />}
-                        {payout.status === 'approved' && <CheckCircle className="w-3 h-3" />}
-                        {payout.status === 'pending' && <Clock className="w-3 h-3" />}
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${payout.status === 'paid' ? 'bg-success-muted text-success' : payout.status === 'approved' ? 'bg-primary-100 text-primary-600' : 'bg-warning-muted text-warning'}`}>
+                        {payout.status === 'pending' ? <Clock className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
                         {payout.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {formatDate(payout.created_at)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex justify-center gap-2">
-                        {payout.status === 'pending' && (
-                          <button
-                            onClick={() => openApprovalModal(payout)}
-                            disabled={processingId === payout.id}
-                            className="px-3 py-2 bg-success text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 min-h-[40px]"
-                          >
-                            {processingId === payout.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              'Approve'
-                            )}
-                          </button>
-                        )}
-                        {payout.status === 'approved' && (
-                          <button
-                            onClick={() => markAsPaid(payout)}
-                            disabled={processingId === payout.id}
-                            className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 min-h-[40px]"
-                          >
-                            {processingId === payout.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              'Mark Paid'
-                            )}
-                          </button>
-                        )}
-                        {!['pending', 'approved'].includes(payout.status) && (
-                          <span className="text-xs text-gray-400">No actions</span>
-                        )}
-                      </div>
+                    <td className="px-6 py-4 text-center">
+                      {payout.status === 'pending' && (
+                        <button onClick={() => openApprovalModal(payout)} disabled={processingId === payout.id || !user?.id} className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
+                          Review
+                        </button>
+                      )}
+                      {payout.status === 'approved' && (
+                        <button onClick={() => markAsPaid(payout)} disabled={processingId === payout.id || !user?.id} className="px-3 py-2 bg-success text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 inline-flex items-center gap-1">
+                          {processingId === payout.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                          Mark paid
+                        </button>
+                      )}
                     </td>
                   </motion.tr>
                 ))}
@@ -380,92 +287,36 @@ export default function AdminPayoutsPage() {
         </div>
       )}
 
-      {/* Approval Modal */}
       <AnimatePresence>
         {showApprovalModal && selectedPayout && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={() => setShowApprovalModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 bg-success-muted rounded-xl">
-                  <DollarSign className="w-6 h-6 text-success" />
-                </div>
+          <motion.div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowApprovalModal(false)}>
+            <motion.div className="w-full max-w-md bg-white rounded-2xl p-6" initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }} onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between gap-4 mb-5">
                 <div>
-                  <h3 className="font-bold text-gray-900">Approve Payout</h3>
-                  <p className="text-sm text-gray-500">
-                    {formatCurrency(selectedPayout.amount)} to {selectedPayout.user_email}
-                  </p>
+                  <h2 className="text-lg font-bold text-gray-900">Approve payout</h2>
+                  <p className="text-sm text-gray-500">Original amount: {formatCurrency(Number(selectedPayout.amount))}</p>
                 </div>
+                <button onClick={() => setShowApprovalModal(false)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
               </div>
 
-              <div className="space-y-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Approval Percentage
-                  </label>
-                  <div className="relative">
-                    <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={approvalPercentage}
-                      onChange={(e) => setApprovalPercentage(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    User receives: {formatCurrency((selectedPayout.amount * (parseFloat(approvalPercentage) || 0)) / 100)}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (optional)
-                  </label>
-                  <textarea
-                    value={approvalNotes}
-                    onChange={(e) => setApprovalNotes(e.target.value)}
-                    placeholder="Add any notes about this approval..."
-                    rows={2}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 resize-none"
-                  />
-                </div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Approval percentage</label>
+              <div className="relative mb-4">
+                <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input type="number" min="0.01" max="100" step="0.01" value={approvalPercentage} onChange={(event) => setApprovalPercentage(event.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary-500" />
               </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowApprovalModal(false)}
-                  className="flex-1 py-3 border border-gray-200 rounded-xl font-medium text-gray-600 hover:bg-gray-50 transition-colors min-h-[48px]"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={approvePayout}
-                  disabled={processingId === selectedPayout.id}
-                  className="flex-1 py-3 bg-success text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50 min-h-[48px] flex items-center justify-center gap-2"
-                >
-                  {processingId === selectedPayout.id ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      Approve
-                    </>
-                  )}
-                </button>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Review notes</label>
+              <textarea value={approvalNotes} onChange={(event) => setApprovalNotes(event.target.value)} rows={3} placeholder="Optional internal note" className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-none mb-5" />
+
+              <div className="rounded-xl bg-gray-50 p-3 mb-5 flex items-center justify-between">
+                <span className="text-sm text-gray-500">Amount to credit</span>
+                <span className="font-bold text-gray-900">{formatCurrency(Number(selectedPayout.amount) * (Number(approvalPercentage || 0) / 100))}</span>
               </div>
+
+              <button onClick={approvePayout} disabled={processingId === selectedPayout.id || !user?.id} className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold hover:bg-primary-700 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                {processingId === selectedPayout.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Approve and credit wallet
+              </button>
             </motion.div>
           </motion.div>
         )}
