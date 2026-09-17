@@ -46,11 +46,21 @@ export async function setPin(userId: string, pin: string): Promise<{ success: bo
   return { success: true };
 }
 
-export async function changePin(userId: string, currentPin: string, newPin: string): Promise<{ success: boolean; error?: string }> {
-  const currentHash = await hashPin(currentPin);
-  const verifyResult = await verifyPin(userId, currentHash, 'pin_change');
-  if (!verifyResult.success) return verifyResult;
-  return setPin(userId, newPin);
+export async function changePin(userId: string, currentPin: string, newPin: string): Promise<{ success: boolean; error?: string; attempts_remaining?: number }> {
+  const validation = validatePin(newPin);
+  if (!validation.valid) return { success: false, error: validation.error };
+  if (!/^\d{4,8}$/.test(currentPin)) return { success: false, error: 'Current PIN must be 4-8 digits' };
+  if (currentPin === newPin) return { success: false, error: 'New PIN must be different from your current PIN' };
+
+  const [currentHash, newHash] = await Promise.all([hashPin(currentPin), hashPin(newPin)]);
+  const { data, error } = await supabase.rpc('change_payment_pin', {
+    p_user_id: userId,
+    p_current_pin_hash: currentHash,
+    p_new_pin_hash: newHash,
+    p_pin_length: newPin.length,
+  });
+  if (error) return { success: false, error: error.message };
+  return data as { success: boolean; error?: string; attempts_remaining?: number };
 }
 
 export async function verifyPin(userId: string, pin: string, context = 'transaction'): Promise<{ success: boolean; error?: string; attempts_remaining?: number; locked_until?: string }> {
@@ -79,13 +89,11 @@ export async function verifyRecoveryToken(token: string): Promise<{ success: boo
   return { success: result.success, userId: result.user_id, error: result.error };
 }
 
-export async function resetPinWithToken(userId: string, newPin: string): Promise<{ success: boolean; error?: string }> {
-  const validation = validatePin(newPin);
-  if (!validation.valid) return { success: false, error: validation.error };
-  const pinHash = await hashPin(newPin);
-  const { error } = await supabase.rpc('reset_payment_pin', { p_user_id: userId, p_new_pin_hash: pinHash, p_pin_length: newPin.length });
-  if (error) return { success: false, error: error.message };
-  return { success: true };
+export async function resetPinWithToken(_userId: string, _newPin: string): Promise<{ success: boolean; error?: string }> {
+  return {
+    success: false,
+    error: 'PIN recovery reset is disabled until the server-side recovery credential flow is enabled.',
+  };
 }
 
 export async function updateAuthRules(userId: string, rules: AuthRules): Promise<{ success: boolean; error?: string }> {
