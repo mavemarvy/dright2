@@ -493,11 +493,11 @@ begin
 
   for i in 1..10 loop
     v_code := upper(
-      substring(encode(gen_random_bytes(5), 'hex') from 1 for 5)
+      substring(encode(gen_random_bytes(8), 'hex') from 1 for 8)
       || '-' ||
-      substring(encode(gen_random_bytes(5), 'hex') from 1 for 5)
+      substring(encode(gen_random_bytes(8), 'hex') from 1 for 8)
     );
-    v_hash := encode(digest(v_code || p_user_id::text || 'dright_rc_salt', 'sha256'), 'hex');
+    v_hash := crypt(v_code || p_user_id::text, gen_salt('bf'));
     v_codes := v_codes || v_code;
 
     insert into public.payment_recovery_codes(user_id, code_hash)
@@ -565,16 +565,21 @@ begin
     return jsonb_build_object('success', false, 'error', 'Invalid PIN payload');
   end if;
 
-  v_hash := encode(
-    digest(upper(trim(p_code)) || p_user_id::text || 'dright_rc_salt', 'sha256'),
-    'hex'
-  );
+  v_hash := upper(trim(p_code)) || p_user_id::text;
 
   select * into v_rec
   from public.payment_recovery_codes
   where user_id = p_user_id
-    and code_hash = v_hash
     and used_at is null
+    and (
+      (code_hash like '$2%' and crypt(v_hash, code_hash) = code_hash)
+      or
+      (code_hash not like '$2%' and code_hash = encode(
+        digest(upper(trim(p_code)) || p_user_id::text || 'dright_rc_salt', 'sha256'),
+        'hex'
+      ))
+    )
+  limit 1
   for update;
 
   if not found then
