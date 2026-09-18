@@ -182,6 +182,27 @@ Deno.serve(async (req: Request) => {
       metadata: { credential_issuer: "supabase_auth", purpose },
     });
 
+    if (userId) {
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        title: purpose === "password_reset" ? "Password reset code sent" : "Account verification code sent",
+        message: purpose === "password_reset"
+          ? "A secure password reset code was sent to your account email."
+          : "A secure account verification code was sent to your signup email.",
+        notification_type: "security_alert",
+        category: "security",
+        priority: "high",
+        metadata: {
+          event_module: "security",
+          event_type: purpose === "password_reset" ? "password_reset_code_sent" : "account_verification_code_sent",
+          email_suppressed: true,
+        },
+        is_read: false,
+        is_archived: false,
+        is_deleted: false,
+      });
+    }
+
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
