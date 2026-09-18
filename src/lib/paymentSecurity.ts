@@ -89,6 +89,34 @@ export async function resetPinWithToken(_userId: string, _newPin: string): Promi
   return { success: false, error: 'Legacy recovery-token resets are disabled.' };
 }
 
+export async function requestPinResetEmail(): Promise<{ success: boolean; error?: string; expiresInSeconds?: number }> {
+  const { data, error } = await supabase.functions.invoke('pin-reset-email-code', {
+    body: { action: 'request' },
+  });
+  if (error) return { success: false, error: error.message };
+  return {
+    success: data?.success === true,
+    error: data?.error,
+    expiresInSeconds: data?.expiresInSeconds,
+  };
+}
+
+export async function resetPinWithEmailCode(code: string, newPin: string): Promise<{ success: boolean; error?: string; attemptsRemaining?: number }> {
+  const validation = validatePin(newPin);
+  if (!validation.valid) return { success: false, error: validation.error };
+  if (!/^\d{6}$/.test(code.trim())) return { success: false, error: 'Enter the 6-digit reset code' };
+
+  const { data, error } = await supabase.functions.invoke('pin-reset-email-code', {
+    body: { action: 'reset', code: code.trim(), newPin },
+  });
+  if (error) return { success: false, error: error.message };
+  return {
+    success: data?.success === true,
+    error: data?.error,
+    attemptsRemaining: data?.attemptsRemaining,
+  };
+}
+
 export async function resetPinWithRecoveryCode(userId: string, recoveryCode: string, newPin: string): Promise<{ success: boolean; error?: string }> {
   const validation = validatePin(newPin);
   if (!validation.valid) return { success: false, error: validation.error };
