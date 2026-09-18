@@ -13,6 +13,7 @@ export interface AuthRules {
   require_pin_new_device: boolean;
   require_pin_after_minutes: number;
   require_pin_payout_change: boolean;
+  force_reset_required?: boolean;
 }
 
 const COMMON_PINS = ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '1234', '4321', '1212', '1004', '2000', '1122'];
