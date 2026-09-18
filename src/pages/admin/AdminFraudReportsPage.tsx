@@ -75,15 +75,11 @@ export default function AdminFraudReportsPage() {
   const updateStatus = async (report: FraudReport, newStatus: string) => {
     setProcessingId(report.id);
     try {
-      await supabase.from('fraud_reports').update({ status: newStatus }).eq('id', report.id);
-
-      await supabase.from('admin_logs').insert({
-        admin_id: user?.id,
-        action_type: 'fraud_report_update',
-        target_id: report.id,
-        target_type: 'fraud_report',
-        details: { report_id: report.id, new_status: newStatus },
+      const { error: statusError } = await supabase.rpc('admin_update_fraud_report', {
+        p_report_id: report.id,
+        p_status: newStatus,
       });
+      if (statusError) throw statusError;
 
       if (newStatus === 'resolved' && report.reported_id) {
         await emitEvent({
@@ -109,7 +105,12 @@ export default function AdminFraudReportsPage() {
     if (!confirm('Suspend (lock) this account? This will prevent the user from generating links, accepting contracts, or withdrawing.')) return;
     setProcessingId(userId);
     try {
-      await supabase.from('users').update({ account_status: 'LOCKED' }).eq('id', userId);
+      const { error: suspendError } = await supabase.rpc('admin_set_user_account_status', {
+        p_user_id: userId,
+        p_status: 'LOCKED',
+        p_reason: 'Suspicious activity under Trust & Safety review',
+      });
+      if (suspendError) throw suspendError;
       await emitEvent({
         module: 'security',
         eventType: 'suspicious_activity',
