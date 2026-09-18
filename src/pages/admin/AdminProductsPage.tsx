@@ -135,36 +135,14 @@ export default function AdminProductsPage() {
   const approveProduct = async (productId: string) => {
     setProcessingId(productId);
     try {
-      const { error } = await supabase
-        .from('products')
-        .update({ approval_status: 'approved', rejection_reason: null, is_hidden: false, is_active: true })
-        .eq('id', productId);
-      if (error) throw error;
-
-      await supabase.from('admin_logs').insert({
-        admin_id: user?.id,
-        action_type: 'approve_product',
-        target_id: productId,
-        target_type: 'product',
-        details: { product_id: productId },
+      const { error } = await supabase.rpc('review_dright_listing', {
+        p_listing_type: 'product',
+        p_listing_id: productId,
+        p_decision: 'approve',
+        p_reason: null,
       });
-
-      const product = products.find(p => p.id === productId);
-      if (product) {
-        await emitEvent({
-          module: 'marketplace',
-          eventType: 'product_approved',
-          recipientIds: product.uploaded_by,
-          actorId: user?.id,
-          metadata: {
-            productTitle: product.name,
-            productImage: product.image_url,
-            actionUrl: `/product/${productId}`,
-          },
-        });
-      }
-
-      fetchProducts();
+      if (error) throw error;
+      await fetchProducts();
     } catch (error) {
       console.error('Error approving product:', error);
     } finally {
@@ -182,35 +160,16 @@ export default function AdminProductsPage() {
     if (!selectedProduct || !rejectionReason.trim()) return;
     setProcessingId(selectedProduct.id);
     try {
-      const { error } = await supabase
-        .from('products')
-        .update({ approval_status: 'rejected', rejection_reason: rejectionReason.trim() })
-        .eq('id', selectedProduct.id);
+      const { error } = await supabase.rpc('review_dright_listing', {
+        p_listing_type: 'product',
+        p_listing_id: selectedProduct.id,
+        p_decision: 'reject',
+        p_reason: rejectionReason.trim(),
+      });
       if (error) throw error;
-
-      await supabase.from('admin_logs').insert({
-        admin_id: user?.id,
-        action_type: 'reject_product',
-        target_id: selectedProduct.id,
-        target_type: 'product',
-        details: { reason: rejectionReason.trim() },
-      });
-
-      await emitEvent({
-        module: 'marketplace',
-        eventType: 'product_rejected',
-        recipientIds: selectedProduct.uploaded_by,
-        actorId: user?.id,
-        metadata: {
-          productTitle: selectedProduct.name,
-          reason: rejectionReason.trim(),
-          actionUrl: `/product/${selectedProduct.id}`,
-        },
-      });
-
       setShowRejectModal(false);
       setSelectedProduct(null);
-      fetchProducts();
+      await fetchProducts();
     } catch (error) {
       console.error('Error rejecting product:', error);
     } finally {

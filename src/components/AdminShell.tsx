@@ -51,6 +51,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
     title: 'Marketplace',
     items: [
       { path: '/admin/products', label: 'Products', icon: Package, page: 'products' },
+      { path: '/admin/listing-verification', label: 'Listing Verification', icon: FileCheck, page: 'listing_verification' },
       { path: '/admin/product-edits', label: 'Edit Approvals', icon: FileCheck, page: 'product_edits' },
       { path: '/admin/marketplace', label: 'Marketplace', icon: Store, page: 'marketplace' },
       { path: '/admin/moderation', label: 'Moderation', icon: Shield, page: 'moderation' },

@@ -322,6 +322,7 @@ export default function JobPostingPage() {
         company_description: form.companyDescription.trim() || null,
         application_instructions: form.applicationInstructions.trim() || null,
         status: 'active',
+        approval_status: 'pending',
       }).select('id').single();
       if (insertError) throw insertError;
       localStorage.removeItem(DRAFT_KEY);
@@ -386,7 +387,7 @@ export default function JobPostingPage() {
           {success && (
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
               className="flex items-center gap-2 bg-success-muted text-success rounded-xl px-4 py-3 text-sm mb-6">
-              <CheckCircle className="w-4 h-4 shrink-0" /> Job posted! Redirecting to job board...
+              <CheckCircle className="w-4 h-4 shrink-0" /> Job submitted and pending admin verification.
             </motion.div>
           )}
         </AnimatePresence>

@@ -57,7 +57,7 @@ import {
   type DraftData,
 } from '../lib/drafts';
 
-type ProductType = 'DIGITAL' | 'SERVICE' | 'COURSE';
+type ProductType = 'PHYSICAL' | 'DIGITAL' | 'SERVICE' | 'COURSE';
 
 const CATEGORIES = [
   'General', 'Electronics', 'Fashion', 'Health & Beauty', 'Home & Garden',
@@ -597,7 +597,7 @@ export default function UploadProductPage() {
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Post an Ad</h1>
-        <p className="text-gray-500 mt-1">Add a product, service, or course to the marketplace</p>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">Add a physical product, digital product, service, or course to the marketplace</p>
       </div>
 
       <AnimatePresence>
@@ -607,7 +607,7 @@ export default function UploadProductPage() {
             className="flex items-center gap-3 bg-success-muted border border-success/20 text-success rounded-2xl p-4 mb-6"
           >
             <CheckCircle className="w-5 h-5 shrink-0" />
-            <span className="font-medium">Product uploaded! It's now pending admin approval.</span>
+            <span className="font-medium">Listing submitted! It is pending admin verification.</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -647,8 +647,9 @@ export default function UploadProductPage() {
               <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Layers className="w-5 h-5 text-primary-600" />Product Type
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {([
+                  { value: 'PHYSICAL', label: 'Physical', icon: Package },
                   { value: 'DIGITAL', label: 'Digital', icon: Download },
                   { value: 'SERVICE', label: 'Service', icon: Sparkles },
                   { value: 'COURSE', label: 'Course', icon: Video },

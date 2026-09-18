@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-export type UploadType = 'PRODUCT' | 'SERVICE' | 'COURSE' | 'JOB';
+export type UploadType = 'PRODUCT' | 'PHYSICAL' | 'DIGITAL' | 'SERVICE' | 'COURSE' | 'JOB';
 
 type ReviewStage = 'submitted' | 'under_review' | 'approved' | 'rejected';
 
@@ -22,6 +22,8 @@ interface PostUploadConfirmationProps {
 
 const TYPE_LABELS: Record<UploadType, { noun: string; verb: string }> = {
   PRODUCT: { noun: 'product', verb: 'uploaded' },
+  PHYSICAL: { noun: 'physical product', verb: 'submitted' },
+  DIGITAL: { noun: 'digital product', verb: 'submitted' },
   SERVICE: { noun: 'service', verb: 'submitted' },
   COURSE: { noun: 'course', verb: 'submitted' },
   JOB: { noun: 'job', verb: 'posted' },
@@ -57,7 +59,7 @@ export default function PostUploadConfirmation({
       const { data } = await supabase
         .from('review_timeframes')
         .select('min_hours, max_hours')
-        .eq('upload_type', uploadType)
+        .eq('upload_type', uploadType === 'PHYSICAL' || uploadType === 'DIGITAL' ? 'PRODUCT' : uploadType)
         .maybeSingle();
       if (active && data) setTimeframe(data);
     })();
@@ -69,13 +71,16 @@ export default function PostUploadConfirmation({
     if (uploadType === 'JOB') {
       const { data } = await supabase
         .from('jobs')
-        .select('status')
+        .select('approval_status, rejection_reason')
         .eq('id', itemId)
         .maybeSingle();
       if (data) {
-        const s = data.status;
-        if (s === 'closed') setStage('rejected');
-        else if (s === 'active') setStage('approved');
+        const s = data.approval_status;
+        if (s === 'approved') setStage('approved');
+        else if (s === 'rejected') {
+          setStage('rejected');
+          setRejectedReason(data.rejection_reason || null);
+        } else if (s === 'pending') setStage('submitted');
         else setStage('under_review');
       }
     } else {
@@ -113,9 +118,12 @@ export default function PostUploadConfirmation({
         (payload) => {
           const newRow = payload.new as Record<string, unknown>;
           if (uploadType === 'JOB') {
-            const s = newRow.status as string;
-            if (s === 'closed') setStage('rejected');
-            else if (s === 'active') setStage('approved');
+            const s = newRow.approval_status as string;
+            if (s === 'approved') setStage('approved');
+            else if (s === 'rejected') {
+              setStage('rejected');
+              setRejectedReason((newRow.rejection_reason as string) || null);
+            } else if (s === 'pending') setStage('submitted');
             else setStage('under_review');
           } else {
             const s = newRow.approval_status as string;
