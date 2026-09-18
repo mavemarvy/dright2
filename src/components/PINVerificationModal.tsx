@@ -7,7 +7,7 @@ interface Props {
   userId: string;
   context?: string;
   title?: string;
-  onSuccess: () => void;
+  onSuccess: (authorizationToken?: string) => void;
   onCancel: () => void;
   onForgotPin?: () => void;
 }
@@ -32,7 +32,7 @@ export default function PINVerificationModal({ open, userId, context = 'transact
     setLoading(true); setError(null);
     const result = await verifyPin(userId, pin, context);
     setLoading(false);
-    if (result.success) { onSuccess(); setPin(''); return; }
+    if (result.success) { onSuccess(result.authorization_token); setPin(''); return; }
     if (result.locked_until) { setLockedUntil(result.locked_until); setError(result.error || 'PIN locked'); return; }
     if (result.attempts_remaining !== undefined) setAttemptsRemaining(result.attempts_remaining);
     setError(result.error || 'Incorrect PIN');
