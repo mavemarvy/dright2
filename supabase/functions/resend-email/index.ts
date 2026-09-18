@@ -18,6 +18,28 @@ function getSupabaseClient(req: Request) {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
 }
 
+function getServiceClient() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
+
+const KNOWN_TEMPLATES = new Set([
+  "welcome", "email_verification", "password_reset", "login_verification",
+  "wallet_funding", "purchase_receipt", "subscription_confirmation",
+  "withdrawal_request", "withdrawal_completed", "referral_reward",
+  "affiliate_commission", "new_order", "seller_sale", "payment_receipt",
+  "admin_payment_alert", "support_ticket_update", "report_status_update",
+  "admin_invitation", "two_factor_auth",
+]);
+
+const SERVER_ONLY_TEMPLATES = new Set([
+  "email_verification", "password_reset", "login_verification",
+  "two_factor_auth", "admin_payment_alert",
+]);
+
 interface EmailParams {
   to: string;
   subject: string;
@@ -311,15 +333,106 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabase = getSupabaseClient(req);
+    const caller = getSupabaseClient(req);
+    const service = getServiceClient();
     const body = await req.json();
-    const { templateType, to, data = {}, userId, from, replyTo } = body;
+    const templateType = typeof body?.templateType === "string" ? body.templateType : "";
+    const to = typeof body?.to === "string" ? body.to.trim().toLowerCase() : "";
+    const data = body?.data && typeof body.data === "object" ? body.data : {};
+    let userId = typeof body?.userId === "string" ? body.userId : undefined;
+    const requestedFrom = typeof body?.from === "string" ? body.from : undefined;
+    const requestedReplyTo = typeof body?.replyTo === "string" ? body.replyTo : undefined;
 
     if (!to) throw new Error("Missing recipient email");
-    if (!templateType) throw new Error("Missing template type");
+    if (!KNOWN_TEMPLATES.has(templateType)) {
+      return new Response(JSON.stringify({ success: false, error: "Unsupported email template" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const isServiceCall = Boolean(serviceKey && bearer === serviceKey);
+    let allowCrossRecipient = isServiceCall;
+    let callerUserId: string | undefined;
+
+    if (!isServiceCall) {
+      const { data: authData, error: authError } = await caller.auth.getUser();
+      const authUser = authData?.user;
+      if (authError || !authUser?.id || !authUser.email) {
+        return new Response(JSON.stringify({ success: false, error: "Authentication required" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      callerUserId = authUser.id;
+      const ownEmail = authUser.email.trim().toLowerCase();
+
+      if (SERVER_ONLY_TEMPLATES.has(templateType)) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Security email templates are issued only by DRIGHT server authority",
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (templateType === "admin_invitation") {
+        const { data: profile } = await caller
+          .from("users")
+          .select("is_admin,admin_status,admin_role")
+          .eq("id", authUser.id)
+          .maybeSingle();
+        allowCrossRecipient = profile?.is_admin === true
+          && profile?.admin_status === "active"
+          && profile?.admin_role === "super_admin";
+      }
+
+      if (!allowCrossRecipient && to !== ownEmail) {
+        return new Response(JSON.stringify({ success: false, error: "Recipient must be your authenticated email" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (userId && userId !== authUser.id && !allowCrossRecipient) {
+        return new Response(JSON.stringify({ success: false, error: "Invalid email owner" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = userId || authUser.id;
+
+      const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString();
+      const { count } = await service
+        .from("email_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", authUser.id)
+        .gte("created_at", oneHourAgo);
+      const limit = allowCrossRecipient ? 50 : 20;
+      if ((count || 0) >= limit) {
+        return new Response(JSON.stringify({ success: false, error: "Email rate limit reached" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     const { subject, html } = getTemplate(templateType, data);
-    const result = await sendWithRetry({ to, subject, html, from, replyTo, templateType, userId, metadata: data }, supabase);
+    const result = await sendWithRetry({
+      to,
+      subject,
+      html,
+      from: isServiceCall ? requestedFrom : undefined,
+      replyTo: isServiceCall ? requestedReplyTo : undefined,
+      templateType,
+      userId: userId || callerUserId,
+      metadata: data,
+    }, service);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
