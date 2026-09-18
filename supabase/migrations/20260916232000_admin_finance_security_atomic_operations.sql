@@ -268,7 +268,7 @@ as $$
 declare v_token text;
 begin
   if auth.uid() is null or auth.uid() is distinct from p_user_id then raise exception 'Unauthorized'; end if;
-  v_token:=encode(gen_random_bytes(32),'hex');
+  v_token:=encode(extensions.gen_random_bytes(32),'hex');
   insert into public.payment_recovery_tokens(user_id,token,expires_at)
   values (p_user_id,v_token,now()+interval '1 hour');
   insert into public.payment_security_logs(user_id,event_type,description)
