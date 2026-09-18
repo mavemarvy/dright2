@@ -337,10 +337,8 @@ as $$
      and (
        auth.uid() = p_user_id
        or coalesce(public.is_super_admin(), false)
-       or coalesce(public.has_dright_permission('payments','view'), false)
+       or coalesce(public.has_dright_permission('payments','read'), false)
        or coalesce(public.has_dright_permission('payments','manage'), false)
-       or coalesce(public.has_rbac_permission('wallets','view'), false)
-       or coalesce(public.has_rbac_permission('wallets','manage'), false)
      );
 $$;
 
@@ -715,10 +713,8 @@ begin
 
   if v_target is distinct from auth.uid()
      and public.is_super_admin() is not true
-     and public.has_dright_permission('payments','view') is not true
-     and public.has_dright_permission('payments','manage') is not true
-     and public.has_rbac_permission('transactions','view') is not true
-     and public.has_rbac_permission('transactions','manage') is not true then
+     and public.has_dright_permission('payments','read') is not true
+     and public.has_dright_permission('payments','manage') is not true then
     raise exception 'Unauthorized';
   end if;
 
@@ -788,10 +784,8 @@ begin
   end if;
 
   if public.is_super_admin() is not true
-     and public.has_dright_permission('payments','view') is not true
-     and public.has_dright_permission('payments','manage') is not true
-     and public.has_rbac_permission('transactions','view') is not true
-     and public.has_rbac_permission('transactions','manage') is not true then
+     and public.has_dright_permission('payments','read') is not true
+     and public.has_dright_permission('payments','manage') is not true then
     raise exception 'Unauthorized: transaction review permission required';
   end if;
 
