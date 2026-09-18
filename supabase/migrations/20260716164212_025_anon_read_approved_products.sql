@@ -1,0 +1,4 @@
+/*\n# Add anon-readable SELECT policy on products\n\n## Problem\nAll existing SELECT policies on `products` are scoped to `TO authenticated`.\nUnauthenticated visitors (anon role) get zero rows — the marketplace appears\nempty for logged-out users.\n\n## Fix\nAdd a new SELECT policy for `anon, authenticated` that allows reading only\napproved, active, non-hidden products. This is intentionally public market data.\n\n## Notes\n- The existing "Promoters can view approved products" (authenticated) policy\n  remains — it also lets owners see their own pending/rejected products.\n- The new policy is additive: anon gets approved-only
+ authenticated keeps\n  its broader access.\n*/\n\nDROP POLICY IF EXISTS "anon_read_approved_products" ON products
+\nCREATE POLICY "anon_read_approved_products"\n  ON products FOR SELECT\n  TO anon, authenticated\n  USING (approval_status = 'approved' AND is_active = true AND is_hidden = false)
+\n

@@ -1,0 +1,1 @@
+create unique index if not exists idx_refund_records_gateway_reference on public.refund_records (gateway_reference) where gateway_reference is not null;
