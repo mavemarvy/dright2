@@ -43,8 +43,8 @@ export async function runFraudChecks(userId: string, action: string, amount: num
   else if (failCount >= 3) { flags.push('multiple_pin_failures'); riskScore += 10; }
 
   // 3. Large withdrawal
-  if (action === 'withdrawal' && amount >= 100000) { flags.push('large_withdrawal'); riskScore += 20; }
-  else if (action === 'withdrawal' && amount >= 500000) { flags.push('very_large_withdrawal'); riskScore += 40; }
+  if (action === 'withdrawal' && amount >= 500000) { flags.push('very_large_withdrawal'); riskScore += 40; }
+  else if (action === 'withdrawal' && amount >= 100000) { flags.push('large_withdrawal'); riskScore += 20; }
 
   // 4. Check existing risk score
   const { data: existingScore } = await supabase.rpc('get_user_risk_score', { p_user_id: userId });

@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-hardcoded-currency.mjs && tsc -b && vite build",
+    "build": "node scripts/check-hardcoded-currency.mjs && node scripts/check-navigation.mjs && tsc -b && vite build",
     "check:currency": "node scripts/check-hardcoded-currency.mjs --strict",
+    "check:navigation": "node scripts/check-navigation.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

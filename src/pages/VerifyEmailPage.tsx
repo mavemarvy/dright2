@@ -1,76 +1,84 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Mail, CheckCircle, XCircle, RefreshCw, ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, CheckCircle, XCircle, RefreshCw, ArrowLeft, Clock } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import TurnstileWidget from '../components/TurnstileWidget';
 
 export default function VerifyEmailPage() {
-  const { user, session, resendVerificationEmail, isEmailVerified, loading } = useAuth();
+  const { user, isEmailVerified, loading } = useAuth();
   const navigate = useNavigate();
-  const [resending, setResending] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
+  const [searchParams] = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get('email') || user?.email || '');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const [turnstileKey, setTurnstileKey] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirect already-verified users
   useEffect(() => {
-    if (!loading && isEmailVerified) {
-      navigate('/dashboard', { replace: true });
-    }
+    if (!email && user?.email) setEmail(user.email);
+  }, [email, user?.email]);
+
+  useEffect(() => {
+    if (!loading && isEmailVerified) navigate('/dashboard', { replace: true });
   }, [isEmailVerified, loading, navigate]);
 
-  // Cooldown timer
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setInterval(() => setCooldown(prev => Math.max(0, prev - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [cooldown]);
+  const normalizedEmail = email.trim().toLowerCase();
 
-  // Check for verification success from email redirect
-  useEffect(() => {
-    if (isEmailVerified) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [isEmailVerified, navigate]);
-
-  const handleResend = useCallback(async () => {
-    if (cooldown > 0 || resending) return;
-    setResending(true);
+  const requestCode = async () => {
     setError(null);
-    try {
-      const { error: err } = await resendVerificationEmail();
-      if (err) {
-        setError(err.message || 'Failed to resend verification email');
-      } else {
-        setMessage('Verification email sent! Check your inbox.');
-        setCooldown(60);
-      }
-    } catch {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setResending(false);
-    }
-  }, [cooldown, resending, resendVerificationEmail]);
+    setMessage(null);
+    if (!normalizedEmail) return setError('Enter the email address you used for signup.');
+    if (!turnstileToken) return setError('Complete the Cloudflare security check.');
 
-  // If no user/session, show expired/invalid state
-  if (!loading && !user && !session) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-muted px-4">
-        <div className="max-w-md w-full rounded-2xl bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-            <XCircle className="w-7 h-7 text-red-600 dark:text-red-400" />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Session Expired</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            Your session has expired. Please sign in again to request a new verification email.
-          </p>
-          <Link to="/sign-in" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Sign In
-          </Link>
-        </div>
-      </div>
-    );
-  }
+    setSending(true);
+    const { data, error: invokeError } = await supabase.functions.invoke('auth-email-code', {
+      body: {
+        email: normalizedEmail,
+        purpose: 'account_verification',
+        turnstileToken,
+      },
+    });
+    setSending(false);
+
+    if (invokeError || data?.success === false) {
+      setError(data?.error || invokeError?.message || 'Could not send verification code.');
+      setTurnstileToken(null);
+      setTurnstileKey((key) => key + 1);
+      return;
+    }
+
+    setCodeSent(true);
+    setMessage('A 6-digit account verification code has been sent by email.');
+    setTurnstileToken(null);
+    setTurnstileKey((key) => key + 1);
+  };
+
+  const verifyCode = async () => {
+    setError(null);
+    if (!/^\d{6}$/.test(code)) return setError('Enter the 6-digit verification code.');
+
+    setVerifying(true);
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      email: normalizedEmail,
+      token: code,
+      type: 'email',
+    });
+    setVerifying(false);
+
+    if (verifyError) {
+      setError(verifyError.message || 'That verification code is invalid or expired.');
+      return;
+    }
+
+    setMessage('Email verified successfully. Opening your DRIGHT dashboard…');
+    window.setTimeout(() => navigate('/dashboard', { replace: true }), 600);
+  };
 
   if (loading) {
     return (
@@ -84,29 +92,21 @@ export default function VerifyEmailPage() {
     <div className="min-h-screen flex items-center justify-center bg-surface-muted px-4 py-8">
       <div className="max-w-md w-full">
         <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 p-8">
-          {/* Icon */}
           <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
             <Mail className="w-8 h-8 text-primary-600 dark:text-primary-400" />
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">
-            Verify Your Email
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">Verify Your Email</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
-            We sent a verification link to{' '}
-            <span className="font-medium text-gray-700 dark:text-gray-300">{user?.email}</span>.
-            Click the link in the email to confirm your account.
+            Your original Supabase signup verification email still works. You can also request a secure 6-digit code below.
           </p>
 
-          {/* Success message */}
           {message && (
             <div className="rounded-xl p-3 mb-4 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-start gap-2">
               <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
               <span className="text-sm">{message}</span>
             </div>
           )}
-
-          {/* Error message */}
           {error && (
             <div className="rounded-xl p-3 mb-4 bg-red-500/10 text-red-700 dark:text-red-400 flex items-start gap-2">
               <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -114,57 +114,114 @@ export default function VerifyEmailPage() {
             </div>
           )}
 
-          {/* Resend button */}
-          <button
-            onClick={handleResend}
-            disabled={cooldown > 0 || resending}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {resending ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : cooldown > 0 ? (
-              <Clock className="w-4 h-4" />
-            ) : (
-              <Mail className="w-4 h-4" />
-            )}
-            {cooldown > 0
-              ? `Resend in ${cooldown}s`
-              : resending
-                ? 'Sending...'
-                : 'Resend verification email'}
-          </button>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Signup email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setCodeSent(false);
+                  setCode('');
+                }}
+                disabled={Boolean(user?.email)}
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-70 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
 
-          {/* Help text */}
-          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
-            <p className="text-xs text-gray-400 text-center mb-3">
-              Already clicked the link in your email?
-            </p>
+            {!codeSent && (
+              <>
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ShieldCheck className="w-4 h-4 text-primary-600" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Cloudflare security verification</span>
+                  </div>
+                  <TurnstileWidget
+                    key={turnstileKey}
+                    action="account_verification_code"
+                    onVerified={setTurnstileToken}
+                    onError={setTurnstileError}
+                  />
+                  {turnstileError && <p className="text-xs text-red-500 mt-1">{turnstileError}</p>}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void requestCode()}
+                  disabled={sending || !normalizedEmail || !turnstileToken}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary-600 text-white font-semibold hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  Send verification code
+                </button>
+              </>
+            )}
+
+            {codeSent && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">6-digit verification code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center text-2xl font-bold tracking-[0.35em] focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void verifyCode()}
+                  disabled={verifying || code.length !== 6}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary-600 text-white font-semibold hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  Verify account
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCodeSent(false);
+                    setCode('');
+                    setMessage(null);
+                    setError(null);
+                    setTurnstileToken(null);
+                    setTurnstileKey((key) => key + 1);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Request another code
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700 text-center">
+            <p className="text-xs text-gray-400 mb-3">Already used the verification link from the Supabase signup email?</p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
             >
               <RefreshCw className="w-4 h-4" />
-              I've verified — refresh
+              I’ve verified — refresh
             </button>
           </div>
 
-          {/* Back link */}
           <div className="mt-4 text-center">
             <Link to="/sign-in" className="text-sm text-gray-500 hover:text-primary-600 inline-flex items-center gap-1">
               <ArrowLeft className="w-3.5 h-3.5" />
               Back to sign in
             </Link>
           </div>
-        </div>
-
-        {/* Tips */}
-        <div className="mt-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 p-4">
-          <p className="text-xs text-blue-700 dark:text-blue-400 font-medium mb-1">Tips</p>
-          <ul className="text-xs text-blue-600 dark:text-blue-500 space-y-1">
-            <li>Check your spam/junk folder if you don't see the email</li>
-            <li>The verification link expires after 24 hours</li>
-            <li>Make sure the email address is correct</li>
-          </ul>
         </div>
       </div>
     </div>

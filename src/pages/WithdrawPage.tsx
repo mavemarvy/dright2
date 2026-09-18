@@ -88,18 +88,24 @@ export default function WithdrawPage() {
     setShowPin(true);
   };
 
-  const handlePinSuccess = async () => {
+  const handlePinSuccess = async (authorizationToken?: string) => {
     setShowPin(false);
-    setStep('submitting');
     setError(null);
 
     if (!user || !selectedAccount) return;
+    if (!authorizationToken) {
+      setError('A fresh PIN authorization is required. Please verify your PIN again.');
+      setStep('amount');
+      return;
+    }
+
+    setStep('submitting');
 
     const { data, error: rpcError } = await supabase.rpc('create_withdrawal_request', {
       p_user_id: user.id,
       p_amount: parseFloat(amount),
       p_bank_account_id: selectedAccount.id,
-      p_pin_verified: true,
+      p_authorization_token: authorizationToken,
     });
 
     if (rpcError || !data) {

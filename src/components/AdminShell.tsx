@@ -12,6 +12,7 @@ import { useAuth, ADMIN_ROLE_LABELS, type AdminRole } from '../contexts/AuthCont
 import { ROLE_PAGE_ACCESS, type AdminPageKey } from '../lib/adminPermissions';
 import ThemeToggle from './ThemeToggle';
 import { DrightBrand, MetallicNavIcon } from './DrightBrand';
+import ErrorBoundary from './ErrorBoundary';
 
 interface NavItem {
   path: string;
@@ -30,7 +31,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
     title: 'Overview',
     items: [
       { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, page: 'dashboard' },
-      { path: '/admin/notifications', label: 'Notifications', icon: Bell, page: 'notifications' },
+      { path: '/admin/notification-center', label: 'Notifications', icon: Bell, page: 'notifications' },
     ],
   },
   {
@@ -40,7 +41,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
       { path: '/admin/verifications', label: 'Verifications', icon: FileCheck, page: 'verifications' },
       { path: '/admin/verification-review', label: 'KYC Review', icon: ShieldCheck, page: 'verifications' },
       { path: '/admin/verification-providers', label: 'KYC Providers', icon: CreditCard, page: 'verifications' },
-      { path: '/admin/compliance-center', label: 'Compliance Center', icon: ShieldAlert, page: 'verifications' },
+      { path: '/admin/compliance-center', label: 'Compliance Center', icon: ShieldAlert, page: 'compliance_center' },
       { path: '/admin/locked-accounts', label: 'Locked Accounts', icon: Lock, page: 'locked_accounts' },
       { path: '/admin/appeals', label: 'Appeals', icon: Gavel, page: 'appeals' },
       { path: '/admin/auth-center', label: 'Auth Center', icon: Lock, page: 'auth_center' },
@@ -160,7 +161,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
       { path: '/admin/env-health', label: 'Env Health', icon: Shield, page: 'env_health' },
       { path: '/admin/system-health', label: 'System Health', icon: ShieldCheck, page: 'system_health' },
       { path: '/admin/audit-logs', label: 'Audit Logs', icon: History, page: 'audit_logs' },
-      { path: '/admin/invite', label: 'Invite Admin', icon: Shield, page: 'admins' },
+      { path: '/admin/invite', label: 'Invite Admin', icon: Shield, page: 'invite' },
     ],
   },
 ];
@@ -173,6 +174,26 @@ function getNavSections(role: AdminRole | null): NavSection[] {
     .filter(section => section.items.length > 0);
 }
 
+function AdminRouteFailure() {
+  return (
+    <div className="p-4 md:p-8">
+      <div className="max-w-2xl mx-auto rounded-2xl border border-red-200 dark:border-red-900/50 bg-white dark:bg-gray-900 p-6 shadow-sm">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-6 h-6 text-red-500 shrink-0" />
+          <div className="flex-1">
+            <h2 className="font-bold text-gray-900 dark:text-gray-100">Admin page failed to render</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">The Admin shell is still available. Reload this page or select another Admin section. A page exception will no longer leave a blank screen.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-xl bg-amber-500 text-gray-950 text-sm font-semibold">Reload page</button>
+              <Link to="/admin" className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-200">Admin dashboard</Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminShell() {
   const { isAdmin, adminRole, profile, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -182,6 +203,11 @@ export default function AdminShell() {
 
   const navSections = getNavSections(adminRole);
   const roleLabel = adminRole ? ADMIN_ROLE_LABELS[adminRole] : 'Admin';
+  const isNavActive = (path: string) => {
+    if (path === '/admin') return location.pathname === '/admin';
+    if (path === '/admin/users') return location.pathname === '/admin/users' || location.pathname.startsWith('/admin/users/');
+    return location.pathname === path;
+  };
 
   const renderNavSections = (onNavigate?: () => void) => navSections.map(section => (
     <div key={section.title} className="mb-3">
@@ -190,7 +216,7 @@ export default function AdminShell() {
       </p>
       <div className="space-y-1">
         {section.items.map(item => {
-          const active = location.pathname === item.path;
+          const active = isNavActive(item.path);
           return (
             <Link
               key={item.path}
@@ -339,7 +365,9 @@ export default function AdminShell() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
           >
-            <Outlet />
+            <ErrorBoundary key={location.pathname} fallback={<AdminRouteFailure />}>
+              <Outlet />
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>

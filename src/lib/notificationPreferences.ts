@@ -41,7 +41,7 @@ export const DEFAULT_PREFERENCES: NotificationPreferences = {
   quiet_hours_end: null,
   quiet_hours_critical_bypass: true,
   category_toggles: {},
-  delivery_channels: { in_app: true, email: false, push: false, sms: false },
+  delivery_channels: { in_app: true, email: true, push: true, sms: false },
   reminder_frequency: 'daily',
   ai_summaries_enabled: true,
   ai_summary_frequency: 'daily',

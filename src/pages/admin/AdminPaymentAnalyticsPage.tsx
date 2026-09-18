@@ -38,75 +38,46 @@ export default function AdminPaymentAnalyticsPage() {
 
     const startISO = start.toISOString();
 
-    // Fetch payment transactions
-    const { data: txs } = await supabase
-      .from('paystack_transactions')
-      .select('status, amount, purpose, created_at')
-      .gte('created_at', startISO);
+    const { data: analytics, error } = await supabase.rpc('get_admin_payment_analytics', {
+      p_start: startISO,
+    });
 
-    const allTxs = txs || [];
-    const successful = allTxs.filter((t) => t.status === 'success');
-    const failed = allTxs.filter((t) => t.status === 'failed');
-    const abandoned = allTxs.filter((t) => t.status === 'abandoned');
+    if (error || !analytics) {
+      console.error('Failed to load payment analytics:', error);
+      setData({
+        totalRevenue: 0,
+        totalEscrow: 0,
+        totalFailed: 0,
+        totalRefunds: 0,
+        totalAbandoned: 0,
+        totalWithdrawals: 0,
+        totalWalletFunding: 0,
+        totalSubscriptionRevenue: 0,
+        paymentCount: 0,
+        failedCount: 0,
+        abandonedCount: 0,
+        successRate: 0,
+        avgProcessingTime: null,
+      });
+      setLoading(false);
+      return;
+    }
 
-    const totalRevenue = successful.reduce((sum, t) => sum + (Number(t.amount) || 0) / 100, 0);
-    const fundingTxs = successful.filter((t) => t.purpose === 'wallet_funding');
-    const productTxs = successful.filter((t) => t.purpose === 'product_purchase');
-    void productTxs;
-    const subTxs = successful.filter((t) => t.purpose === 'subscription');
-
-    const totalWalletFunding = fundingTxs.reduce((sum, t) => sum + (Number(t.amount) || 0) / 100, 0);
-    const totalSubscriptionRevenue = subTxs.reduce((sum, t) => sum + (Number(t.amount) || 0) / 100, 0);
-
-    // Fetch escrow
-    const { data: escrowData } = await supabase
-      .from('escrow_payments')
-      .select('amount, status')
-      .gte('created_at', startISO);
-
-    const totalEscrow = (escrowData || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-
-    // Fetch refunds
-    const { data: refunds } = await supabase
-      .from('wallet_transactions')
-      .select('amount')
-      .eq('transaction_type', 'refund')
-      .gte('created_at', startISO);
-
-    const totalRefunds = (refunds || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-
-    // Fetch withdrawals
-    const { data: withdrawals } = await supabase
-      .from('withdrawal_requests')
-      .select('amount')
-      .gte('created_at', startISO);
-
-    const totalWithdrawals = (withdrawals || []).reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
-
-    // Fetch abandoned payments
-    const { data: abandonedPays } = await supabase
-      .from('abandoned_payments')
-      .select('amount')
-      .gte('created_at', startISO);
-
-    const totalAbandoned = (abandonedPays || []).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
-
-    const successRate = allTxs.length > 0 ? (successful.length / allTxs.length) * 100 : 0;
-
+    const result = analytics as Partial<AnalyticsData>;
     setData({
-      totalRevenue,
-      totalEscrow,
-      totalFailed: failed.reduce((sum, t) => sum + (Number(t.amount) || 0) / 100, 0),
-      totalRefunds,
-      totalAbandoned,
-      totalWithdrawals,
-      totalWalletFunding,
-      totalSubscriptionRevenue,
-      paymentCount: successful.length,
-      failedCount: failed.length,
-      abandonedCount: abandoned.length + (abandonedPays || []).length,
-      successRate,
-      avgProcessingTime: null,
+      totalRevenue: Number(result.totalRevenue) || 0,
+      totalEscrow: Number(result.totalEscrow) || 0,
+      totalFailed: Number(result.totalFailed) || 0,
+      totalRefunds: Number(result.totalRefunds) || 0,
+      totalAbandoned: Number(result.totalAbandoned) || 0,
+      totalWithdrawals: Number(result.totalWithdrawals) || 0,
+      totalWalletFunding: Number(result.totalWalletFunding) || 0,
+      totalSubscriptionRevenue: Number(result.totalSubscriptionRevenue) || 0,
+      paymentCount: Number(result.paymentCount) || 0,
+      failedCount: Number(result.failedCount) || 0,
+      abandonedCount: Number(result.abandonedCount) || 0,
+      successRate: Number(result.successRate) || 0,
+      avgProcessingTime: result.avgProcessingTime == null ? null : Number(result.avgProcessingTime),
     });
 
     setLoading(false);

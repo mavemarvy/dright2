@@ -121,16 +121,19 @@ export async function verifyBankAccount(
     return { success: false, verified: false, error: result.error };
   }
 
-  // Mark as pending verification
-  await supabase
-    .from('bank_accounts')
-    .update({
-      verification_status: 'pending',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', accountId);
+  const { data: verificationData, error: verificationError } = await supabase
+    .rpc('request_bank_account_verification', { p_account_id: accountId });
 
-  return { success: true, verified: false };
+  if (verificationError) {
+    return { success: false, verified: false, error: verificationError.message };
+  }
+
+  const verification = verificationData as { success?: boolean; verified?: boolean; error?: string } | null;
+  if (!verification?.success) {
+    return { success: false, verified: false, error: verification?.error || 'Verification request failed' };
+  }
+
+  return { success: true, verified: verification.verified === true };
 }
 
 export function useBankAccounts(userId: string | undefined) {
