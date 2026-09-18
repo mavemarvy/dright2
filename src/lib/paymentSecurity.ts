@@ -64,7 +64,7 @@ export async function changePin(userId: string, currentPin: string, newPin: stri
   return data as { success: boolean; error?: string; attempts_remaining?: number };
 }
 
-export async function verifyPin(userId: string, pin: string, context = 'transaction'): Promise<{ success: boolean; error?: string; attempts_remaining?: number; locked_until?: string }> {
+export async function verifyPin(userId: string, pin: string, context = 'transaction'): Promise<{ success: boolean; error?: string; attempts_remaining?: number; locked_until?: string; authorization_token?: string; expires_in_seconds?: number }> {
   const pinHash = await hashPin(pin);
   const { data, error } = await supabase.rpc('verify_payment_pin', { p_user_id: userId, p_pin_hash: pinHash, p_context: context });
   if (error) return { success: false, error: error.message };
@@ -77,24 +77,32 @@ export async function verifyPinHash(userId: string, pinHash: string, context = '
   return data as any;
 }
 
-export async function requestPinReset(userId: string): Promise<{ success: boolean; token?: string; error?: string }> {
-  const { data, error } = await supabase.rpc('create_pin_recovery_token', { p_user_id: userId });
-  if (error) return { success: false, error: error.message };
-  return { success: true, token: data as string };
+export async function requestPinReset(_userId: string): Promise<{ success: boolean; token?: string; error?: string }> {
+  return { success: false, error: 'Browser-generated recovery tokens are disabled. Use a saved one-time recovery code.' };
 }
 
-export async function verifyRecoveryToken(token: string): Promise<{ success: boolean; userId?: string; error?: string }> {
-  const { data, error } = await supabase.rpc('verify_pin_recovery_token', { p_token: token });
-  if (error) return { success: false, error: error.message };
-  const result = data as any;
-  return { success: result.success, userId: result.user_id, error: result.error };
+export async function verifyRecoveryToken(_token: string): Promise<{ success: boolean; userId?: string; error?: string }> {
+  return { success: false, error: 'Legacy recovery tokens are disabled. Use a saved one-time recovery code.' };
 }
 
 export async function resetPinWithToken(_userId: string, _newPin: string): Promise<{ success: boolean; error?: string }> {
-  return {
-    success: false,
-    error: 'PIN recovery reset is disabled until the server-side recovery credential flow is enabled.',
-  };
+  return { success: false, error: 'Legacy recovery-token resets are disabled.' };
+}
+
+export async function resetPinWithRecoveryCode(userId: string, recoveryCode: string, newPin: string): Promise<{ success: boolean; error?: string }> {
+  const validation = validatePin(newPin);
+  if (!validation.valid) return { success: false, error: validation.error };
+  if (!recoveryCode.trim()) return { success: false, error: 'Recovery code is required' };
+  const pinHash = await hashPin(newPin);
+  const { data, error } = await supabase.rpc('reset_payment_pin_with_recovery_code', {
+    p_user_id: userId,
+    p_code: recoveryCode.trim(),
+    p_new_pin_hash: pinHash,
+    p_pin_length: newPin.length,
+  });
+  if (error) return { success: false, error: error.message };
+  const result = data as { success?: boolean; error?: string } | null;
+  return { success: result?.success === true, error: result?.error };
 }
 
 export async function updateAuthRules(userId: string, rules: AuthRules): Promise<{ success: boolean; error?: string }> {
