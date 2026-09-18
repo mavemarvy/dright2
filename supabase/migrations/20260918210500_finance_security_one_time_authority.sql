@@ -89,13 +89,13 @@ begin
     where user_id = p_user_id
       and (used_at is not null or expires_at <= now());
 
-    v_authorization_token := encode(gen_random_bytes(32), 'hex');
+    v_authorization_token := encode(extensions.gen_random_bytes(32), 'hex');
 
     insert into public.payment_authorizations(user_id, context, token_hash, expires_at)
     values (
       p_user_id,
       v_context,
-      encode(digest(v_authorization_token, 'sha256'), 'hex'),
+      encode(extensions.digest(v_authorization_token, 'sha256'), 'hex'),
       now() + interval '5 minutes'
     );
 
@@ -240,7 +240,7 @@ begin
   from public.payment_authorizations
   where user_id = p_user_id
     and context = 'withdrawal'
-    and token_hash = encode(digest(p_authorization_token, 'sha256'), 'hex')
+    and token_hash = encode(extensions.digest(p_authorization_token, 'sha256'), 'hex')
     and used_at is null
     and expires_at > now()
   for update;
@@ -249,7 +249,7 @@ begin
     return jsonb_build_object('success', false, 'error', 'PIN authorization expired or already used');
   end if;
 
-  v_reference := 'WDL-' || upper(substring(encode(gen_random_bytes(8), 'hex') from 1 for 12));
+  v_reference := 'WDL-' || upper(substring(encode(extensions.gen_random_bytes(8), 'hex') from 1 for 12));
 
   v_result := public.process_wallet_transaction(
     p_user_id,
@@ -493,11 +493,11 @@ begin
 
   for i in 1..10 loop
     v_code := upper(
-      substring(encode(gen_random_bytes(8), 'hex') from 1 for 8)
+      substring(encode(extensions.gen_random_bytes(8), 'hex') from 1 for 8)
       || '-' ||
-      substring(encode(gen_random_bytes(8), 'hex') from 1 for 8)
+      substring(encode(extensions.gen_random_bytes(8), 'hex') from 1 for 8)
     );
-    v_hash := crypt(v_code || p_user_id::text, gen_salt('bf'));
+    v_hash := extensions.crypt(v_code || p_user_id::text, extensions.gen_salt('bf'));
     v_codes := v_codes || v_code;
 
     insert into public.payment_recovery_codes(user_id, code_hash)
@@ -572,10 +572,10 @@ begin
   where user_id = p_user_id
     and used_at is null
     and (
-      (code_hash like '$2%' and crypt(v_hash, code_hash) = code_hash)
+      (code_hash like '$2%' and extensions.crypt(v_hash, code_hash) = code_hash)
       or
       (code_hash not like '$2%' and code_hash = encode(
-        digest(upper(trim(p_code)) || p_user_id::text || 'dright_rc_salt', 'sha256'),
+        extensions.digest(upper(trim(p_code)) || p_user_id::text || 'dright_rc_salt', 'sha256'),
         'hex'
       ))
     )
