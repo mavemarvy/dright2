@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useLoginHistory, getBrowserName } from '../lib/authSecurity';
 import {
-  Shield, ShieldCheck, Clock, Monitor, LogOut, Mail, Lock,
+  Shield, ShieldCheck, Monitor, LogOut, Mail,
   CheckCircle, XCircle, RefreshCw, KeyRound, Activity, Wallet,
   Eye, EyeOff, AlertCircle,
 } from 'lucide-react';
@@ -301,8 +301,9 @@ export default function UserSecurityCenterPage() {
           <p className="text-sm text-gray-500">Use account recovery codes only through DRIGHT’s official recovery flow.</p>
           <button onClick={() => setShowRecoveryCodes((value) => !value)} className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50">{showRecoveryCodes ? 'Hide' : 'Manage'}</button>
         </div>
-        {showRecoveryCodes && <div className="mt-4"><RecoveryCodes /></div>}
       </Section>
+
+      <RecoveryCodes open={showRecoveryCodes} userId={user.id} onClose={() => setShowRecoveryCodes(false)} />
 
       <Section title="Recent Devices" icon={Monitor}>
         {historyLoading ? (
