@@ -625,4 +625,378 @@ grant execute on function public.create_pin_recovery_token(uuid) to service_role
 grant execute on function public.verify_pin_recovery_token(text) to service_role;
 grant execute on function public.verify_recovery_code(uuid,text) to service_role;
 
+
+-- ---------------------------------------------------------------------------
+-- Protect all legacy/system-owned user fields used by finance, verification,
+-- trust, growth and admin authorization. Owner profile updates must not be able
+-- to self-award these values.
+-- ---------------------------------------------------------------------------
+create or replace function public.protect_user_authoritative_fields()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if current_user = 'authenticated' and auth.uid() = old.id then
+    if new.role is distinct from old.role
+       or new.balance is distinct from old.balance
+       or new.available_balance is distinct from old.available_balance
+       or new.locked_balance is distinct from old.locked_balance
+       or new.affiliate_earnings is distinct from old.affiliate_earnings
+       or new.is_admin is distinct from old.is_admin
+       or new.admin_status is distinct from old.admin_status
+       or new.admin_role is distinct from old.admin_role
+       or new.rbac_role_id is distinct from old.rbac_role_id
+       or new.account_status is distinct from old.account_status
+       or new.is_verified is distinct from old.is_verified
+       or new.location_verified is distinct from old.location_verified
+       or new.verification_level is distinct from old.verification_level
+       or new.verification_status is distinct from old.verification_status
+       or new.admin_verification_status is distinct from old.admin_verification_status
+       or new.admin_rejection_reason is distinct from old.admin_rejection_reason
+       or new.marketer_level is distinct from old.marketer_level
+       or new.marketer_status is distinct from old.marketer_status
+       or new.advertiser_grade is distinct from old.advertiser_grade
+       or new.advertiser_status is distinct from old.advertiser_status
+       or new.weekly_sales_count is distinct from old.weekly_sales_count
+       or new.total_sales_count is distinct from old.total_sales_count
+       or new.consecutive_weeks_streak is distinct from old.consecutive_weeks_streak
+       or new.consecutive_week_failures is distinct from old.consecutive_week_failures
+       or new.total_reviews is distinct from old.total_reviews
+       or new.average_rating is distinct from old.average_rating
+       or new.one_star_count is distinct from old.one_star_count
+       or new.followers_count is distinct from old.followers_count
+       or new.response_rate is distinct from old.response_rate
+       or new.avg_response_time_hours is distinct from old.avg_response_time_hours
+       or new.account_locks_count is distinct from old.account_locks_count
+       or new.referral_code is distinct from old.referral_code
+       or new.referred_by is distinct from old.referred_by
+       or new.marketer_social_analysis is distinct from old.marketer_social_analysis
+       or new.marketer_deep_research is distinct from old.marketer_deep_research
+       or new.marketer_monitoring_status is distinct from old.marketer_monitoring_status
+       or new.marketer_last_verified_at is distinct from old.marketer_last_verified_at
+       or new.marketer_next_verification_due_at is distinct from old.marketer_next_verification_due_at
+       or new.marketer_monitoring_flags is distinct from old.marketer_monitoring_flags then
+      raise exception 'Protected account fields can only be changed by authoritative DRIGHT operations';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Replace legacy users.role='admin' finance authorization with DRIGHT RBAC.
+-- ---------------------------------------------------------------------------
+create or replace function public.get_user_transaction_history(
+  p_user_id uuid default null,
+  p_status text default null,
+  p_category text default null,
+  p_date_from timestamptz default null,
+  p_date_to timestamptz default null,
+  p_search text default null,
+  p_limit integer default 20,
+  p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+declare
+  v_result jsonb;
+  v_total bigint;
+  v_target uuid := coalesce(p_user_id, auth.uid());
+begin
+  if auth.uid() is null or v_target is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  if v_target is distinct from auth.uid()
+     and public.is_super_admin() is not true
+     and public.has_dright_permission('payments','view') is not true
+     and public.has_dright_permission('payments','manage') is not true
+     and public.has_rbac_permission('transactions','view') is not true
+     and public.has_rbac_permission('transactions','manage') is not true then
+    raise exception 'Unauthorized';
+  end if;
+
+  select count(*) into v_total
+  from public.cc_transactions
+  where user_id = v_target
+    and (p_status is null or status = p_status)
+    and (p_category is null or category = p_category)
+    and (p_date_from is null or created_at >= p_date_from)
+    and (p_date_to is null or created_at <= p_date_to)
+    and (
+      p_search is null
+      or reference ilike '%' || p_search || '%'
+      or receipt_number ilike '%' || p_search || '%'
+      or description ilike '%' || p_search || '%'
+      or type ilike '%' || p_search || '%'
+    );
+
+  select coalesce(jsonb_agg(t order by t.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select *
+    from public.cc_transactions
+    where user_id = v_target
+      and (p_status is null or status = p_status)
+      and (p_category is null or category = p_category)
+      and (p_date_from is null or created_at >= p_date_from)
+      and (p_date_to is null or created_at <= p_date_to)
+      and (
+        p_search is null
+        or reference ilike '%' || p_search || '%'
+        or receipt_number ilike '%' || p_search || '%'
+        or description ilike '%' || p_search || '%'
+        or type ilike '%' || p_search || '%'
+      )
+    order by created_at desc
+    limit greatest(1, least(coalesce(p_limit,20), 100))
+    offset greatest(coalesce(p_offset,0), 0)
+  ) t;
+
+  return jsonb_build_object('transactions', v_result, 'total', v_total);
+end;
+$$;
+
+create or replace function public.search_platform_transactions(
+  p_search text default null,
+  p_status text default null,
+  p_category text default null,
+  p_user_id uuid default null,
+  p_date_from timestamptz default null,
+  p_date_to timestamptz default null,
+  p_limit integer default 50,
+  p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+declare
+  v_result jsonb;
+  v_total bigint;
+begin
+  if auth.uid() is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  if public.is_super_admin() is not true
+     and public.has_dright_permission('payments','view') is not true
+     and public.has_dright_permission('payments','manage') is not true
+     and public.has_rbac_permission('transactions','view') is not true
+     and public.has_rbac_permission('transactions','manage') is not true then
+    raise exception 'Unauthorized: transaction review permission required';
+  end if;
+
+  select count(*) into v_total
+  from public.cc_transactions
+  where (p_status is null or status = p_status)
+    and (p_category is null or category = p_category)
+    and (p_user_id is null or user_id = p_user_id)
+    and (p_date_from is null or created_at >= p_date_from)
+    and (p_date_to is null or created_at <= p_date_to)
+    and (
+      p_search is null
+      or reference ilike '%' || p_search || '%'
+      or receipt_number ilike '%' || p_search || '%'
+      or description ilike '%' || p_search || '%'
+      or id::text ilike '%' || p_search || '%'
+    );
+
+  select coalesce(jsonb_agg(t order by t.created_at desc), '[]'::jsonb)
+  into v_result
+  from (
+    select t.*, u.email, u.username
+    from public.cc_transactions t
+    left join public.users u on u.id = t.user_id
+    where (p_status is null or t.status = p_status)
+      and (p_category is null or t.category = p_category)
+      and (p_user_id is null or t.user_id = p_user_id)
+      and (p_date_from is null or t.created_at >= p_date_from)
+      and (p_date_to is null or t.created_at <= p_date_to)
+      and (
+        p_search is null
+        or t.reference ilike '%' || p_search || '%'
+        or t.receipt_number ilike '%' || p_search || '%'
+        or t.description ilike '%' || p_search || '%'
+        or t.id::text ilike '%' || p_search || '%'
+      )
+    order by t.created_at desc
+    limit greatest(1, least(coalesce(p_limit,50), 200))
+    offset greatest(coalesce(p_offset,0), 0)
+  ) t;
+
+  return jsonb_build_object('transactions', v_result, 'total', v_total);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Admin-only payment security summary.
+-- ---------------------------------------------------------------------------
+create or replace function public.get_admin_payment_security_summary()
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  if public.is_super_admin() is not true
+     and public.has_dright_permission('security','view') is not true
+     and public.has_dright_permission('security','manage') is not true
+     and public.has_dright_permission('payments','manage') is not true then
+    raise exception 'Unauthorized: security review permission required';
+  end if;
+
+  return jsonb_build_object(
+    'total_pins', (select count(*) from public.payment_security where is_active = true),
+    'locked_pins', (select count(*) from public.payment_security where is_locked = true),
+    'total_attempts_24h', (select count(*) from public.payment_pin_attempts where created_at > now() - interval '24 hours'),
+    'failed_attempts_24h', (select count(*) from public.payment_pin_attempts where success = false and created_at > now() - interval '24 hours'),
+    'high_risk_users', (select count(*) from public.user_risk_scores where risk_score >= 70),
+    'unresolved_fraud_alerts', (select count(*) from public.wallet_fraud_alerts where is_resolved = false),
+    'recovery_codes_active', (select count(distinct user_id) from public.payment_recovery_codes where used_at is null),
+    'frozen_wallets', (select count(*) from public.cc_wallets where is_frozen = true)
+  );
+end;
+$$;
+
+-- Seller-scoped fraud analytics are visible to the seller; platform-wide or
+-- another seller's analytics require explicit security/fraud review permission.
+create or replace function public.get_fraud_detection(
+  p_seller_id uuid default null,
+  p_days integer default 30
+)
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = public, pg_temp
+as $$
+declare
+  v_start timestamptz;
+  v_is_reviewer boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  if p_days < 1 or p_days > 365 then
+    raise exception 'Invalid analytics window';
+  end if;
+
+  v_is_reviewer :=
+       public.is_super_admin() is true
+    or public.has_dright_permission('security','view') is true
+    or public.has_dright_permission('security','view_fraud') is true
+    or public.has_dright_permission('security','manage') is true;
+
+  if p_seller_id is null and not v_is_reviewer then
+    raise exception 'Unauthorized: platform fraud analytics require security review permission';
+  end if;
+
+  if p_seller_id is not null
+     and p_seller_id is distinct from auth.uid()
+     and not v_is_reviewer then
+    raise exception 'Unauthorized';
+  end if;
+
+  v_start := now() - make_interval(days => p_days);
+
+  return jsonb_build_object(
+    'fake_views', (
+      select count(*) from (
+        select session_id
+        from public.analytics_events
+        where event_type='product_view'
+          and session_id is not null
+          and created_at >= v_start
+          and (p_seller_id is null or seller_id = p_seller_id)
+        group by session_id
+        having count(*) > 50
+      ) x
+    ),
+    'fake_clicks', (
+      select count(*) from (
+        select session_id
+        from public.analytics_events
+        where event_type='affiliate_click'
+          and session_id is not null
+          and created_at >= v_start
+          and (p_seller_id is null or seller_id = p_seller_id)
+        group by session_id
+        having count(*) > 20
+      ) x
+    ),
+    'bot_traffic', (
+      select count(*) from public.analytics_events
+      where is_bot=true
+        and created_at >= v_start
+        and (p_seller_id is null or seller_id = p_seller_id)
+    ),
+    'rapid_refresh', (
+      select count(*) from (
+        select session_id, entity_id
+        from public.analytics_events
+        where event_type='product_view'
+          and session_id is not null
+          and created_at >= v_start
+          and (p_seller_id is null or seller_id = p_seller_id)
+        group by session_id, entity_id
+        having count(*) > 10
+      ) x
+    ),
+    'referral_fraud', (
+      select count(*) from public.analytics_events
+      where event_type='referral_fraud'
+        and created_at >= v_start
+        and (p_seller_id is null or seller_id = p_seller_id)
+    ),
+    'risk_score', least(
+      100,
+      (select count(*) from public.analytics_events
+       where is_bot=true and created_at >= v_start
+         and (p_seller_id is null or seller_id = p_seller_id)) * 5
+      +
+      (select count(*) from public.analytics_events
+       where event_type='referral_fraud' and created_at >= v_start
+         and (p_seller_id is null or seller_id = p_seller_id)) * 10
+      +
+      coalesce((
+        select count(*) from (
+          select session_id
+          from public.analytics_events
+          where event_type='product_view'
+            and session_id is not null
+            and created_at >= v_start
+            and (p_seller_id is null or seller_id = p_seller_id)
+          group by session_id
+          having count(*) > 50
+        ) x
+      ),0) * 2
+    )
+  );
+end;
+$$;
+
+revoke all on function public.get_user_transaction_history(uuid,text,text,timestamptz,timestamptz,text,integer,integer) from public, anon;
+revoke all on function public.search_platform_transactions(text,text,text,uuid,timestamptz,timestamptz,integer,integer) from public, anon;
+revoke all on function public.get_admin_payment_security_summary() from public, anon;
+revoke all on function public.get_fraud_detection(uuid,integer) from public, anon;
+grant execute on function public.get_user_transaction_history(uuid,text,text,timestamptz,timestamptz,text,integer,integer) to authenticated, service_role;
+grant execute on function public.search_platform_transactions(text,text,text,uuid,timestamptz,timestamptz,integer,integer) to authenticated, service_role;
+grant execute on function public.get_admin_payment_security_summary() to authenticated, service_role;
+grant execute on function public.get_fraud_detection(uuid,integer) to authenticated, service_role;
+
 commit;
