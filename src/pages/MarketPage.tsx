@@ -90,20 +90,37 @@ export default function MarketPage() {
   const usingMarketplaceV2 = recommendedMode && !marketV2Failed;
 
   const fetchCategoryCounts = useCallback(async () => {
-    const { data } = await supabase
-      .from('products')
-      .select('category')
-      .eq('is_active', true)
-      .eq('is_hidden', false)
-      .eq('approval_status', 'approved');
+    const [productsResult, jobsResult] = await Promise.all([
+      supabase
+        .from('products')
+        .select('category, product_type')
+        .eq('is_active', true)
+        .eq('is_hidden', false)
+        .eq('approval_status', 'approved'),
+      supabase
+        .from('jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('approval_status', 'approved')
+        .eq('status', 'active'),
+    ]);
+
     const counts: Record<string, number> = {};
-    for (const p of data || []) {
-      const cat = MARKETPLACE_CATEGORIES.find(c =>
-        c.name.toLowerCase() === p.category?.toLowerCase() ||
-        c.subcategories.some(s => s.toLowerCase() === p.category?.toLowerCase())
+    for (const product of productsResult.data || []) {
+      const matchedIds = new Set<string>();
+      if (product.product_type === 'DIGITAL') matchedIds.add('digital');
+      if (product.product_type === 'COURSE') matchedIds.add('courses');
+      if (product.product_type === 'SERVICE') matchedIds.add('services');
+
+      const category = MARKETPLACE_CATEGORIES.find(c =>
+        c.name.toLowerCase() === product.category?.toLowerCase() ||
+        c.subcategories.some(s => s.toLowerCase() === product.category?.toLowerCase())
       );
-      if (cat) counts[cat.id] = (counts[cat.id] || 0) + 1;
+      if (category) matchedIds.add(category.id);
+
+      for (const id of matchedIds) counts[id] = (counts[id] || 0) + 1;
     }
+
+    if ((jobsResult.count || 0) > 0) counts.jobs = jobsResult.count || 0;
     setCategoryCounts(counts);
   }, []);
 

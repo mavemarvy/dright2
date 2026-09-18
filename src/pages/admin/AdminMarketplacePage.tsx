@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Store, Star, Flag, Package, TrendingUp, Save,
-  Loader2, Check, X, Trash2, Plus,
+  Loader2, Check, X, Trash2, Plus, Eye, EyeOff,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,7 +41,24 @@ interface Collection {
   display_order: number;
 }
 
-type Tab = 'featured' | 'moderation' | 'ranking' | 'collections';
+interface MarketplaceCategoryAdmin {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  subcategories: string[];
+  popular: boolean;
+  is_visible: boolean;
+  sort_order: number;
+}
+
+interface MarketplaceUiSettings {
+  key: string;
+  categories_section_visible: boolean;
+  categories_default_collapsed: boolean;
+}
+
+type Tab = 'featured' | 'moderation' | 'ranking' | 'categories' | 'collections';
 
 const PROMOTION_TYPES = [
   { value: 'featured', label: 'Featured', color: 'bg-purple-500' },
@@ -68,13 +85,25 @@ export default function AdminMarketplacePage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedPromoType, setSelectedPromoType] = useState('featured');
   const [promoDuration, setPromoDuration] = useState(7);
+  const [categories, setCategories] = useState<MarketplaceCategoryAdmin[]>([]);
+  const [categorySettings, setCategorySettings] = useState<MarketplaceUiSettings>({
+    key: 'default',
+    categories_section_visible: true,
+    categories_default_collapsed: true,
+  });
+  const [canManageCategories, setCanManageCategories] = useState(false);
+  const [categorySavingId, setCategorySavingId] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    const [featRes, repRes, colRes, wRes] = await Promise.all([
+    const [featRes, repRes, colRes, wRes, catRes, categorySettingsRes, categoryPermissionRes] = await Promise.all([
       supabase.from('featured_products').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(20),
       supabase.from('moderation_reports').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.from('marketplace_collections').select('*').order('display_order', { ascending: true }),
       supabase.from('marketplace_ranking_weights').select('*').maybeSingle(),
+      supabase.from('marketplace_categories').select('*').order('sort_order', { ascending: true }),
+      supabase.from('marketplace_ui_settings').select('*').eq('key', 'default').maybeSingle(),
+      supabase.rpc('has_dright_permission', { p_module: 'marketplace', p_action: 'manage_categories' }),
     ]);
 
     if (featRes.data) {
@@ -90,6 +119,9 @@ export default function AdminMarketplacePage() {
     if (repRes.data) setReports(repRes.data as ModerationReport[]);
     if (colRes.data) setCollections(colRes.data as Collection[]);
     if (wRes.data) setWeights(wRes.data as RankingWeights);
+    if (catRes.data) setCategories(catRes.data as MarketplaceCategoryAdmin[]);
+    if (categorySettingsRes.data) setCategorySettings(categorySettingsRes.data as MarketplaceUiSettings);
+    setCanManageCategories(categoryPermissionRes.data === true);
     setLoading(false);
   }, []);
 
@@ -186,10 +218,50 @@ export default function AdminMarketplacePage() {
     if (data) setCollections(prev => [...prev, data as Collection]);
   };
 
+  const handleToggleCategory = async (category: MarketplaceCategoryAdmin) => {
+    setCategorySavingId(category.id);
+    setCategoryError(null);
+    const { error } = await supabase.rpc('set_marketplace_category_visibility', {
+      p_category_id: category.id,
+      p_visible: !category.is_visible,
+    });
+    if (error) {
+      setCategoryError(error.message);
+    } else {
+      setCategories(prev => prev.map(item =>
+        item.id === category.id ? { ...item, is_visible: !item.is_visible } : item
+      ));
+    }
+    setCategorySavingId(null);
+  };
+
+  const handleCategorySectionSettings = async (
+    visible: boolean,
+    defaultCollapsed: boolean,
+  ) => {
+    setCategorySavingId('section');
+    setCategoryError(null);
+    const { error } = await supabase.rpc('set_marketplace_category_section', {
+      p_visible: visible,
+      p_default_collapsed: defaultCollapsed,
+    });
+    if (error) {
+      setCategoryError(error.message);
+    } else {
+      setCategorySettings(prev => ({
+        ...prev,
+        categories_section_visible: visible,
+        categories_default_collapsed: defaultCollapsed,
+      }));
+    }
+    setCategorySavingId(null);
+  };
+
   const tabs: Array<{ id: Tab; label: string; icon: React.ElementType }> = [
     { id: 'featured', label: 'Featured & Sponsored', icon: Star },
     { id: 'moderation', label: 'Moderation Queue', icon: Flag },
     { id: 'ranking', label: 'Ranking Weights', icon: TrendingUp },
+    ...(canManageCategories ? [{ id: 'categories' as const, label: 'Categories', icon: Package }] : []),
     { id: 'collections', label: 'Collections', icon: Package },
   ];
 
@@ -209,7 +281,7 @@ export default function AdminMarketplacePage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Marketplace Controls</h1>
-          <p className="text-sm text-gray-500">Manage promotions, moderation, ranking, and collections</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Manage promotions, moderation, ranking, categories, and collections</p>
         </div>
       </div>
 
@@ -398,6 +470,113 @@ export default function AdminMarketplacePage() {
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Save Weights</>}
           </button>
+        </div>
+      )}
+
+      {/* Categories Tab */}
+      {activeTab === 'categories' && canManageCategories && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100">Marketplace Categories</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Hide placeholder categories until DRIGHT has real listings for them. Hidden categories disappear from the public marketplace.
+                </p>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 whitespace-nowrap">
+                {categories.filter(category => category.is_visible).length} visible
+              </span>
+            </div>
+
+            {categoryError && (
+              <div className="mt-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 p-3 text-sm text-red-700 dark:text-red-300">
+                {categoryError}
+              </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 gap-3 mt-5">
+              <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Categories section</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Master visibility on the marketplace.</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={categorySavingId === 'section'}
+                  onClick={() => void handleCategorySectionSettings(
+                    !categorySettings.categories_section_visible,
+                    categorySettings.categories_default_collapsed,
+                  )}
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 ${
+                    categorySettings.categories_section_visible
+                      ? 'bg-success text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {categorySettings.categories_section_visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  {categorySettings.categories_section_visible ? 'Visible' : 'Hidden'}
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Default state</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">How categories appear when the marketplace opens.</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={categorySavingId === 'section'}
+                  onClick={() => void handleCategorySectionSettings(
+                    categorySettings.categories_section_visible,
+                    !categorySettings.categories_default_collapsed,
+                  )}
+                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+                >
+                  {categorySettings.categories_default_collapsed ? 'Collapsed' : 'Expanded'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
+            <div className="space-y-2">
+              {categories.map(category => (
+                <div
+                  key={category.id}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-transparent dark:border-gray-700"
+                >
+                  <div className={`w-10 h-10 rounded-xl ${category.color} flex items-center justify-center shrink-0`}>
+                    <Package className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{category.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">
+                      {category.subcategories.slice(0, 5).join(' · ')}
+                      {category.subcategories.length > 5 ? ` · +${category.subcategories.length - 5}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={categorySavingId === category.id}
+                    onClick={() => void handleToggleCategory(category)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 ${
+                      category.is_visible
+                        ? 'bg-success text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    {categorySavingId === category.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : category.is_visible
+                        ? <Eye className="w-3.5 h-3.5" />
+                        : <EyeOff className="w-3.5 h-3.5" />}
+                    {category.is_visible ? 'Visible' : 'Hidden'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
