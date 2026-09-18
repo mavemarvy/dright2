@@ -279,7 +279,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => { await supabase.auth.signOut(); setUser(null); setSession(null); setProfile(null); };
   const signOutAllDevices = async () => { const { error } = await supabase.auth.signOut({ scope: 'global' }); return { error }; };
   const resetPassword = async (email: string) => { const normalizedEmail = email.trim().toLowerCase(); const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo: `${window.location.origin}/reset-password` }); return { error }; };
-  const updatePassword = async (newPassword: string) => { const { error } = await supabase.auth.updateUser({ password: newPassword }); return { error }; };
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (!error && user?.id) {
+      try {
+        await emitEvent({
+          module: 'security',
+          eventType: 'password_changed',
+          recipientIds: user.id,
+          metadata: {},
+          priority: 'high',
+        });
+      } catch { /* notification failure must not invalidate password change */ }
+    }
+    return { error };
+  };
   const refreshProfile = async () => { if (user) await fetchProfile(user.id); };
   const resendVerificationEmail = async () => { if (!user?.email) return { error: null }; const { error } = await supabase.auth.resend({ type: 'signup', email: user.email }); return { error }; };
 
