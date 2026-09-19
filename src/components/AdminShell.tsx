@@ -155,6 +155,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
       { path: '/admin/roles', label: 'Roles & RBAC', icon: Shield, page: 'roles' },
       { path: '/admin/settings', label: 'System Settings', icon: Settings, page: 'settings' },
       { path: '/admin/site-settings', label: 'Site Settings', icon: Palette, page: 'site_settings' },
+      { path: '/admin/user-navigation', label: 'User Navigation', icon: Settings2, page: 'site_settings' },
       { path: '/admin/algorithm', label: 'Algorithm', icon: Settings2, page: 'algorithm' },
       { path: '/admin/local-seo', label: 'Local SEO', icon: MapPin, page: 'local_seo' },
       { path: '/admin/integration-hub', label: 'Integration Hub', icon: Plug, page: 'integration_hub' },
