@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   DollarSign, Search, CheckCircle, Clock, Loader2,
-  Percent, Save, AlertTriangle, X,
+  Percent, Save, AlertTriangle, X, Power, ShieldCheck, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { emitEvent } from '../../lib/notificationEvents';
@@ -34,8 +34,24 @@ type PayoutRpcResult = {
   balance_after?: number;
 };
 
+interface WithdrawalAutomationSettings {
+  key: string;
+  auto_payouts_enabled: boolean;
+  auto_payout_limit_ngn: number;
+  require_verified_bank: boolean;
+  max_retries: number;
+  updated_at: string;
+}
+
+type AutomationResponse = {
+  success?: boolean;
+  settings?: WithdrawalAutomationSettings;
+  error?: string;
+};
+
 export default function AdminPayoutsPage() {
-  const { user } = useAuth();
+  const { user, adminRole } = useAuth();
+  const isSuperAdmin = adminRole === 'super_admin';
   const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'paid' | 'all'>('pending');
@@ -46,10 +62,102 @@ export default function AdminPayoutsPage() {
   const [approvalPercentage, setApprovalPercentage] = useState('100');
   const [approvalNotes, setApprovalNotes] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [automation, setAutomation] = useState<WithdrawalAutomationSettings | null>(null);
+  const [automationDraft, setAutomationDraft] = useState<WithdrawalAutomationSettings | null>(null);
+  const [automationLoading, setAutomationLoading] = useState(false);
+  const [automationSaving, setAutomationSaving] = useState(false);
+  const [automationError, setAutomationError] = useState<string | null>(null);
+  const [automationSuccess, setAutomationSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayouts();
   }, [statusFilter]);
+
+  useEffect(() => {
+    if (isSuperAdmin) void loadAutomationSettings();
+  }, [isSuperAdmin]);
+
+  const loadAutomationSettings = async () => {
+    if (!isSuperAdmin) return;
+    setAutomationLoading(true);
+    setAutomationError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-withdrawal-automation-settings', {
+        body: { action: 'get' },
+      });
+      if (error) throw error;
+      const result = (data || {}) as AutomationResponse;
+      if (!result.success || !result.settings) throw new Error(result.error || 'Unable to load withdrawal automation settings');
+      const normalized: WithdrawalAutomationSettings = {
+        ...result.settings,
+        auto_payout_limit_ngn: Number(result.settings.auto_payout_limit_ngn),
+        max_retries: Number(result.settings.max_retries),
+      };
+      setAutomation(normalized);
+      setAutomationDraft(normalized);
+    } catch (error) {
+      setAutomationError(error instanceof Error ? error.message : 'Unable to load withdrawal automation settings');
+    } finally {
+      setAutomationLoading(false);
+    }
+  };
+
+  const saveAutomationSettings = async () => {
+    if (!isSuperAdmin || !automationDraft) return;
+
+    const limit = Number(automationDraft.auto_payout_limit_ngn);
+    const retries = Number(automationDraft.max_retries);
+    if (!Number.isFinite(limit) || limit < 0 || limit > 100000000) {
+      setAutomationError('Automatic payout limit must be between ₦0 and ₦100,000,000.');
+      return;
+    }
+    if (!Number.isInteger(retries) || retries < 0 || retries > 10) {
+      setAutomationError('Maximum retries must be a whole number from 0 to 10.');
+      return;
+    }
+
+    const enabling = automation?.auto_payouts_enabled !== true && automationDraft.auto_payouts_enabled === true;
+    if (enabling) {
+      const confirmed = window.confirm(
+        'Enable automatic withdrawals? Eligible queued withdrawals up to the configured limit can be submitted to Paystack without admin review. Verified bank accounts remain required.'
+      );
+      if (!confirmed) return;
+    }
+
+    setAutomationSaving(true);
+    setAutomationError(null);
+    setAutomationSuccess(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-withdrawal-automation-settings', {
+        body: {
+          auto_payouts_enabled: automationDraft.auto_payouts_enabled,
+          auto_payout_limit_ngn: limit,
+          require_verified_bank: automationDraft.require_verified_bank,
+          max_retries: retries,
+          ...(enabling ? { confirm_enable: 'ENABLE_AUTOMATIC_PAYOUTS' } : {}),
+        },
+      });
+      if (error) throw error;
+      const result = (data || {}) as AutomationResponse;
+      if (!result.success || !result.settings) throw new Error(result.error || 'Unable to save withdrawal automation settings');
+      const normalized: WithdrawalAutomationSettings = {
+        ...result.settings,
+        auto_payout_limit_ngn: Number(result.settings.auto_payout_limit_ngn),
+        max_retries: Number(result.settings.max_retries),
+      };
+      setAutomation(normalized);
+      setAutomationDraft(normalized);
+      setAutomationSuccess(
+        normalized.auto_payouts_enabled
+          ? 'Automatic payouts are ON. Eligible withdrawals can now be submitted to Paystack automatically.'
+          : 'Automatic payouts are OFF. New withdrawals will remain queued for review.'
+      );
+    } catch (error) {
+      setAutomationError(error instanceof Error ? error.message : 'Unable to save withdrawal automation settings');
+    } finally {
+      setAutomationSaving(false);
+    }
+  };
 
   const fetchPayouts = async () => {
     setLoading(true);
@@ -194,6 +302,189 @@ export default function AdminPayoutsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Payout Records</h1>
         <p className="text-gray-500 mt-1">Review payout records through atomic wallet operations</p>
       </div>
+
+      {isSuperAdmin && (
+        <section id="withdrawal-automation" className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="p-5 md:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                automationDraft?.auto_payouts_enabled ? 'bg-emerald-100' : 'bg-gray-100'
+              }`}>
+                <Power className={`w-5 h-5 ${automationDraft?.auto_payouts_enabled ? 'text-emerald-700' : 'text-gray-500'}`} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg font-bold text-gray-900">Withdrawal Automation</h2>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">Super Admin only</span>
+                  {automation && (
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                      automation.auto_payouts_enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {automation.auto_payouts_enabled ? 'LIVE' : 'OFF'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  Control whether eligible queued withdrawals are submitted to Paystack automatically.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadAutomationSettings()}
+              disabled={automationLoading || automationSaving}
+              className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${automationLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          {automationLoading && !automationDraft ? (
+            <div className="p-8 flex items-center justify-center">
+              <Loader2 className="w-7 h-7 animate-spin text-primary-600" />
+            </div>
+          ) : automationDraft ? (
+            <div className="p-5 md:p-6 space-y-5">
+              {automationError && (
+                <div className="p-3 rounded-xl border border-red-100 bg-red-50 text-red-700 text-sm flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{automationError}</span>
+                </div>
+              )}
+              {automationSuccess && (
+                <div className="p-3 rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 text-sm flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{automationSuccess}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 p-4">
+                <div>
+                  <p className="font-semibold text-gray-900">Automatic payouts</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    When ON, eligible withdrawals up to the limit can be sent to Paystack without waiting for admin review.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={automationDraft.auto_payouts_enabled}
+                  onClick={() => setAutomationDraft((current) => current ? {
+                    ...current,
+                    auto_payouts_enabled: !current.auto_payouts_enabled,
+                    require_verified_bank: !current.auto_payouts_enabled ? true : current.require_verified_bank,
+                  } : current)}
+                  className={`relative w-14 h-8 rounded-full transition-colors shrink-0 ${
+                    automationDraft.auto_payouts_enabled ? 'bg-emerald-500' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${
+                    automationDraft.auto_payouts_enabled ? 'left-7' : 'left-1'
+                  }`} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Automatic payout limit</span>
+                  <div className="mt-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">₦</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100000000"
+                      step="100"
+                      value={automationDraft.auto_payout_limit_ngn}
+                      onChange={(event) => setAutomationDraft((current) => current ? {
+                        ...current,
+                        auto_payout_limit_ngn: Number(event.target.value),
+                      } : current)}
+                      className="w-full pl-8 pr-3 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary-500 bg-white text-gray-900"
+                    />
+                  </div>
+                  <span className="text-[11px] text-gray-400 mt-1 block">Withdrawals above this amount remain in the review queue.</span>
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Maximum queue retries</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="1"
+                    value={automationDraft.max_retries}
+                    onChange={(event) => setAutomationDraft((current) => current ? {
+                      ...current,
+                      max_retries: Number(event.target.value),
+                    } : current)}
+                    className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary-500 bg-white text-gray-900"
+                  />
+                  <span className="text-[11px] text-gray-400 mt-1 block">Retry cap stored on new withdrawal-queue entries.</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 p-4">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-primary-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-gray-900">Require verified bank account</p>
+                    <p className="text-xs text-gray-500 mt-1">Only Paystack-resolved accounts with a saved transfer-recipient code can receive automated withdrawals.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={automationDraft.require_verified_bank}
+                  disabled={automationDraft.auto_payouts_enabled}
+                  onClick={() => setAutomationDraft((current) => current ? {
+                    ...current,
+                    require_verified_bank: !current.require_verified_bank,
+                  } : current)}
+                  className={`relative w-14 h-8 rounded-full transition-colors shrink-0 disabled:opacity-60 ${
+                    automationDraft.require_verified_bank ? 'bg-primary-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${
+                    automationDraft.require_verified_bank ? 'left-7' : 'left-1'
+                  }`} />
+                </button>
+              </div>
+
+              {automationDraft.auto_payouts_enabled && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-900">Live money movement</p>
+                    <p className="text-xs text-amber-800 mt-1">
+                      Saving with automatic payouts ON allows eligible withdrawals to be submitted to Paystack automatically. Keep your Paystack transfer balance, OTP configuration, fraud controls, and webhook monitoring ready.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                <p className="text-xs text-gray-400">
+                  Last updated: {automation.updated_at ? new Date(automation.updated_at).toLocaleString() : 'Unknown'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void saveAutomationSettings()}
+                  disabled={automationSaving || automationLoading}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary-600 text-white font-semibold hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {automationSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save automation settings
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-5 text-sm text-red-600">
+              {automationError || 'Withdrawal automation settings could not be loaded.'}
+            </div>
+          )}
+        </section>
+      )}
 
       {actionError && (
         <div className="mb-4 p-3 rounded-xl border border-red-100 bg-red-50 text-red-700 text-sm flex items-start gap-2">
