@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
     const customizationOptionIds = Array.isArray(body.customization_option_ids)
       ? [...new Set(body.customization_option_ids.map((value: unknown) => safeText(value, 64)).filter(Boolean))].slice(0, 30)
       : [];
-    const quantity = Math.max(1, Math.min(99, Math.floor(Number(body.quantity) || 1));
+    const quantity = Math.max(1, Math.min(99, Math.floor(Number(body.quantity) || 1)));
     if (!productId || !buyerName || !validEmail(buyerEmail)) return json({ error: "Name, valid email, and product are required" }, 400);
 
     const { data: product, error: productError } = await db.from("products").select("*").eq("id", productId).maybeSingle();
