@@ -385,44 +385,25 @@ export default function AdminPayoutsPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Automatic payout limit</span>
-                  <div className="mt-1 relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">₦</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100000000"
-                      step="100"
-                      value={automationDraft.auto_payout_limit_ngn}
-                      onChange={(event) => setAutomationDraft((current) => current ? {
-                        ...current,
-                        auto_payout_limit_ngn: Number(event.target.value),
-                      } : current)}
-                      className="w-full pl-8 pr-3 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary-500 bg-white text-gray-900"
-                    />
-                  </div>
-                  <span className="text-[11px] text-gray-400 mt-1 block">Withdrawals above this amount remain in the review queue.</span>
-                </label>
-
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Maximum queue retries</span>
+              <label className="block max-w-md">
+                <span className="text-sm font-medium text-gray-700">Automatic payout limit</span>
+                <div className="mt-1 relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">₦</span>
                   <input
                     type="number"
                     min="0"
-                    max="10"
-                    step="1"
-                    value={automationDraft.max_retries}
+                    max="100000000"
+                    step="100"
+                    value={automationDraft.auto_payout_limit_ngn}
                     onChange={(event) => setAutomationDraft((current) => current ? {
                       ...current,
-                      max_retries: Number(event.target.value),
+                      auto_payout_limit_ngn: Number(event.target.value),
                     } : current)}
-                    className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary-500 bg-white text-gray-900"
+                    className="w-full pl-8 pr-3 py-3 rounded-xl border border-gray-200 outline-none focus:border-primary-500 bg-white text-gray-900"
                   />
-                  <span className="text-[11px] text-gray-400 mt-1 block">Retry cap stored on new withdrawal-queue entries.</span>
-                </label>
-              </div>
+                </div>
+                <span className="text-[11px] text-gray-400 mt-1 block">Withdrawals above this amount remain in the review queue.</span>
+              </label>
 
               <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 p-4">
                 <div className="flex items-start gap-3">
@@ -457,7 +438,7 @@ export default function AdminPayoutsPage() {
                   <div>
                     <p className="font-semibold text-amber-900">Live money movement</p>
                     <p className="text-xs text-amber-800 mt-1">
-                      Saving with automatic payouts ON allows eligible withdrawals to be submitted to Paystack automatically. Keep your Paystack transfer balance, OTP configuration, fraud controls, and webhook monitoring ready.
+                      Saving with automatic payouts ON allows eligible new withdrawals to be submitted to Paystack automatically. Existing withdrawals that were already queued before enabling remain in the review queue. Keep your Paystack transfer balance, OTP configuration, fraud controls, and webhook monitoring ready.
                     </p>
                   </div>
                 </div>
