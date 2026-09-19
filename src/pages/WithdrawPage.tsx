@@ -67,6 +67,16 @@ export default function WithdrawPage() {
   const displayBalance = convertAmount(balance, walletCurrency, selectedCurrency) ?? balance;
   const enabledMethods = getEnabledMethods(methods);
   const comingSoonMethods = getComingSoonMethods(methods);
+  const enteredDisplayAmount = parseFloat(amount);
+  const enteredCanonicalAmount = Number.isFinite(enteredDisplayAmount)
+    ? convertAmount(enteredDisplayAmount, selectedCurrency, walletCurrency)
+    : null;
+  const canProceedToPin = Boolean(
+    amount &&
+    enteredCanonicalAmount &&
+    enteredCanonicalAmount >= 100 &&
+    enteredCanonicalAmount <= balance
+  );
 
   const handleSelectMethod = (slug: string) => {
     setSelectedMethod(slug);
@@ -464,7 +474,7 @@ export default function WithdrawPage() {
 
           <button
             onClick={handleProceedToPin}
-            disabled={!amount || parseFloat(amount) < 100}
+            disabled={!canProceedToPin}
             className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Lock className="w-5 h-5" />Continue to PIN Verification
