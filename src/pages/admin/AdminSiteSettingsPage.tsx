@@ -9,9 +9,12 @@ import {
   Globe,
   Image as ImageIcon,
   Wrench,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { clearBusinessSettingsCache } from '../../lib/seo';
 
 interface SiteSettings {
   id: string;
@@ -21,9 +24,16 @@ interface SiteSettings {
   maintenance_mode: boolean;
 }
 
+interface BusinessFooterSettings {
+  id: string;
+  public_footer_visible: boolean;
+}
+
 export default function AdminSiteSettingsPage() {
   const {} = useAuth();
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const [businessFooterSettings, setBusinessFooterSettings] = useState<BusinessFooterSettings | null>(null);
+  const [canManageBusinessFooter, setCanManageBusinessFooter] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -36,17 +46,33 @@ export default function AdminSiteSettingsPage() {
   }, []);
 
   const fetchSettings = async () => {
-    const { data, error } = await supabase
-      .from('site_settings')
-      .select('*')
-      .eq('singleton', true)
-      .maybeSingle();
+    const [siteResult, businessResult, permissionResult] = await Promise.all([
+      supabase
+        .from('site_settings')
+        .select('*')
+        .eq('singleton', true)
+        .maybeSingle(),
+      supabase
+        .from('business_settings')
+        .select('id, public_footer_visible')
+        .eq('is_singleton', true)
+        .maybeSingle(),
+      supabase.rpc('has_dright_permission', { p_module: 'site_settings', p_action: 'manage' }),
+    ]);
 
-    if (error) {
+    if (siteResult.error) {
       setError('Failed to load site settings');
-    } else if (data) {
-      setSettings(data as SiteSettings);
+    } else if (siteResult.data) {
+      setSettings(siteResult.data as SiteSettings);
     }
+
+    if (businessResult.error) {
+      setError(prev => prev || 'Failed to load public business information visibility');
+    } else if (businessResult.data) {
+      setBusinessFooterSettings(businessResult.data as BusinessFooterSettings);
+    }
+
+    setCanManageBusinessFooter(permissionResult.data === true);
     setLoading(false);
   };
 
@@ -67,6 +93,23 @@ export default function AdminSiteSettingsPage() {
         .eq('id', settings.id);
 
       if (error) throw error;
+
+      if (businessFooterSettings) {
+        if (!canManageBusinessFooter) {
+          throw new Error('You do not have permission to manage public business information visibility.');
+        }
+
+        const { error: footerError } = await supabase
+          .from('business_settings')
+          .update({
+            public_footer_visible: businessFooterSettings.public_footer_visible,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', businessFooterSettings.id);
+
+        if (footerError) throw footerError;
+        clearBusinessSettingsCache();
+      }
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3500);
@@ -247,6 +290,67 @@ export default function AdminSiteSettingsPage() {
             </div>
           </label>
         </div>
+      </div>
+
+      {/* Public Business Information Footer */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              {businessFooterSettings?.public_footer_visible === false
+                ? <EyeOff className="w-5 h-5 text-gray-500" />
+                : <Eye className="w-5 h-5 text-primary-600" />}
+              Public Business Information Footer
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-xl">
+              Show or hide the entire public business block containing the DRIGHT address, phone, email,
+              opening hours, service area, categories, social links and website. Hiding it keeps the saved data.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={businessFooterSettings?.public_footer_visible !== false}
+            disabled={!businessFooterSettings || !canManageBusinessFooter || saving}
+            onClick={() => {
+              if (!businessFooterSettings) return;
+              setBusinessFooterSettings({
+                ...businessFooterSettings,
+                public_footer_visible: !businessFooterSettings.public_footer_visible,
+              });
+            }}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              businessFooterSettings?.public_footer_visible !== false ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+            }`}
+            title={canManageBusinessFooter ? 'Toggle public business information footer' : 'You do not have permission to change this setting'}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                businessFooterSettings?.public_footer_visible !== false ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl bg-gray-50 dark:bg-gray-900/40 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {businessFooterSettings?.public_footer_visible !== false ? 'Visible' : 'Hidden'}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {businessFooterSettings?.public_footer_visible !== false
+                ? 'The business-information block is shown wherever DRIGHT uses the public footer.'
+                : 'The public business-information block is completely hidden.'}
+            </p>
+          </div>
+        </div>
+
+        {!canManageBusinessFooter && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Your admin role can view this setting but cannot change it.
+          </p>
+        )}
       </div>
 
       {/* Maintenance Mode */}

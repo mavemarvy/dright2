@@ -33,6 +33,8 @@ export default function NapFooter({ compact = false }: { compact?: boolean }) {
     );
   }
 
+  if (settings.public_footer_visible === false) return null;
+
   const hoursList = formatHours(settings.hours_json ?? null);
   const openNow = isOpenNow(settings);
   const socials = settings.social_profiles ? Object.entries(settings.social_profiles) : [];

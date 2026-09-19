@@ -563,6 +563,7 @@ export interface ReferralTierInfo {
 export interface BusinessSettings {
   id: string;
   is_singleton: boolean;
+  public_footer_visible?: boolean;
   business_name: string;
   tagline?: string | null;
   description?: string | null;
