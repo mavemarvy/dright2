@@ -23,10 +23,31 @@ function log(level: string, message: string, data?: Record<string, unknown>) {
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
-function normalizeChannels(value: unknown): string[] {
-  if (!Array.isArray(value)) return ["card", "bank", "ussd", "bank_transfer", "mobile_money"];
+function normalizeChannels(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
   const channels = [...new Set(value.map(String).filter((channel) => ALLOWED_CHANNELS.has(channel)))];
-  return channels.length ? channels : ["card", "bank", "ussd", "bank_transfer", "mobile_money"];
+  return channels.length ? channels : undefined;
+}
+
+async function getUsdToNgnRate(): Promise<{ rate: number; source: string }> {
+  const sources = [
+    { url: "https://open.er-api.com/v6/latest/USD", source: "open.er-api.com" },
+    { url: "https://api.exchangerate-api.com/v4/latest/USD", source: "exchangerate-api.com" },
+  ];
+
+  for (const candidate of sources) {
+    try {
+      const response = await fetch(candidate.url, { headers: { Accept: "application/json" } });
+      if (!response.ok) continue;
+      const payload = await response.json().catch(() => null);
+      const rate = Number(payload?.rates?.NGN);
+      if (Number.isFinite(rate) && rate > 100) return { rate, source: candidate.source };
+    } catch {
+      // Try the next provider. A bounded fallback below keeps checkout available.
+    }
+  }
+
+  return { rate: 1600, source: "dright_fallback" };
 }
 function subscriptionPurpose(planType: unknown): string {
   const type = String(planType || "").toLowerCase();
@@ -65,6 +86,8 @@ Deno.serve(async (req: Request) => {
     let amountMinor = requestedAmountMinor;
     let referenceId = requestedReferenceId;
     let paymentCurrency = "NGN";
+    let gatewayAmountMinor = requestedAmountMinor;
+    let gatewayCurrency = "NGN";
     let canonicalMetadata: Record<string, unknown> = { ...requestedMetadata };
 
     if (purpose === "product_purchase" || purpose === "escrow") {
@@ -80,9 +103,37 @@ Deno.serve(async (req: Request) => {
       if (orderStatus !== "PENDING") return json({ error: "Order is not payable" }, 409);
       const orderTotal = Number(order.final_price);
       if (order.is_free_order || !Number.isFinite(orderTotal) || orderTotal <= 0) return json({ error: "This order does not require a Paystack payment" }, 400);
+
+      // DRIGHT marketplace prices and wallets are canonical USD. Nigerian Paystack
+      // checkout is settled in NGN, so keep the ledger amount in USD and derive a
+      // separate trusted gateway amount server-side.
       amountMinor = Math.round(orderTotal * 100);
-      if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) return json({ error: "Payment amount does not match the current order total", amount: orderTotal }, 409);
-      canonicalMetadata = { ...requestedMetadata, order_id: order.id, product_id: order.product_id, seller_id: order.seller_id, buyer_id: user.id, authoritative_amount: orderTotal };
+      paymentCurrency = "USD";
+      if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) {
+        return json({ error: "Payment amount does not match the current order total", amount: orderTotal, currency: "USD" }, 409);
+      }
+
+      const fx = await getUsdToNgnRate();
+      const gatewayAmount = Math.round(orderTotal * fx.rate * 100) / 100;
+      gatewayAmountMinor = Math.round(gatewayAmount * 100);
+      gatewayCurrency = "NGN";
+      if (!Number.isSafeInteger(gatewayAmountMinor) || gatewayAmountMinor <= 0) {
+        return json({ error: "Unable to calculate the Paystack payment amount" }, 503);
+      }
+
+      canonicalMetadata = {
+        ...requestedMetadata,
+        order_id: order.id,
+        product_id: order.product_id,
+        seller_id: order.seller_id,
+        buyer_id: user.id,
+        authoritative_amount: orderTotal,
+        authoritative_currency: "USD",
+        gateway_amount: gatewayAmount,
+        gateway_currency: gatewayCurrency,
+        fx_rate: fx.rate,
+        fx_source: fx.source,
+      };
     } else if (["subscription", "affiliate_subscription", "vendor_subscription"].includes(purpose)) {
       const planId = typeof requestedMetadata.plan_id === "string" ? requestedMetadata.plan_id.trim() : "";
       if (!planId) return json({ error: "Subscription plan is required" }, 400);
@@ -148,6 +199,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return json({ error: "Invalid payment amount" }, 400);
+
+    // Flows that do not require FX use the canonical amount directly at Paystack.
+    if (!Number.isSafeInteger(gatewayAmountMinor) || gatewayAmountMinor <= 0) {
+      gatewayAmountMinor = amountMinor;
+      gatewayCurrency = paymentCurrency;
+    }
     if (!PAYSTACK_SECRET) return json({ error: "Paystack not configured. Set PAYSTACK_SECRET_KEY." }, 503);
 
     const { data: userData } = await supabase.from("users").select("email, full_name").eq("id", user.id).maybeSingle();
@@ -160,8 +217,25 @@ Deno.serve(async (req: Request) => {
     const appUrl = (Deno.env.get("APP_URL") || req.headers.get("origin") || "").replace(/\/$/, "");
     if (!appUrl) return json({ error: "Application URL is not configured" }, 503);
 
-    canonicalMetadata = { ...canonicalMetadata, user_id: user.id, purpose, reference_id: referenceId, currency: paymentCurrency, source: "dright_server" };
-    log("INFO", "Initialize authoritative payment", { userId: user.id, amount: amountMajor, currency: paymentCurrency, purpose, reference_id: referenceId });
+    canonicalMetadata = {
+      ...canonicalMetadata,
+      user_id: user.id,
+      purpose,
+      reference_id: referenceId,
+      currency: paymentCurrency,
+      gateway_amount: Number(canonicalMetadata.gateway_amount ?? (gatewayAmountMinor / 100)),
+      gateway_currency: String(canonicalMetadata.gateway_currency ?? gatewayCurrency),
+      source: "dright_server",
+    };
+    log("INFO", "Initialize authoritative payment", {
+      userId: user.id,
+      amount: amountMajor,
+      currency: paymentCurrency,
+      gatewayAmount: gatewayAmountMinor / 100,
+      gatewayCurrency,
+      purpose,
+      reference_id: referenceId,
+    });
 
     const { error: insertErr } = await supabase.from("paystack_transactions").insert({
       user_id: user.id, reference, amount: amountMajor, currency: paymentCurrency, purpose,
@@ -177,21 +251,35 @@ Deno.serve(async (req: Request) => {
     });
     if (attemptError) log("WARN", "Unable to record payment attempt", { error: attemptError.message, reference });
 
+    const requestedChannels = normalizeChannels(body.channels);
+    const paystackPayload: Record<string, unknown> = {
+      email,
+      amount: gatewayAmountMinor,
+      currency: gatewayCurrency,
+      reference,
+      callback_url: `${appUrl}${callbackPath}?reference=${encodeURIComponent(reference)}`,
+      metadata: {
+        user_id: user.id,
+        purpose,
+        reference_id: referenceId,
+        dright_amount: amountMajor,
+        dright_currency: paymentCurrency,
+        gateway_amount: gatewayAmountMinor / 100,
+        gateway_currency: gatewayCurrency,
+        custom_fields: [
+          { display_name: "User ID", variable_name: "user_id", value: user.id },
+          { display_name: "Purpose", variable_name: "purpose", value: purpose },
+        ],
+      },
+    };
+    // When channels are not explicitly requested, let Paystack present every
+    // channel actually enabled for the merchant account/currency.
+    if (requestedChannels) paystackPayload.channels = requestedChannels;
+
     const paystackRes = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email, amount: amountMinor, currency: paymentCurrency, reference,
-        callback_url: `${appUrl}${callbackPath}?reference=${encodeURIComponent(reference)}`,
-        channels: normalizeChannels(body.channels),
-        metadata: {
-          user_id: user.id, purpose, reference_id: referenceId,
-          custom_fields: [
-            { display_name: "User ID", variable_name: "user_id", value: user.id },
-            { display_name: "Purpose", variable_name: "purpose", value: purpose },
-          ],
-        },
-      }),
+      body: JSON.stringify(paystackPayload),
     });
     const paystackData = await paystackRes.json().catch(() => ({}));
     if (!paystackRes.ok || !paystackData.status || !paystackData.data) {
@@ -201,7 +289,18 @@ Deno.serve(async (req: Request) => {
     }
 
     await supabase.from("paystack_transactions").update({ paystack_reference: paystackData.data.reference, status: "pending", updated_at: new Date().toISOString() }).eq("reference", reference);
-    return json({ success: true, authorization_url: paystackData.data.authorization_url, access_code: paystackData.data.access_code, reference, amount: amountMajor, currency: paymentCurrency, purpose, reference_id: referenceId });
+    return json({
+      success: true,
+      authorization_url: paystackData.data.authorization_url,
+      access_code: paystackData.data.access_code,
+      reference,
+      amount: amountMajor,
+      currency: paymentCurrency,
+      gateway_amount: gatewayAmountMinor / 100,
+      gateway_currency: gatewayCurrency,
+      purpose,
+      reference_id: referenceId,
+    });
   } catch (err) {
     log("ERROR", "Unhandled exception", { error: err instanceof Error ? err.message : String(err) });
     return json({ error: err instanceof Error ? err.message : "Internal error" }, 500);

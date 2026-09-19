@@ -38,10 +38,10 @@ Deno.serve(async (req: Request) => {
     const supabase = getSupabaseClient();
     const { error: rateError } = await supabase
       .from("turnstile_verifications")
-      .select("id, created_at")
+      .select("id, verified_at")
       .eq("user_id", userId)
       .eq("action", action)
-      .order("created_at", { ascending: false })
+      .order("verified_at", { ascending: false })
       .limit(20);
     if (rateError) console.warn("Turnstile rate lookup warning:", rateError.message);
 
@@ -62,10 +62,13 @@ Deno.serve(async (req: Request) => {
       action,
       success: !!result?.success,
       error_codes: Array.isArray(result?.["error-codes"]) ? result["error-codes"] : null,
-      created_at: new Date().toISOString(),
+      verified_at: new Date().toISOString(),
     }).then(({ error }) => { if (error) console.warn("Turnstile log warning:", error.message); });
 
     if (!result?.success) return new Response(JSON.stringify({ success: false, error: "Turnstile verification failed", errorCodes: result?.["error-codes"] || [] }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (result?.action && result.action !== action) {
+      return new Response(JSON.stringify({ success: false, error: "Turnstile verification action mismatch" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     return new Response(JSON.stringify({ success: true, action }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("turnstile-verify error:", error);

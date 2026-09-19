@@ -77,8 +77,9 @@ interface ServiceDetailViewProps {
   onDismissResult: () => void;
 }
 
-const formatNaira = (amount: number) =>
-  formatCurrency(Math.round(amount), 'NGN');
+// Service prices are stored in DRIGHT's canonical USD currency and converted
+// only for display. Never relabel the numeric USD value as NGN.
+const formatNaira = (amount: number) => formatCurrency(amount);
 
 function getDeliveryDate(days: number): string {
   const d = new Date();
@@ -124,8 +125,11 @@ export default function ServiceDetailView({
   const extraDays = selectedCustomObjs.reduce((s, c) => s + c.additional_days, 0);
   const customPrice = selectedCustomObjs.reduce((s, c) => s + Number(c.additional_price), 0);
   const tierBasePrice = selectedTier ? Number(selectedTier.price) : 0;
-  const adminTask = tierBasePrice * (product.admin_task_percent / 100);
-  const totalPrice = tierBasePrice + customPrice + adminTask;
+  const productBasePrice = Number(product.price || 0);
+  // Match the authoritative checkout Edge Function exactly: base listing price
+  // + selected service tier + add-ons + task fee calculated from listing base.
+  const adminTask = product.is_free ? 0 : productBasePrice * (Number(product.admin_task_percent || 15) / 100);
+  const totalPrice = product.is_free ? 0 : productBasePrice + tierBasePrice + customPrice + adminTask;
   const deliveryDays = (selectedTier?.delivery_days || 7) + extraDays;
 
   const toggleCustom = (id: string) => {
@@ -656,6 +660,10 @@ export default function ServiceDetailView({
             productName={product.name}
             productPrice={totalPrice}
             sellerId={product.uploaded_by}
+            productType="SERVICE"
+            selectedTierId={selectedTierId}
+            customizationOptionIds={[...selectedCustomIds]}
+            buyerRequirements={requirements}
             trigger={
               <button className="w-full py-4 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-bold text-base transition-colors flex items-center justify-center gap-2 min-h-[56px]">
                 Continue ({formatNaira(totalPrice)})

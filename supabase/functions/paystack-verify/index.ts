@@ -66,6 +66,7 @@ Deno.serve(async (req: Request) => {
         already_verified: true,
         idempotent: true,
         amount: Number(tx.amount),
+        currency: String(tx.currency || "NGN").toUpperCase(),
         purpose: tx.purpose,
         channel: tx.channel,
         reference,
@@ -93,24 +94,29 @@ Deno.serve(async (req: Request) => {
 
     const gatewayStatus = String(verified.data.status || "").toLowerCase();
     const gatewayAmount = Number(verified.data.amount) / 100;
-    const expectedAmount = Number(tx.amount);
+    const settlementAmount = Number(tx.amount);
+    const settlementCurrency = String(tx.currency || "NGN").toUpperCase();
+    const txMetadata = tx.metadata && typeof tx.metadata === "object" && !Array.isArray(tx.metadata)
+      ? tx.metadata as Record<string, unknown>
+      : {};
+    const expectedGatewayAmount = Number(txMetadata.gateway_amount ?? settlementAmount);
+    const expectedGatewayCurrency = String(txMetadata.gateway_currency ?? settlementCurrency).toUpperCase();
     const gatewayCurrency = String(verified.data.currency || "").toUpperCase();
-    const expectedCurrency = String(tx.currency || "NGN").toUpperCase();
 
     if (gatewayStatus === "success") {
-      if (!Number.isFinite(gatewayAmount) || !Number.isFinite(expectedAmount) || Math.abs(gatewayAmount - expectedAmount) > 0.01) {
+      if (!Number.isFinite(gatewayAmount) || !Number.isFinite(expectedGatewayAmount) || Math.abs(gatewayAmount - expectedGatewayAmount) > 0.01) {
         return json({
           success: false,
           status: "failed",
-          message: "Verified gateway amount does not match DRIGHT transaction amount",
+          message: "Verified gateway amount does not match the initialized Paystack amount",
         }, 409);
       }
 
-      if (!gatewayCurrency || gatewayCurrency !== expectedCurrency) {
+      if (!gatewayCurrency || gatewayCurrency !== expectedGatewayCurrency) {
         return json({
           success: false,
           status: "failed",
-          message: "Verified gateway currency does not match DRIGHT transaction currency",
+          message: "Verified gateway currency does not match the initialized Paystack currency",
         }, 409);
       }
 
@@ -129,14 +135,14 @@ Deno.serve(async (req: Request) => {
         ? await db.rpc("process_verified_promotion_payment", {
           p_reference: reference,
           p_user_id: tx.user_id,
-          p_amount: expectedAmount,
-          p_currency: expectedCurrency,
+          p_amount: settlementAmount,
+          p_currency: settlementCurrency,
           p_provider: "paystack",
         })
         : await db.rpc("process_paystack_payment", {
           p_reference: reference,
           p_user_id: tx.user_id,
-          p_amount: expectedAmount,
+          p_amount: settlementAmount,
           p_purpose: tx.purpose,
           p_reference_id: tx.reference_id,
           p_metadata: tx.metadata,
@@ -159,13 +165,15 @@ Deno.serve(async (req: Request) => {
           notification_type: "payment_success",
           title: tx.purpose === "promotion_campaign" ? "Promotion Payment Successful" : "Payment Successful",
           message: tx.purpose === "promotion_campaign"
-            ? `Your promotion payment of ${expectedAmount.toLocaleString()} ${expectedCurrency} was verified and the campaign was activated.`
-            : `Your payment of ${expectedAmount.toLocaleString()} was successful. Reference: ${reference}`,
+            ? `Your promotion payment of ${settlementAmount.toLocaleString()} ${settlementCurrency} was verified and the campaign was activated.`
+            : `Your payment of ${settlementAmount.toLocaleString()} ${settlementCurrency} was successful. Reference: ${reference}`,
           priority: "high",
           metadata: {
             reference,
-            amount: expectedAmount,
-            currency: expectedCurrency,
+            amount: settlementAmount,
+            currency: settlementCurrency,
+            gateway_amount: gatewayAmount,
+            gateway_currency: gatewayCurrency,
             purpose: tx.purpose,
             campaign_id: tx.purpose === "promotion_campaign" ? tx.reference_id : undefined,
             channel: verified.data.channel,
@@ -177,8 +185,10 @@ Deno.serve(async (req: Request) => {
       return json({
         success: true,
         status: "success",
-        amount: expectedAmount,
-        currency: expectedCurrency,
+        amount: settlementAmount,
+        currency: settlementCurrency,
+        gateway_amount: gatewayAmount,
+        gateway_currency: gatewayCurrency,
         purpose: tx.purpose,
         campaign_id: tx.purpose === "promotion_campaign" ? tx.reference_id : undefined,
         channel: verified.data.channel,
@@ -187,12 +197,19 @@ Deno.serve(async (req: Request) => {
     }
 
     if (gatewayStatus === "reversed") {
-      const reversalAmount = Number.isFinite(gatewayAmount) ? gatewayAmount : expectedAmount;
+      // Marketplace ledgers settle in the canonical DRIGHT currency, even when
+      // Paystack collected an FX-converted NGN amount.
+      const reversalAmount = tx.purpose === "product_purchase" || tx.purpose === "escrow"
+        ? settlementAmount
+        : (Number.isFinite(gatewayAmount) ? gatewayAmount : settlementAmount);
+      const reversalCurrency = tx.purpose === "product_purchase" || tx.purpose === "escrow"
+        ? settlementCurrency
+        : (gatewayCurrency || settlementCurrency);
       const { data: result, error: reversalError } = await db.rpc("process_paystack_refund_event", {
         p_transaction_reference: reference,
         p_gateway_reference: `reversal:${reference}`,
         p_amount: reversalAmount,
-        p_currency: gatewayCurrency || expectedCurrency,
+        p_currency: reversalCurrency,
         p_status: "reversed",
         p_reason: verified.data.gateway_response || "Paystack transaction reversed",
       });

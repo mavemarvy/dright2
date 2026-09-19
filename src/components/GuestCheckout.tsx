@@ -6,33 +6,46 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import TurnstileWidget from './TurnstileWidget';
-import { verifyTurnstileToken } from '../lib/security/turnstile';
-import type { GuestOrder } from '../lib/types';
 
 interface GuestCheckoutProps {
   productId: string;
   productName: string;
   productPrice: number;
   sellerId: string;
+  productType?: string;
+  selectedTierId?: string;
+  customizationOptionIds?: string[];
+  buyerRequirements?: string;
   trigger: React.ReactNode;
 }
 
-export default function GuestCheckout({ productId, productName, productPrice, trigger }: GuestCheckoutProps) {
+export default function GuestCheckout({
+  productId,
+  productName,
+  productPrice,
+  productType = 'DIGITAL',
+  selectedTierId,
+  customizationOptionIds = [],
+  buyerRequirements,
+  trigger,
+}: GuestCheckoutProps) {
   const { user } = useAuth();
   const { format } = useCurrency();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [formData, setFormData] = useState({ email: '', name: '', address: '' });
   const [submitting, setSubmitting] = useState(false);
-  const [order, setOrder] = useState<GuestOrder | null>(null);
+  const [orderEmail, setOrderEmail] = useState<string | null>(null);
   const [couponCode, setCouponCode] = useState('');
   const [discount, setDiscount] = useState(0);
   const [couponMsg, setCouponMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [validating, setValidating] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const [turnstileKey, setTurnstileKey] = useState(0);
 
   const finalPrice = Math.max(0, productPrice - discount);
+  const requiresShipping = String(productType || '').toUpperCase() === 'PHYSICAL';
 
   const handleValidateCoupon = async () => {
     if (!couponCode || !user) return;
@@ -63,52 +76,75 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTurnstileError(null);
+
     if (!turnstileToken) {
       setTurnstileError('Please complete the CAPTCHA challenge');
       return;
     }
-    setSubmitting(true);
-
-    const turnstileResult = await verifyTurnstileToken(turnstileToken, 'guest_checkout');
-    if (!turnstileResult.success) {
-      setTurnstileError(turnstileResult.error || 'CAPTCHA verification failed');
-      setSubmitting(false);
+    if (requiresShipping && !formData.address.trim()) {
+      setTurnstileError('Shipping address is required for physical products');
       return;
     }
 
-    const { data } = await supabase
-      .from('guest_orders')
-      .insert({
-        product_id: productId,
-        buyer_email: formData.email,
-        buyer_name: formData.name,
-        shipping_address: formData.address,
-        total_amount: finalPrice,
-        user_id: user?.id || null,
-      })
-      .select()
-      .single();
+    setSubmitting(true);
+    try {
+      // The guest checkout Edge Function is the single authoritative path:
+      // it verifies the one-time Turnstile token, creates the canonical guest
+      // order, calculates the trusted amount, and initializes Paystack.
+      const { data, error } = await supabase.functions.invoke('guest-checkout', {
+        body: {
+          product_id: productId,
+          buyer_email: formData.email.trim(),
+          buyer_name: formData.name.trim(),
+          shipping_address: requiresShipping ? formData.address.trim() : null,
+          quantity: 1,
+          selected_tier_id: selectedTierId || null,
+          customization_option_ids: customizationOptionIds,
+          buyer_requirements: buyerRequirements?.trim() || null,
+          turnstile_token: turnstileToken,
+        },
+      });
 
-    if (data) {
-      // ST-1g: creating a guest order is not a verified conversion.
-      // Financial sale/commission rows and purchase analytics are written only by
-      // the existing server-side payment/order finalization pipeline after payment
-      // verification. This prevents duplicate or fabricated client-side conversions.
+      const result = (data || {}) as {
+        success?: boolean;
+        free?: boolean;
+        error?: string;
+        authorization_url?: string;
+        guest_order_id?: string;
+      };
 
-      // Coupon redemption must also remain tied to the authoritative purchase flow.
-      // At this stage the coupon is only validated and reflected in order context.
+      if (error || result.error || !result.success) {
+        throw new Error(result.error || error?.message || 'Unable to start guest checkout');
+      }
 
-      setOrder(data);
-      setStep('success');
+      if (result.free) {
+        setOrderEmail(formData.email.trim());
+        setStep('success');
+        return;
+      }
+
+      if (!result.authorization_url) {
+        throw new Error('Payment gateway did not return a checkout URL');
+      }
+
+      window.location.assign(result.authorization_url);
+    } catch (err) {
+      setTurnstileError(err instanceof Error ? err.message : 'Guest checkout failed');
+      // Turnstile tokens are single-use. Render a fresh challenge after any
+      // server attempt so a retry never replays the previous token.
+      setTurnstileToken(null);
+      setTurnstileKey((value) => value + 1);
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const reset = () => {
     setOpen(false);
     setStep('form');
     setFormData({ email: '', name: '', address: '' });
-    setOrder(null);
+    setOrderEmail(null);
   };
 
   return (
@@ -224,20 +260,30 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">Shipping Address</label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                      <textarea
-                        required
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        placeholder="123 Main St, City, Country"
-                        rows={2}
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-200 resize-none"
-                      />
+                  {requiresShipping ? (
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1.5 block">
+                        Shipping Address <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                        <textarea
+                          required
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                          placeholder="123 Main St, City, Country"
+                          rows={2}
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-200 resize-none"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="rounded-xl bg-blue-50 border border-blue-100 p-3">
+                      <p className="text-xs text-blue-700 font-medium">
+                        No shipping address is required for this {String(productType || 'digital').toLowerCase()} purchase.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="bg-gray-50 rounded-xl p-3 flex items-center gap-2">
                     <Lock className="w-4 h-4 text-gray-400 shrink-0" />
@@ -247,8 +293,12 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                   </div>
 
                   <TurnstileWidget
+                    key={turnstileKey}
                     action="guest_checkout"
-                    onVerified={setTurnstileToken}
+                    onVerified={(token) => {
+                      setTurnstileToken(token);
+                      setTurnstileError(null);
+                    }}
                     onError={setTurnstileError}
                   />
                   {turnstileError && (
@@ -278,7 +328,7 @@ export default function GuestCheckout({ productId, productName, productPrice, tr
                     Your order for <span className="font-medium text-gray-700">{productName}</span> has been created.
                   </p>
                   <p className="text-xs text-gray-400 mb-6">
-                    Order contact: {order?.buyer_email}. A sale is recorded only after verified payment completion.
+                    Order contact: {orderEmail}. A sale is recorded only after verified payment completion.
                   </p>
 
                   <div className="bg-primary-50 rounded-xl p-4 mb-6 text-left">

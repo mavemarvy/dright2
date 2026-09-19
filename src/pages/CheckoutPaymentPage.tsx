@@ -275,7 +275,9 @@ export default function CheckoutPaymentPage() {
       // Create invoice before payment
       const invoiceResult = await createInvoice(user.id, {
         amount: productPrice + tierPrice + customizationPrice,
-        currency: 'NGN',
+        // Marketplace order values are canonical USD. Paystack conversion to
+        // NGN happens server-side at payment initialization.
+        currency: 'USD',
         invoice_type: 'product',
         order_id: checkoutData.orderId,
         line_items: [

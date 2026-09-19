@@ -615,6 +615,7 @@ export default function ProductDetailPage() {
                     productName={product.name}
                     productPrice={pricing?.finalPrice || Number(product.price)}
                     sellerId={product.uploaded_by}
+                    productType={product.product_type}
                     trigger={
                       <button className="w-full py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2">
                         <ShoppingBag className="w-4 h-4" />Buy as Guest

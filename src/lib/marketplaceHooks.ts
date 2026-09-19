@@ -98,6 +98,7 @@ export function useStoreFollow(userId: string | undefined) {
 }
 
 const RECENTLY_VIEWED_STORAGE_KEY = 'dright_recently_viewed_ids';
+const RECENTLY_VIEWED_EVENT = 'dright-recently-viewed-changed';
 const RECENTLY_VIEWED_ACCOUNT_LIMIT = 12;
 const RECENTLY_VIEWED_BROWSER_LIMIT = 20;
 
@@ -113,15 +114,17 @@ function getLocalRecentlyViewedIds(): string[] {
   }
 }
 
-function setLocalRecentlyViewedIds(ids: string[]): void {
+function setLocalRecentlyViewedIds(ids: string[], notify = false): string[] {
+  const normalized = Array.from(new Set(ids)).slice(0, RECENTLY_VIEWED_BROWSER_LIMIT);
   try {
-    localStorage.setItem(
-      RECENTLY_VIEWED_STORAGE_KEY,
-      JSON.stringify(Array.from(new Set(ids)).slice(0, RECENTLY_VIEWED_BROWSER_LIMIT)),
-    );
+    localStorage.setItem(RECENTLY_VIEWED_STORAGE_KEY, JSON.stringify(normalized));
+    if (notify) {
+      window.dispatchEvent(new CustomEvent(RECENTLY_VIEWED_EVENT, { detail: { ids: normalized } }));
+    }
   } catch {
     // Browser storage can be unavailable in private/restricted contexts.
   }
+  return normalized;
 }
 
 async function mergeGuestRecentlyViewed(userId: string): Promise<void> {
@@ -180,7 +183,31 @@ async function mergeGuestRecentlyViewed(userId: string): Promise<void> {
 }
 
 export function useRecentlyViewed(userId: string | undefined) {
-  const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
+  const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() =>
+    getLocalRecentlyViewedIds().slice(0, RECENTLY_VIEWED_ACCOUNT_LIMIT),
+  );
+
+  // Keep every mounted marketplace surface synchronized immediately. This matters
+  // when a product detail page records a view and the user navigates back before
+  // the account-side database update finishes.
+  useEffect(() => {
+    const syncFromLocal = (event?: Event) => {
+      const custom = event as CustomEvent<{ ids?: string[] }>;
+      const ids = Array.isArray(custom?.detail?.ids)
+        ? custom.detail.ids
+        : getLocalRecentlyViewedIds();
+      setRecentlyViewed(ids.slice(0, RECENTLY_VIEWED_ACCOUNT_LIMIT));
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === RECENTLY_VIEWED_STORAGE_KEY) syncFromLocal();
+    };
+    window.addEventListener(RECENTLY_VIEWED_EVENT, syncFromLocal as EventListener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(RECENTLY_VIEWED_EVENT, syncFromLocal as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   const fetchRecentlyViewed = useCallback(async () => {
     if (!userId) {
@@ -200,7 +227,9 @@ export function useRecentlyViewed(userId: string | undefined) {
       .order('viewed_at', { ascending: false })
       .limit(RECENTLY_VIEWED_ACCOUNT_LIMIT);
 
-    const accountIds = (data || []).map((row: { product_id: string }) => row.product_id);
+    const accountIds = Array.from(new Set(
+      (data || []).map((row: { product_id: string }) => row.product_id),
+    )).slice(0, RECENTLY_VIEWED_ACCOUNT_LIMIT);
     setRecentlyViewed(accountIds);
 
     // Keep one browser history as the local continuity/fallback store. This also
@@ -211,28 +240,43 @@ export function useRecentlyViewed(userId: string | undefined) {
   useEffect(() => { void fetchRecentlyViewed(); }, [fetchRecentlyViewed]);
 
   const recordView = useCallback(async (productId: string) => {
+    // Update browser history first, synchronously, so navigation cannot race the
+    // network write. The viewed product is always #1 and previous entries shift down.
+    const orderedLocal = setLocalRecentlyViewedIds(
+      [productId, ...getLocalRecentlyViewedIds().filter(id => id !== productId)],
+      true,
+    );
+    setRecentlyViewed(orderedLocal.slice(0, RECENTLY_VIEWED_ACCOUNT_LIMIT));
+
     if (userId) {
+      const viewedAt = new Date().toISOString();
       const { data: existing } = await supabase
         .from('recently_viewed')
         .select('id, view_count')
         .eq('user_id', userId)
         .eq('product_id', productId)
+        .order('viewed_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (existing) {
         await supabase
           .from('recently_viewed')
           .update({
-            viewed_at: new Date().toISOString(),
-            view_count: (existing as { view_count: number }).view_count + 1,
+            viewed_at: viewedAt,
+            view_count: Number((existing as { view_count?: number }).view_count || 0) + 1,
           })
-          .eq('id', (existing as { id: string }).id);
+          .eq('id', (existing as { id: string }).id)
+          .eq('user_id', userId);
       } else {
-        await supabase.from('recently_viewed').insert({ user_id: userId, product_id: productId });
+        await supabase.from('recently_viewed').insert({
+          user_id: userId,
+          product_id: productId,
+          viewed_at: viewedAt,
+          view_count: 1,
+        });
       }
     }
-
-    setLocalRecentlyViewedIds([productId, ...getLocalRecentlyViewedIds().filter(id => id !== productId)]);
 
     // Canonical analytics path; the server mirrors this into legacy product_views.
     void trackProductView(productId, null, 'marketplace');

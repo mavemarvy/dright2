@@ -19,7 +19,7 @@ Deno.serve(async(req:Request)=>{
     }
     if(!reference||!reference.startsWith("DRG_GUEST_"))return json({error:"Invalid guest payment reference"},400);
 
-    const{data:order,error:orderError}=await db.from("guest_orders").select("id,product_id,product_name,buyer_email,total_amount,currency,status,payment_status,processed_at").eq("payment_reference",reference).maybeSingle();
+    const{data:order,error:orderError}=await db.from("guest_orders").select("id,product_id,product_name,buyer_email,total_amount,currency,status,payment_status,processed_at,metadata").eq("payment_reference",reference).maybeSingle();
     if(orderError||!order)return json({error:"Guest order not found"},404);
     if(order.processed_at&&order.payment_status==="success")return json({success:true,status:"success",idempotent:true,reference,guest_order_id:order.id,product_id:order.product_id,product_name:order.product_name,amount:Number(order.total_amount),currency:order.currency});
     if(Number(order.total_amount)===0&&order.payment_status==="success")return json({success:true,status:"success",idempotent:true,reference,guest_order_id:order.id,product_id:order.product_id,product_name:order.product_name,amount:0,currency:order.currency});
@@ -31,17 +31,20 @@ Deno.serve(async(req:Request)=>{
     if(String(verified.data.reference||"")!==reference)return json({success:false,status:"failed",error:"Gateway reference mismatch"},409);
 
     const gatewayStatus=String(verified.data.status||"").toLowerCase();
-    const amount=Number(verified.data.amount)/100;
-    const currency=String(verified.data.currency||"").toUpperCase();
+    const gatewayAmount=Number(verified.data.amount)/100;
+    const gatewayCurrency=String(verified.data.currency||"").toUpperCase();
     const expectedAmount=Number(order.total_amount);
-    const expectedCurrency=String(order.currency||"NGN").toUpperCase();
+    const expectedCurrency=String(order.currency||"USD").toUpperCase();
+    const metadata=order.metadata&&typeof order.metadata==="object"&&!Array.isArray(order.metadata)?order.metadata as Record<string,unknown>:{};
+    const expectedGatewayAmount=Number(metadata.gateway_amount??expectedAmount);
+    const expectedGatewayCurrency=String(metadata.gateway_currency??expectedCurrency).toUpperCase();
 
     if(gatewayStatus==="success"){
-      if(!Number.isFinite(amount)||Math.abs(amount-expectedAmount)>0.01)return json({success:false,status:"failed",error:"Gateway amount does not match guest order"},409);
-      if(currency!==expectedCurrency)return json({success:false,status:"failed",error:"Gateway currency does not match guest order"},409);
+      if(!Number.isFinite(gatewayAmount)||!Number.isFinite(expectedGatewayAmount)||Math.abs(gatewayAmount-expectedGatewayAmount)>0.01)return json({success:false,status:"failed",error:"Gateway amount does not match initialized guest payment"},409);
+      if(gatewayCurrency!==expectedGatewayCurrency)return json({success:false,status:"failed",error:"Gateway currency does not match initialized guest payment"},409);
       const{data:result,error:processError}=await db.rpc("process_verified_guest_order",{p_reference:reference,p_amount:expectedAmount,p_currency:expectedCurrency,p_gateway_response:verified.data.gateway_response||null,p_paid_at:verified.data.paid_at||new Date().toISOString(),p_channel:verified.data.channel||null});
       if(processError){console.error("guest payment processing error",processError);return json({success:false,status:"processing_error",error:"Verified payment could not be finalized"},500);}
-      return json({success:true,status:"success",reference,guest_order_id:order.id,product_id:order.product_id,product_name:order.product_name,amount:expectedAmount,currency:expectedCurrency,channel:verified.data.channel||null,result});
+      return json({success:true,status:"success",reference,guest_order_id:order.id,product_id:order.product_id,product_name:order.product_name,amount:expectedAmount,currency:expectedCurrency,gateway_amount:gatewayAmount,gateway_currency:gatewayCurrency,channel:verified.data.channel||null,result});
     }
 
     if(["failed","abandoned","reversed"].includes(gatewayStatus)){
