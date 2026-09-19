@@ -53,11 +53,12 @@ async function settings(admin: ReturnType<typeof createClient>) {
 async function logUsage(admin: ReturnType<typeof createClient>, uid: string | null, s: any, tokens: number, success: boolean, errorMessage?: string, latencyMs = 0) {
   const costPerMillion = Number(s.embedding_estimated_cost_per_million_tokens || 0);
   const estimatedCost = costPerMillion > 0 ? (tokens / 1_000_000) * costPerMillion : 0;
-  await admin.from("ai_usage").insert({
+  const { error: usageLogError } = await admin.from("ai_usage").insert({
     user_id: uid, provider: s.semantic_provider, model: s.semantic_embedding_model,
     feature: "semantic-embedding", tokens, estimated_cost: estimatedCost,
     latency_ms: latencyMs, success, error_message: errorMessage?.slice(0,500) || null,
-  }).then(() => undefined).catch(() => undefined);
+  });
+  if (usageLogError) console.warn("[semantic-embeddings] failed to record usage", usageLogError.message);
 }
 
 async function checkBudget(admin: ReturnType<typeof createClient>, s: any) {

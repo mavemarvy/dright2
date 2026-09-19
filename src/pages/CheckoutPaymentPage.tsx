@@ -41,7 +41,7 @@ interface CheckoutData {
 export default function CheckoutPaymentPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-    const formatCurrencyFn = (n: number) => formatCurrency(n);
+  const formatCurrencyFn = (n: number) => formatCurrency(n);
   const [searchParams] = useSearchParams();
 
   const orderId = searchParams.get('order_id') || '';
@@ -369,16 +369,18 @@ export default function CheckoutPaymentPage() {
   if (!checkoutData) return null;
 
   const countryInfo = getCountryInfo(countryCode);
+  const selectedProviderRecord = providers.find((provider) => provider.slug === selectedProvider);
+  const selectedProviderName = selectedProviderRecord?.name || 'payment method';
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto pb-32 md:pb-8">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-5 pb-40 md:pb-8 overflow-x-hidden">
+      <div className="flex items-start sm:items-center gap-2.5 sm:gap-4 mb-4 sm:mb-5">
         <Link to={`/product/${checkoutData.productId}`} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Checkout</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Checkout</h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 leading-snug">
             Review your order and complete your purchase
             {countryInfo && (
               <span className="ml-2 inline-flex items-center gap-1 text-xs">
@@ -390,17 +392,17 @@ export default function CheckoutPaymentPage() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-4 lg:gap-6">
         {/* Left: All sections */}
-        <div className="lg:col-span-2 space-y-5">
+        <div className="lg:col-span-2 space-y-3.5 sm:space-y-4">
           {/* 1. Payment Summary */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-700 p-3.5 sm:p-4">
             <h2 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
               <ShoppingCart className="w-4 h-4 text-primary-600" />
               Payment Summary
             </h2>
             <div className="flex gap-4">
-              <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0">
                 {checkoutData.productImage ? (
                   <img src={checkoutData.productImage} alt={checkoutData.productName} className="w-full h-full object-cover" />
                 ) : (
@@ -438,7 +440,7 @@ export default function CheckoutPaymentPage() {
           </div>
 
           {/* 2. Payment Breakdown */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-700 p-3.5 sm:p-4">
             <h2 className="text-sm font-bold text-gray-900 mb-4">Payment Breakdown</h2>
             <div className="space-y-2.5 text-sm">
               <div className="flex justify-between">
@@ -487,7 +489,7 @@ export default function CheckoutPaymentPage() {
           </div>
 
           {/* 3. Billing Details (collapsible) */}
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
             <button
               onClick={() => setShowBilling(!showBilling)}
               className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
@@ -501,7 +503,7 @@ export default function CheckoutPaymentPage() {
             </button>
             {showBilling && (
               <div className="p-5 pt-0 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                   <input
                     type="text"
                     placeholder="Full Name"
@@ -537,7 +539,7 @@ export default function CheckoutPaymentPage() {
 
           {/* 4. Coupon */}
           {!checkoutData.isFreeOrder && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-700 p-3.5 sm:p-4">
               <h2 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <Ticket className="w-4 h-4 text-primary-600" />
                 Coupon Code
@@ -574,7 +576,7 @@ export default function CheckoutPaymentPage() {
 
           {/* 5. Payment Method */}
           {!checkoutData.isFreeOrder && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-700 p-3.5 sm:p-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-bold text-gray-900">Payment Method</h2>
                 {lastGateway && (
@@ -583,7 +585,7 @@ export default function CheckoutPaymentPage() {
                   </span>
                 )}
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {providers.map((provider) => (
                   <PaymentProviderCard
                     key={provider.id}
@@ -596,13 +598,37 @@ export default function CheckoutPaymentPage() {
                   />
                 ))}
               </div>
+
+              <div className="mt-3.5 pt-3.5 border-t border-gray-100 dark:border-gray-700">
+                {error && (
+                  <div className="mb-3 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs sm:text-sm text-red-600 dark:text-red-300">{error}</p>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handlePay}
+                  disabled={paying || !selectedProviderRecord || selectedProviderRecord.status !== 'enabled'}
+                  className="w-full min-h-[52px] sm:min-h-[56px] px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-md shadow-primary-600/20"
+                >
+                  {paying ? (
+                    <><Loader2 className="w-5 h-5 animate-spin" /> Opening {selectedProviderName}…</>
+                  ) : (
+                    <><Lock className="w-5 h-5" /> Proceed to {selectedProviderName} · {formatCurrencyFn(grandTotal)}</>
+                  )}
+                </button>
+                <p className="mt-2 text-[10px] sm:text-[11px] text-center text-gray-400 dark:text-gray-500">
+                  You will be redirected to the selected provider's secure payment page.
+                </p>
+              </div>
             </div>
           )}
 
           {/* 6. Buyer Protection + Escrow */}
           {!checkoutData.isFreeOrder && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-primary-50/50 rounded-2xl border border-primary-100 p-4">
+              <div className="bg-primary-50/50 dark:bg-primary-950/20 rounded-xl border border-primary-100 dark:border-primary-900/40 p-3.5">
                 <div className="flex items-start gap-2">
                   <Shield className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
                   <div>
@@ -611,7 +637,7 @@ export default function CheckoutPaymentPage() {
                   </div>
                 </div>
               </div>
-              <div className="bg-blue-50/50 rounded-2xl border border-blue-100 p-4">
+              <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/40 p-3.5">
                 <div className="flex items-start gap-2">
                   <Lock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
@@ -625,7 +651,7 @@ export default function CheckoutPaymentPage() {
 
           {/* Refund Policy */}
           {!checkoutData.isFreeOrder && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-start gap-2">
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-700 p-3.5 sm:p-4 flex items-start gap-2">
               <RotateCcw className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-semibold text-gray-700">Refund Policy</p>
@@ -697,8 +723,11 @@ export default function CheckoutPaymentPage() {
       </div>
 
       {/* Mobile: Sticky bottom bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 p-3 shadow-lg">
-        <div className="flex items-center gap-3">
+      <div
+        className="lg:hidden fixed left-0 right-0 z-[70] bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 px-3 pt-2.5 shadow-[0_-8px_28px_rgba(0,0,0,0.14)]"
+        style={{ bottom: 0, paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom))' }}
+      >
+        <div className="max-w-4xl mx-auto flex items-center gap-2.5">
           <div className="flex-1 min-w-0">
             <p className="text-xs text-gray-500">Order Total</p>
             <p className="text-lg font-bold text-primary-600">
@@ -715,7 +744,7 @@ export default function CheckoutPaymentPage() {
             ) : checkoutData.isFreeOrder ? (
               <><CheckCircle2 className="w-5 h-5" />Complete</>
             ) : (
-              <><Lock className="w-5 h-5" />Pay →</>
+              <><Lock className="w-4 h-4" />Pay {formatCurrencyFn(grandTotal)}</>
             )}
           </button>
         </div>

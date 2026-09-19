@@ -208,12 +208,13 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     if (emailHash && purpose) {
-      await supabase.from("auth_email_code_requests").insert({
+      const { error: requestLogError } = await supabase.from("auth_email_code_requests").insert({
         email_hash: emailHash,
         purpose,
         success: false,
         error_code: error instanceof Error ? error.message.slice(0, 120) : "internal_error",
-      }).catch(() => {});
+      });
+      if (requestLogError) console.warn("[auth-email-code] failed to record request error", requestLogError.message);
     }
     return new Response(JSON.stringify({
       success: false,
