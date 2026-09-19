@@ -13,9 +13,10 @@ interface Props {
   onSelect?: (account: BankAccount) => void;
   selectedId?: string;
   compact?: boolean;
+  onAccountsChanged?: () => void;
 }
 
-export default function BankAccountManager({ onSelect, selectedId, compact }: Props) {
+export default function BankAccountManager({ onSelect, selectedId, compact, onAccountsChanged }: Props) {
   const { user } = useAuth();
   const { accounts, loading, reload } = useBankAccounts(user?.id);
   const [showAdd, setShowAdd] = useState(false);
@@ -65,18 +66,23 @@ export default function BankAccountManager({ onSelect, selectedId, compact }: Pr
     if (!error) {
       setShowAdd(false);
       resetForm();
-      reload();
+      await reload();
+      onAccountsChanged?.();
     }
   };
 
   const handleDelete = async (id: string) => {
     const result = await deleteBankAccount(id);
-    if (result.success) reload();
+    if (result.success) {
+      await reload();
+      onAccountsChanged?.();
+    }
   };
 
   const handleSetDefault = async (id: string) => {
     await setDefaultBankAccount(user.id, id);
-    reload();
+    await reload();
+    onAccountsChanged?.();
   };
 
   const handleVerify = async (account: BankAccount) => {
@@ -84,7 +90,8 @@ export default function BankAccountManager({ onSelect, selectedId, compact }: Pr
     const result = await verifyBankAccount(account.id, account.account_number, account.bank_code);
     setVerifyingId(null);
     if (result.success) {
-      reload();
+      await reload();
+      onAccountsChanged?.();
     } else {
       setError(result.error || 'Verification failed');
     }
@@ -259,41 +266,46 @@ export default function BankAccountManager({ onSelect, selectedId, compact }: Pr
                   </div>
                 </div>
 
-                {!compact && (
+                {(!compact || (!account.is_verified && account.verification_status !== 'pending')) && (
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {!account.is_verified && account.verification_status !== 'pending' && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleVerify(account); }}
+                        onClick={(e) => { e.stopPropagation(); void handleVerify(account); }}
                         disabled={verifyingId === account.id}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600"
-                        title="Verify account"
+                        className="px-2 py-1.5 rounded-lg hover:bg-primary-50 text-primary-600 text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-50"
+                        title="Verify account with Paystack"
                       >
                         {verifyingId === account.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
+                        {compact && (verifyingId === account.id ? 'Verifying' : 'Verify')}
                       </button>
                     )}
-                    {!account.is_default && (
+                    {!compact && !account.is_default && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleSetDefault(account.id); }}
+                        onClick={(e) => { e.stopPropagation(); void handleSetDefault(account.id); }}
                         className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600"
                         title="Set as default"
                       >
                         <Star className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); startEdit(account); }}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600"
-                      title="Edit"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(account.id); }}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-500"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {!compact && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); startEdit(account); }}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600"
+                        title="Edit"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {!compact && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); void handleDelete(account.id); }}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-500"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
