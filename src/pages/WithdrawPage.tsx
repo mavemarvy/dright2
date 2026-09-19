@@ -67,9 +67,27 @@ export default function WithdrawPage() {
   const displayBalance = convertAmount(balance, walletCurrency, selectedCurrency) ?? balance;
   const enabledMethods = getEnabledMethods(methods);
   const comingSoonMethods = getComingSoonMethods(methods);
+
+  const toCanonicalWithdrawalAmount = useCallback((displayAmount: number) => {
+    if (!Number.isFinite(displayAmount) || displayAmount <= 0) return null;
+
+    // The UI rounds non-NGN balances to two decimals. If the user enters/taps the
+    // displayed maximum, use the exact ledger balance instead of converting the
+    // rounded display value back and accidentally exceeding the wallet by a few naira.
+    const displayRoundingTolerance = selectedCurrency === 'NGN' ? 0.5 : 0.005;
+    if (
+      Math.abs(displayAmount - displayBalance) <= displayRoundingTolerance ||
+      (displayAmount >= displayBalance && displayAmount - displayBalance <= displayRoundingTolerance)
+    ) {
+      return balance;
+    }
+
+    return convertAmount(displayAmount, selectedCurrency, walletCurrency);
+  }, [balance, convertAmount, displayBalance, selectedCurrency]);
+
   const enteredDisplayAmount = parseFloat(amount);
   const enteredCanonicalAmount = Number.isFinite(enteredDisplayAmount)
-    ? convertAmount(enteredDisplayAmount, selectedCurrency, walletCurrency)
+    ? toCanonicalWithdrawalAmount(enteredDisplayAmount)
     : null;
   const canProceedToPin = Boolean(
     amount &&
@@ -103,7 +121,7 @@ export default function WithdrawPage() {
       setError(`Minimum withdrawal amount is about ${cSym}${minimumDisplayAmount.toLocaleString()}`);
       return;
     }
-    const canonicalAmount = convertAmount(amt, selectedCurrency, walletCurrency);
+    const canonicalAmount = toCanonicalWithdrawalAmount(amt);
     if (!canonicalAmount || canonicalAmount < 100) {
       setError('Withdrawal must equal at least ₦100 at the current exchange rate');
       return;
@@ -134,7 +152,7 @@ export default function WithdrawPage() {
     setStep('submitting');
 
     const displayAmount = parseFloat(amount);
-    const canonicalAmount = convertAmount(displayAmount, selectedCurrency, walletCurrency);
+    const canonicalAmount = toCanonicalWithdrawalAmount(displayAmount);
     if (!canonicalAmount || canonicalAmount < 100) {
       setError('Withdrawal amount is below the NGN minimum after conversion');
       setStep('amount');
