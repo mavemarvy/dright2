@@ -37,6 +37,166 @@ async function signatureValid(body: string, signature: string | null) {
   return secureEqual(expected, signature.toLowerCase());
 }
 
+async function queueFullRefund(db: any, tx: any, reference: string, reason: string) {
+  const { data: existing } = await db
+    .from("refund_records")
+    .select("id,status,gateway_reference")
+    .eq("transaction_id", tx.id)
+    .in("status", ["pending", "processing", "completed"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    return { queued: true, existing: true, status: existing.status, refund_id: existing.gateway_reference || existing.id };
+  }
+
+  const refundResponse = await fetch(`${BASE}/refund`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SECRET}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      transaction: reference,
+      customer_note: "Automatic full refund from DRIGHT because the successful payment could not be matched safely to the order.",
+      merchant_note: reason,
+    }),
+  });
+  const refundPayload = await refundResponse.json().catch(() => ({}));
+  const accepted = refundResponse.ok && refundPayload?.status === true && refundPayload?.data;
+  const txMetadata = tx.metadata && typeof tx.metadata === "object" && !Array.isArray(tx.metadata)
+    ? tx.metadata as Record<string, unknown>
+    : {};
+
+  if (!accepted) {
+    const refundError = String(refundPayload?.message || `Refund request failed (${refundResponse.status})`);
+    await db.from("paystack_transactions").update({
+      status: "failed",
+      gateway_response: `${reason}; automatic refund could not be queued: ${refundError}`,
+      metadata: {
+        ...txMetadata,
+        auto_refund: {
+          requested: true,
+          queued: false,
+          reason,
+          error: refundError,
+          attempted_at: new Date().toISOString(),
+        },
+      },
+      updated_at: new Date().toISOString(),
+    }).eq("reference", reference);
+
+    await db.from("notifications").insert({
+      user_id: tx.user_id,
+      notification_type: "payment_refund_attention",
+      category: "orders",
+      title: "Payment Needs Refund Attention",
+      message: "Your payment reached Paystack but DRIGHT could not safely match it to the order. Automatic refund could not be queued, so support has been flagged for immediate review.",
+      priority: "critical",
+      metadata: { reference, reason, refund_error: refundError, action_url: "/notifications" },
+    });
+
+    return { queued: false, error: refundError };
+  }
+
+  const refundStatusRaw = String(refundPayload.data.status || "pending").toLowerCase();
+  const refundStatus = ["pending", "processing", "needs-attention", "processed", "failed"].includes(refundStatusRaw)
+    ? refundStatusRaw
+    : "pending";
+  const refundId = String(refundPayload.data.id ?? refundPayload.data.refund_reference ?? `refund:${reference}`);
+  const settlementAmount = Number(tx.amount);
+  const settlementCurrency = String(tx.currency || "USD").toUpperCase();
+
+  const { data: refundResult, error: refundDbError } = await db.rpc("process_paystack_refund_event", {
+    p_transaction_reference: reference,
+    p_gateway_reference: refundId,
+    p_amount: settlementAmount,
+    p_currency: settlementCurrency,
+    p_status: refundStatus,
+    p_reason: reason,
+  });
+
+  await db.from("paystack_transactions").update({
+    metadata: {
+      ...txMetadata,
+      auto_refund: {
+        requested: true,
+        queued: true,
+        reason,
+        refund_id: refundId,
+        refund_status: refundStatus,
+        queued_at: new Date().toISOString(),
+        db_error: refundDbError?.message || null,
+      },
+    },
+    updated_at: new Date().toISOString(),
+  }).eq("reference", reference);
+
+  await db.from("notifications").insert({
+    user_id: tx.user_id,
+    notification_type: "payment_refund_pending",
+    category: "orders",
+    title: "Automatic Refund Started",
+    message: "Your payment reached Paystack but could not be matched safely to the order. A full refund has been queued automatically.",
+    priority: "critical",
+    metadata: { reference, refund_id: refundId, refund_status: refundStatus, reason, action_url: "/notifications" },
+  });
+
+  return {
+    queued: true,
+    refund_id: refundId,
+    status: refundStatus,
+    db_recorded: !refundDbError && refundResult?.success !== false,
+  };
+}
+
+async function queueGuestFullRefund(db: any, order: any, reference: string, reason: string) {
+  if (["refund_pending", "refunded"].includes(String(order.payment_status || "").toLowerCase())) {
+    return { queued: true, existing: true, status: order.payment_status };
+  }
+
+  const refundResponse = await fetch(`${BASE}/refund`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SECRET}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      transaction: reference,
+      customer_note: "Automatic full refund from DRIGHT because the successful guest payment could not be matched safely to the order.",
+      merchant_note: reason,
+    }),
+  });
+  const refundPayload = await refundResponse.json().catch(() => ({}));
+  const accepted = refundResponse.ok && refundPayload?.status === true && refundPayload?.data;
+  const metadata = order.metadata && typeof order.metadata === "object" && !Array.isArray(order.metadata)
+    ? order.metadata as Record<string, unknown>
+    : {};
+  const refundStatus = accepted ? String(refundPayload.data.status || "pending").toLowerCase() : "failed";
+  const refundId = accepted ? String(refundPayload.data.id ?? refundPayload.data.refund_reference ?? `refund:${reference}`) : null;
+
+  await db.from("guest_orders").update({
+    payment_status: accepted ? "refund_pending" : "refund_attention",
+    status: accepted ? "payment_refund_pending" : "payment_failed",
+    gateway_response: accepted ? reason : `${reason}; automatic refund could not be queued: ${String(refundPayload?.message || refundResponse.status)}`,
+    metadata: {
+      ...metadata,
+      auto_refund: {
+        requested: true,
+        queued: Boolean(accepted),
+        reason,
+        refund_id: refundId,
+        refund_status: refundStatus,
+        updated_at: new Date().toISOString(),
+      },
+    },
+  }).eq("id", order.id);
+
+  return { queued: Boolean(accepted), refund_id: refundId, status: refundStatus };
+}
+
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -90,14 +250,22 @@ Deno.serve(async (req: Request) => {
           ? guestOrder.metadata as Record<string, unknown>
           : {};
         const gatewayAmount = Number(verified.data.amount) / 100;
+        const requestedAmountMinor = Number(verified.data.requested_amount);
+        const requestedGatewayAmount = Number.isFinite(requestedAmountMinor) && requestedAmountMinor > 0
+          ? requestedAmountMinor / 100
+          : gatewayAmount;
         const gatewayCurrency = String(verified.data.currency || "").toUpperCase();
         const expectedGatewayAmount = Number(metadata.gateway_amount ?? guestOrder.total_amount);
         const expectedGatewayCurrency = String(metadata.gateway_currency ?? guestOrder.currency ?? "USD").toUpperCase();
-        if (!Number.isFinite(gatewayAmount) || !Number.isFinite(expectedGatewayAmount) || Math.abs(gatewayAmount - expectedGatewayAmount) > 0.01) {
-          return json({ error: "Guest gateway amount mismatch" }, 409);
+        if (!Number.isFinite(requestedGatewayAmount) || !Number.isFinite(expectedGatewayAmount) || Math.abs(requestedGatewayAmount - expectedGatewayAmount) > 0.01) {
+          const reason = `Guest Paystack requested amount mismatch: expected ${expectedGatewayAmount} ${expectedGatewayCurrency}, Paystack requested ${requestedGatewayAmount} ${gatewayCurrency || "UNKNOWN"}, charged ${gatewayAmount} ${gatewayCurrency || "UNKNOWN"}`;
+          const refund = await queueGuestFullRefund(db, guestOrder, ref, reason);
+          return json({ success: true, guest: true, refund_queued: refund.queued, refund_status: refund.status });
         }
         if (gatewayCurrency !== expectedGatewayCurrency) {
-          return json({ error: "Guest gateway currency mismatch" }, 409);
+          const reason = `Guest Paystack currency mismatch: expected ${expectedGatewayCurrency}, received ${gatewayCurrency || "UNKNOWN"}`;
+          const refund = await queueGuestFullRefund(db, guestOrder, ref, reason);
+          return json({ success: true, guest: true, refund_queued: refund.queued, refund_status: refund.status });
         }
 
         const canonicalAmount = Number(guestOrder.total_amount);
@@ -150,6 +318,10 @@ Deno.serve(async (req: Request) => {
       }
 
       const gatewayAmount = Number(verified.data.amount) / 100;
+      const requestedAmountMinor = Number(verified.data.requested_amount);
+      const requestedGatewayAmount = Number.isFinite(requestedAmountMinor) && requestedAmountMinor > 0
+        ? requestedAmountMinor / 100
+        : gatewayAmount;
       const settlementAmount = Number(tx.amount);
       const settlementCurrency = String(tx.currency || "NGN").toUpperCase();
       const txMetadata = tx.metadata && typeof tx.metadata === "object" && !Array.isArray(tx.metadata)
@@ -159,11 +331,15 @@ Deno.serve(async (req: Request) => {
       const expectedGatewayCurrency = String(txMetadata.gateway_currency ?? settlementCurrency).toUpperCase();
       const gatewayCurrency = String(verified.data.currency || "").toUpperCase();
 
-      if (!Number.isFinite(gatewayAmount) || !Number.isFinite(expectedGatewayAmount) || Math.abs(gatewayAmount - expectedGatewayAmount) > 0.01) {
-        return json({ error: "Verified gateway amount does not match initialized Paystack amount" }, 409);
+      if (!Number.isFinite(requestedGatewayAmount) || !Number.isFinite(expectedGatewayAmount) || Math.abs(requestedGatewayAmount - expectedGatewayAmount) > 0.01) {
+        const reason = `Paystack requested amount mismatch: expected ${expectedGatewayAmount} ${expectedGatewayCurrency}, Paystack requested ${requestedGatewayAmount} ${gatewayCurrency || "UNKNOWN"}, charged ${gatewayAmount} ${gatewayCurrency || "UNKNOWN"}`;
+        const refund = await queueFullRefund(db, tx, ref, reason);
+        return json({ success: true, refund_queued: refund.queued, refund_status: refund.status });
       }
       if (!gatewayCurrency || gatewayCurrency !== expectedGatewayCurrency) {
-        return json({ error: "Verified gateway currency does not match initialized Paystack currency" }, 409);
+        const reason = `Paystack currency mismatch: expected ${expectedGatewayCurrency}, received ${gatewayCurrency || "UNKNOWN"}`;
+        const refund = await queueFullRefund(db, tx, ref, reason);
+        return json({ success: true, refund_queued: refund.queued, refund_status: refund.status });
       }
 
       const { error: updateError } = await db.from("paystack_transactions").update({
@@ -218,6 +394,7 @@ Deno.serve(async (req: Request) => {
           amount: settlementAmount,
           currency: settlementCurrency,
           gateway_amount: gatewayAmount,
+          gateway_requested_amount: requestedGatewayAmount,
           gateway_currency: gatewayCurrency,
           purpose: tx.purpose,
           campaign_id: tx.purpose === "promotion_campaign" ? tx.reference_id : null,
@@ -270,6 +447,26 @@ Deno.serve(async (req: Request) => {
       });
       if (error) return json({ error: "Refund processing failed" }, 500);
       if (result?.success === false) return json({ error: result.error || "Refund processing failed" }, 500);
+
+      if (originalTx) {
+        const completed = ["processed", "completed"].includes(status);
+        await db.from("notifications").insert({
+          user_id: originalTx.user_id,
+          notification_type: completed ? "payment_refund_processed" : "payment_refund_pending",
+          category: "orders",
+          title: completed ? "Refund Completed" : "Refund Update",
+          message: completed
+            ? "Your Paystack refund has been processed."
+            : `Your Paystack refund is currently ${status.replaceAll("-", " ")}.`,
+          priority: completed ? "high" : "critical",
+          metadata: {
+            reference: transactionReference,
+            refund_reference: gatewayReference,
+            refund_status: status,
+            action_url: "/notifications",
+          },
+        });
+      }
     } else if ([
       "charge.dispute.create",
       "charge.dispute.remind",
@@ -338,42 +535,37 @@ async function sendPaymentNotification(
   reference: string,
   channel: string,
 ) {
-  const funding = tx.purpose === "wallet_funding" || tx.purpose === "advertiser_funding";
-  const promotion = tx.purpose === "promotion_campaign";
-  const { error: buyerNotificationError } = await db.from("notifications").insert({
-    user_id: tx.user_id,
-    notification_type: "payment_success",
-    title: promotion ? "Promotion Payment Successful" : funding ? "Wallet Funded Successfully" : "Payment Successful",
-    message: promotion
-      ? `Your promotion payment of ${amount.toLocaleString()} ${currency} was verified and the campaign was activated.`
-      : funding
-      ? `Your wallet has been credited with ${amount.toLocaleString()} via ${channel}.`
-      : `Your payment of ${amount.toLocaleString()} was successful. Reference: ${reference}`,
-    priority: "high",
-    metadata: {
-      reference,
-      amount,
-      currency,
-      purpose: tx.purpose,
-      campaign_id: promotion ? tx.reference_id : null,
-      channel,
-    },
-  });
-  if (buyerNotificationError) console.warn("[paystack-webhook] buyer notification failed", buyerNotificationError.message);
-
+  // Buyer payment confirmation is emitted once by trg_notify_paystack_success
+  // only after processed_at is set. Keep this helper focused on the seller-side
+  // order notification so webhook retries cannot create duplicate buyer emails.
   if ((tx.purpose === "product_purchase" || tx.purpose === "escrow") && tx.reference_id) {
-    const { data: order } = await db.from("sales_records")
-      .select("seller_id,product_name")
-      .eq("order_id", tx.reference_id)
+    const { data: order } = await db.from("orders")
+      .select("seller_id,product_id")
+      .eq("id", tx.reference_id)
       .maybeSingle();
+
     if (order?.seller_id) {
+      const { data: product } = await db.from("products")
+        .select("name")
+        .eq("id", order.product_id)
+        .maybeSingle();
+
       const { error: sellerNotificationError } = await db.from("notifications").insert({
         user_id: order.seller_id,
         notification_type: "new_order",
+        category: "orders",
         title: "New Order Received!",
-        message: `You received a new order for ${order.product_name || "your product"}.`,
+        message: `You received a new paid order for ${product?.name || "your product"}.`,
         priority: "high",
-        metadata: { reference, amount, orderId: tx.reference_id },
+        metadata: {
+          reference,
+          amount,
+          currency,
+          channel,
+          orderId: tx.reference_id,
+          productId: order.product_id,
+          action_url: "/sales",
+        },
       });
       if (sellerNotificationError) console.warn("[paystack-webhook] seller notification failed", sellerNotificationError.message);
     }
