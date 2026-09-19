@@ -446,7 +446,7 @@ export default function AdminPayoutsPage() {
 
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
                 <p className="text-xs text-gray-400">
-                  Last updated: {automation.updated_at ? new Date(automation.updated_at).toLocaleString() : 'Unknown'}
+                  Last updated: {automation?.updated_at ? new Date(automation.updated_at).toLocaleString() : 'Unknown'}
                 </p>
                 <button
                   type="button"
