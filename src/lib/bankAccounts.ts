@@ -106,34 +106,37 @@ export async function setDefaultBankAccount(userId: string, accountId: string): 
 
 export async function verifyBankAccount(
   accountId: string,
-  accountNumber: string,
-  bankCode: string
+  _accountNumber: string,
+  _bankCode: string
 ): Promise<{ success: boolean; verified: boolean; account_name?: string; error?: string }> {
-  const { data, error } = await supabase
-    .rpc('resolve_bank_account', { p_account_number: accountNumber, p_bank_code: bankCode });
+  const { data, error } = await supabase.functions.invoke('paystack-bank-account', {
+    body: { account_id: accountId },
+  });
 
-  if (error || !data) {
-    return { success: false, verified: false, error: error?.message || 'Resolution failed' };
+  if (error) {
+    return { success: false, verified: false, error: error.message || 'Paystack account verification failed' };
   }
 
-  const result = data as { success: boolean; status?: string; error?: string };
-  if (!result.success) {
-    return { success: false, verified: false, error: result.error };
+  const result = data as {
+    success?: boolean;
+    verified?: boolean;
+    account_name?: string;
+    error?: string;
+  } | null;
+
+  if (!result?.success || result.verified !== true) {
+    return {
+      success: false,
+      verified: false,
+      error: result?.error || 'Paystack could not verify this bank account',
+    };
   }
 
-  const { data: verificationData, error: verificationError } = await supabase
-    .rpc('request_bank_account_verification', { p_account_id: accountId });
-
-  if (verificationError) {
-    return { success: false, verified: false, error: verificationError.message };
-  }
-
-  const verification = verificationData as { success?: boolean; verified?: boolean; error?: string } | null;
-  if (!verification?.success) {
-    return { success: false, verified: false, error: verification?.error || 'Verification request failed' };
-  }
-
-  return { success: true, verified: verification.verified === true };
+  return {
+    success: true,
+    verified: true,
+    account_name: result.account_name,
+  };
 }
 
 export function useBankAccounts(userId: string | undefined) {
