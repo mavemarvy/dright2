@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Loader2, AlertCircle, Lock,
@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { getCurrencySymbol, formatCurrency } from '../lib/currency';
+import { getCurrencySymbol, tryConvertCurrency } from '../lib/currency';
 import { supabase } from '../lib/supabase';
 import { getWalletSummary, type WalletSummary } from '../lib/walletEngine';
 import { fetchWithdrawalMethods, getEnabledMethods, getComingSoonMethods, type WithdrawalMethod } from '../lib/withdrawalMethods';
@@ -20,8 +20,20 @@ type Step = 'method' | 'account' | 'amount' | 'pin' | 'submitting' | 'success';
 export default function WithdrawPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { selectedCurrency } = useCurrency();
+  const { selectedCurrency, rates, format } = useCurrency();
   const cSym = getCurrencySymbol(selectedCurrency);
+  const walletCurrency = 'NGN';
+  const convertAmount = useCallback((value: number, from: string, to: string) => {
+    return tryConvertCurrency(value, from, to, rates);
+  }, [rates]);
+
+  const minimumDisplayAmount = useMemo(() => {
+    const converted = convertAmount(100, 'NGN', selectedCurrency);
+    if (!converted || converted <= 0) return selectedCurrency === 'NGN' ? 100 : 0;
+    if (converted < 1) return Math.ceil(converted * 100) / 100;
+    if (converted < 100) return Math.round(converted * 100) / 100;
+    return Math.round(converted);
+  }, [convertAmount, selectedCurrency]);
   const [summary, setSummary] = useState<WalletSummary | null>(null);
   const [methods, setMethods] = useState<WithdrawalMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +64,7 @@ export default function WithdrawPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const balance = summary ? Number(summary.balance) : 0;
+  const displayBalance = convertAmount(balance, walletCurrency, selectedCurrency) ?? balance;
   const enabledMethods = getEnabledMethods(methods);
   const comingSoonMethods = getComingSoonMethods(methods);
 
@@ -72,11 +85,16 @@ export default function WithdrawPage() {
 
   const handleProceedToPin = () => {
     const amt = parseFloat(amount);
-    if (!amt || amt < 100) {
-      setError(`Minimum withdrawal amount is ${cSym}100`);
+    if (!amt || amt < minimumDisplayAmount) {
+      setError(`Minimum withdrawal amount is about ${cSym}${minimumDisplayAmount.toLocaleString()}`);
       return;
     }
-    if (amt > balance) {
+    const canonicalAmount = convertAmount(amt, selectedCurrency, walletCurrency);
+    if (!canonicalAmount || canonicalAmount < 100) {
+      setError('Withdrawal must equal at least ₦100 at the current exchange rate');
+      return;
+    }
+    if (canonicalAmount > balance) {
       setError('Insufficient balance');
       return;
     }
@@ -101,9 +119,17 @@ export default function WithdrawPage() {
 
     setStep('submitting');
 
+    const displayAmount = parseFloat(amount);
+    const canonicalAmount = convertAmount(displayAmount, selectedCurrency, walletCurrency);
+    if (!canonicalAmount || canonicalAmount < 100) {
+      setError('Withdrawal amount is below the NGN minimum after conversion');
+      setStep('amount');
+      return;
+    }
+
     const { data, error: rpcError } = await supabase.rpc('create_withdrawal_request', {
       p_user_id: user.id,
-      p_amount: parseFloat(amount),
+      p_amount: Math.round(canonicalAmount * 100) / 100,
       p_bank_account_id: selectedAccount.id,
       p_authorization_token: authorizationToken,
     });
@@ -125,12 +151,12 @@ export default function WithdrawPage() {
     // Send notifications
     try {
       const { notifyWithdrawalRequested } = await import('../lib/financialNotifications');
-      await notifyWithdrawalRequested(user.id, parseFloat(amount), resultData.reference || '');
+      await notifyWithdrawalRequested(user.id, Math.round(canonicalAmount * 100) / 100, resultData.reference || '');
     } catch {
       // notifications are non-critical
     }
 
-    setResult({ reference: resultData.reference || '', amount: parseFloat(amount) });
+    setResult({ reference: resultData.reference || '', amount: Math.round(canonicalAmount * 100) / 100 });
     setStep('success');
   };
 
@@ -151,7 +177,7 @@ export default function WithdrawPage() {
           </div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">Withdrawal Submitted</h1>
           <p className="text-sm text-gray-500 mb-4">
-            Your withdrawal request for <span className="font-semibold text-gray-900">{formatCurrency(result.amount, selectedCurrency)}</span> has been queued for processing.
+            Your withdrawal request for <span className="font-semibold text-gray-900">{format(result.amount, walletCurrency)}</span> has been queued for processing.
           </p>
           <div className="px-4 py-3 rounded-xl bg-gray-50 mb-4">
             <p className="text-xs text-gray-400">Reference</p>
@@ -188,7 +214,7 @@ export default function WithdrawPage() {
       {/* Balance Card */}
       <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl p-5 text-white mb-6">
         <p className="text-sm opacity-80">Available Balance</p>
-        <p className="text-3xl font-bold mt-1">{formatCurrency(balance, selectedCurrency)}</p>
+        <p className="text-3xl font-bold mt-1">{format(balance, walletCurrency)}</p>
       </div>
 
       {/* Step Progress */}
@@ -323,9 +349,9 @@ export default function WithdrawPage() {
             </div>
 
             <div className="flex items-center justify-between mt-3 text-sm">
-              <span className="text-gray-500">Available: {formatCurrency(balance, selectedCurrency)}</span>
+              <span className="text-gray-500">Available: {format(balance, walletCurrency)}</span>
               <button
-                onClick={() => setAmount(balance.toString())}
+                onClick={() => setAmount(displayBalance.toFixed(selectedCurrency === 'NGN' ? 0 : 2))}
                 className="text-primary-600 font-medium hover:text-primary-700"
               >
                 Max
@@ -333,16 +359,25 @@ export default function WithdrawPage() {
             </div>
 
             <div className="grid grid-cols-4 gap-2 mt-3">
-              {[1000, 5000, 10000, 25000].map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setAmount(a.toString())}
-                  className="py-2 rounded-lg bg-gray-100 text-sm font-medium text-gray-600 hover:bg-primary-50 hover:text-primary-600"
-                >
-                  {formatCurrency(a, selectedCurrency)}
-                </button>
-              ))}
+              {[500, 1000, 5000, 10000].map((ngnAmount) => {
+                const displayAmount = convertAmount(ngnAmount, 'NGN', selectedCurrency) ?? ngnAmount;
+                const roundedDisplay = selectedCurrency === 'NGN'
+                  ? Math.round(displayAmount)
+                  : Math.max(0.01, Math.round(displayAmount * 100) / 100);
+                return (
+                  <button
+                    key={ngnAmount}
+                    onClick={() => setAmount(roundedDisplay.toString())}
+                    className="py-2 rounded-lg bg-gray-100 text-sm font-medium text-gray-600 hover:bg-primary-50 hover:text-primary-600"
+                  >
+                    {format(ngnAmount, 'NGN')}
+                  </button>
+                );
+              })}
             </div>
+            <p className="text-[11px] text-gray-400 mt-3">
+              Minimum withdrawal: about {cSym}{minimumDisplayAmount.toLocaleString()} · your entered amount is converted to the wallet's NGN ledger value before the withdrawal is created.
+            </p>
           </div>
 
           {/* Summary */}
