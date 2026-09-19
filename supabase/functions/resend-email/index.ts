@@ -71,7 +71,7 @@ async function sendWithRetry(params: EmailParams, supabase: ReturnType<typeof ge
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) throw new Error("Missing RESEND_API_KEY");
 
-  const fromAddress = params.from || Deno.env.get("RESEND_FROM_EMAIL") || "noreply@dright.com";
+  const fromAddress = params.from || "support@dright.store";
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
