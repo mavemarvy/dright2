@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Shield, Loader2, AlertCircle, CheckCircle2, Lock,
-  ShoppingCart, Tag, Wallet, Truck, User, Info, ChevronDown,
+  ShoppingCart, Wallet, Truck, User, Info, ChevronDown,
   ChevronUp, Ticket, Zap, Award, BadgeCheck, Star, RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -217,8 +217,6 @@ export default function CheckoutPaymentPage() {
   const tierPrice = checkoutData?.tierPrice || 0;
   const customizationPrice = checkoutData?.customizationPrice || 0;
   const referralDiscount = checkoutData?.affiliateCommissionAmount || 0;
-  const escrowFee = 0; // Free escrow
-  const platformFee = checkoutData?.adminTaskAmount || 0;
   const couponAmount = couponApplied ? couponDiscount : 0;
   const grandTotal = Math.max(0, (checkoutData?.finalPrice || 0) - couponAmount);
 
@@ -439,52 +437,20 @@ export default function CheckoutPaymentPage() {
             </div>
           </div>
 
-          {/* 2. Payment Breakdown */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-700 p-3.5 sm:p-4">
-            <h2 className="text-sm font-bold text-gray-900 mb-4">Payment Breakdown</h2>
-            <div className="space-y-2.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Product Price</span>
-                <span className="text-gray-900 font-medium">{formatCurrencyFn(productPrice)}</span>
+          {/* 2. Total to Pay */}
+          <div className="rounded-2xl border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-br from-primary-50 via-white to-blue-50 dark:from-primary-950/35 dark:via-gray-800 dark:to-blue-950/25 p-4 sm:p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs sm:text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Total to Pay</p>
+                {couponApplied && couponDiscount > 0 && (
+                  <p className="mt-1 text-[11px] sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    Coupon applied
+                  </p>
+                )}
               </div>
-              {tierPrice > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Service Tier</span>
-                  <span className="text-gray-900 font-medium">{formatCurrencyFn(tierPrice)}</span>
-                </div>
-              )}
-              {customizationPrice > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Customization</span>
-                  <span className="text-gray-900 font-medium">{formatCurrencyFn(customizationPrice)}</span>
-                </div>
-              )}
-              {checkoutData.refCode && referralDiscount > 0 && (
-                <div className="flex justify-between text-emerald-600">
-                  <span className="flex items-center gap-1"><Tag className="w-3 h-3" /> Referral Reward</span>
-                  <span className="font-medium">-{formatCurrencyFn(referralDiscount)}</span>
-                </div>
-              )}
-              {couponApplied && couponDiscount > 0 && (
-                <div className="flex justify-between text-emerald-600">
-                  <span className="flex items-center gap-1"><Ticket className="w-3 h-3" /> Coupon ({couponCode})</span>
-                  <span className="font-medium">-{formatCurrencyFn(couponAmount)}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-gray-500">Escrow Fee</span>
-                <span className="text-gray-900 font-medium">{escrowFee === 0 ? 'Free' : formatCurrencyFn(escrowFee)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Platform Fee</span>
-                <span className="text-gray-900 font-medium">{platformFee === 0 ? 'Included' : formatCurrencyFn(platformFee)}</span>
-              </div>
-              <div className="flex justify-between pt-3 mt-2 border-t border-gray-100">
-                <span className="font-bold text-gray-900">Total</span>
-                <span className="text-xl font-bold text-primary-600">
-                  {checkoutData.isFreeOrder ? 'FREE' : formatCurrencyFn(grandTotal)}
-                </span>
-              </div>
+              <p className="text-2xl sm:text-3xl font-black tracking-tight text-primary-700 dark:text-primary-300">
+                {checkoutData.isFreeOrder ? 'FREE' : formatCurrencyFn(grandTotal)}
+              </p>
             </div>
           </div>
 
