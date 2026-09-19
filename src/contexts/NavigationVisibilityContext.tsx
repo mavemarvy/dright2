@@ -9,17 +9,23 @@ import {
 } from 'react';
 import { supabase } from '../lib/supabase';
 
-type VisibilityMap = Record<string, boolean>;
+interface FeatureVisibility {
+  users: boolean;
+  admins: boolean;
+  scope: string;
+}
+
+type VisibilityMap = Record<string, FeatureVisibility>;
 
 interface NavigationVisibilityContextValue {
   visibility: VisibilityMap;
   ready: boolean;
   error: string | null;
-  isVisible: (featureKey: string) => boolean;
+  isVisible: (featureKey: string, isAdmin?: boolean) => boolean;
   refresh: () => Promise<void>;
 }
 
-const CACHE_KEY = 'dright:user-navigation-visibility:v1';
+const CACHE_KEY = 'dright:user-navigation-visibility:v2';
 
 function readCache(): VisibilityMap {
   try {
@@ -36,7 +42,7 @@ function writeCache(value: VisibilityMap) {
   try {
     window.localStorage.setItem(CACHE_KEY, JSON.stringify(value));
   } catch {
-    // Local storage is only a performance cache; Supabase remains authoritative.
+    // Cache failure must never override Supabase as the authoritative source.
   }
 }
 
@@ -50,7 +56,7 @@ export function NavigationVisibilityProvider({ children }: { children: ReactNode
   const refresh = useCallback(async () => {
     const { data, error: fetchError } = await supabase
       .from('user_navigation_visibility')
-      .select('feature_key, visible')
+      .select('feature_key, visible, visible_to_admins, feature_scope')
       .order('sort_order', { ascending: true });
 
     if (fetchError) {
@@ -60,7 +66,14 @@ export function NavigationVisibilityProvider({ children }: { children: ReactNode
     }
 
     const next = Object.fromEntries(
-      (data || []).map(row => [String(row.feature_key), row.visible !== false]),
+      (data || []).map(row => [
+        String(row.feature_key),
+        {
+          users: row.visible !== false,
+          admins: row.visible_to_admins !== false,
+          scope: String(row.feature_scope || 'navigation'),
+        },
+      ]),
     ) as VisibilityMap;
 
     setVisibility(next);
@@ -95,7 +108,11 @@ export function NavigationVisibilityProvider({ children }: { children: ReactNode
   }, [refresh]);
 
   const isVisible = useCallback(
-    (featureKey: string) => visibility[featureKey] !== false,
+    (featureKey: string, isAdmin = false) => {
+      const rule = visibility[featureKey];
+      if (!rule) return true;
+      return isAdmin ? rule.admins : rule.users;
+    },
     [visibility],
   );
 

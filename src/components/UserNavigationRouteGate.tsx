@@ -10,7 +10,7 @@ export default function UserNavigationRouteGate({ children }: { children: ReactN
   const { ready, isVisible } = useNavigationVisibility();
   const featureKey = getUserNavigationFeatureForPath(location.pathname);
 
-  if (!featureKey || isAdmin) return <>{children}</>;
+  if (!featureKey) return <>{children}</>;
 
   if (!ready || authLoading) {
     return (
@@ -20,7 +20,7 @@ export default function UserNavigationRouteGate({ children }: { children: ReactN
     );
   }
 
-  if (isVisible(featureKey)) return <>{children}</>;
+  if (isVisible(featureKey, isAdmin)) return <>{children}</>;
 
   if (!user || featureKey === 'dashboard') {
     return <Navigate to="/welcome" replace state={{ hiddenFeature: featureKey }} />;

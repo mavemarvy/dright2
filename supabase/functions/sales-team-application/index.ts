@@ -34,8 +34,17 @@ Deno.serve(async req => {
     const body = await req.json().catch(() => ({}));
     if (body.action !== "submit_marketer_application") return json({ error: "Unknown action" }, 400);
     const links = normalizeLinks(body.social_links);
-    const { data: profile, error: profileError } = await client.from("users").select("id,marketer_status,advertiser_status").eq("id", user.id).single();
+    const { data: profile, error: profileError } = await client.from("users").select("id,marketer_status,advertiser_status,is_admin,admin_status").eq("id", user.id).single();
     if (profileError || !profile) return json({ error: "Profile not found" }, 404);
+
+    const { data: feature } = await client
+      .from("user_navigation_visibility")
+      .select("visible,visible_to_admins")
+      .eq("feature_key", "sales_team_features")
+      .maybeSingle();
+    const adminAudience = profile.is_admin === true && profile.admin_status === "active";
+    const salesTeamAvailable = adminAudience ? feature?.visible_to_admins !== false : feature?.visible !== false;
+    if (!salesTeamAvailable) return json({ error: "Sales Team features are temporarily unavailable." }, 503);
     if (String(profile.advertiser_status || "").toLowerCase() === "approved") return json({ error: "Your account is already approved as an Advertiser" }, 409);
     if (String(profile.marketer_status || "").toLowerCase() === "pending") return json({ error: "Your Marketer application is already pending review" }, 409);
     if (String(profile.marketer_status || "").toLowerCase() === "approved") return json({ error: "Your Marketer application is already approved" }, 409);

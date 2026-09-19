@@ -136,7 +136,7 @@ function NavGroup({ group, collapsed, t, query, onNavigate, isFeatureVisible }: 
 }) {
   const visibleItems = group.items.filter(item => {
     const featureKey = USER_NAV_FEATURE_BY_PATH[item.path as keyof typeof USER_NAV_FEATURE_BY_PATH];
-    return !featureKey || isFeatureVisible(featureKey);
+    return !featureKey || canSeeFeature(featureKey);
   });
   const filtered = query
     ? visibleItems.filter(item => navLabel(item, t).toLowerCase().includes(query.toLowerCase()))
@@ -182,6 +182,7 @@ export default function AppShell() {
   const { t } = useLanguage();
   const { prefs: uiPrefs } = useUIPreferences();
   const { isVisible: isFeatureVisible } = useNavigationVisibility();
+  const canSeeFeature = (featureKey: string) => isFeatureVisible(featureKey, isAdmin);
   const location = useLocation();
   const immersiveSocial = location.pathname.startsWith('/social');
 
@@ -216,8 +217,8 @@ export default function AppShell() {
         )}
 
         <nav className="flex-1 py-3 px-2 overflow-y-auto">
-          {filteredGroups.map(group => <NavGroup key={group.title} group={group} collapsed={collapsed} t={t} query={searchQuery} isFeatureVisible={isFeatureVisible} />)}
-          {!collapsed && <UIPreferencesToggles />}
+          {filteredGroups.map(group => <NavGroup key={group.title} group={group} collapsed={collapsed} t={t} query={searchQuery} isFeatureVisible={canSeeFeature} />)}
+          {!collapsed && canSeeFeature('interface_options') && <UIPreferencesToggles />}
           {isAdmin && (
             <div className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-700">
               <NavLink to="/admin" className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all ${collapsed ? 'justify-center' : ''} ${isActive ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200' : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50/80 dark:hover:bg-amber-900/10'}`} title={collapsed ? t('adminPanel') : undefined}>
@@ -261,9 +262,9 @@ export default function AppShell() {
               <div className="shrink-0 flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700"><DrightBrand size={54} /><button onClick={() => setSidebarOpen(false)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close menu"><X className="w-6 h-6" /></button></div>
               <div className="px-3 pt-4"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={t('searchMenu')} className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:bg-white dark:focus:bg-gray-900 focus:border-slate-400 outline-none transition-colors text-gray-900 dark:text-gray-100" /></div></div>
               <nav className="flex-1 overflow-y-auto py-3 px-2">
-                {filteredGroups.map(group => <NavGroup key={group.title} group={group} collapsed={false} t={t} query={searchQuery} onNavigate={() => setSidebarOpen(false)} isFeatureVisible={isFeatureVisible} />)}
+                {filteredGroups.map(group => <NavGroup key={group.title} group={group} collapsed={false} t={t} query={searchQuery} onNavigate={() => setSidebarOpen(false)} isFeatureVisible={canSeeFeature} />)}
                 {isAdmin && <div className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-700"><NavLink to="/admin" onClick={() => setSidebarOpen(false)} className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all ${isActive ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200' : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50/80 dark:hover:bg-amber-900/10'}`}>{({ isActive }) => <><MetallicNavIcon icon={Shield} active={isActive} variant="admin" /><span className="text-sm">{t('adminPanel')}</span></>}</NavLink></div>}
-                <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-700 space-y-2"><LanguageSwitcher variant="sidebar" /><UIPreferencesToggles /></div>
+                <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-700 space-y-2"><LanguageSwitcher variant="sidebar" />{canSeeFeature('interface_options') && <UIPreferencesToggles />}</div>
               </nav>
               <div className="shrink-0 border-t border-gray-100 dark:border-gray-700 p-3"><button onClick={() => { setSidebarOpen(false); signOut(); }} className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-error hover:bg-error-muted rounded-xl transition-colors"><LogOut className="w-4 h-4" />{t('signOut')}</button></div>
             </motion.aside>
@@ -288,7 +289,7 @@ export default function AppShell() {
         <div className="flex justify-around items-center py-2">
           {mobileBottomItems.filter(item => {
             const featureKey = USER_NAV_FEATURE_BY_PATH[item.path as keyof typeof USER_NAV_FEATURE_BY_PATH];
-            return !featureKey || isFeatureVisible(featureKey);
+            return !featureKey || canSeeFeature(featureKey);
           }).map(item => {
             const isActive = item.path === '/' ? location.pathname === '/' : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (

@@ -38,6 +38,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
 import { supabase } from '../lib/supabase';
 import {
   fetchSystemConfig,
@@ -136,7 +137,9 @@ const initialForm: FormData = {
 };
 
 export default function UploadProductPage() {
-  const { user, isAccountLocked, isAccountBanned } = useAuth();
+  const { user, isAdmin, isAccountLocked, isAccountBanned } = useAuth();
+  const { isVisible } = useNavigationVisibility();
+  const salesTeamFeatureVisible = isVisible('sales_team_features', isAdmin);
   const location = useLocation();
   const [form, setForm] = useState<FormData>(initialForm);
   const [productType, setProductType] = useState<ProductType>('DIGITAL');
@@ -242,8 +245,9 @@ export default function UploadProductPage() {
   }, [location.state]);
 
   const adminTaskPercent = systemConfig?.admin_task_percent ?? 15;
-  const salesTeamTaskPercent = selectedTier && systemConfig
-    ? getTaskPercentForTier(selectedTier, systemConfig) : 0;
+  const effectiveSelectedTier = salesTeamFeatureVisible ? selectedTier : null;
+  const salesTeamTaskPercent = effectiveSelectedTier && systemConfig
+    ? getTaskPercentForTier(effectiveSelectedTier, systemConfig) : 0;
   const basePrice = isFree ? 0 : (parseFloat(form.price) || 0);
   const affiliatePct = parseFloat(affiliateCommission) || 0;
   const pricing = calculatePricing(basePrice, affiliatePct, adminTaskPercent, salesTeamTaskPercent);
@@ -442,13 +446,13 @@ export default function UploadProductPage() {
         admin_task_percent: isFree ? 0 : adminTaskPercent,
         sales_team_task_percent: isFree ? 0 : salesTeamTaskPercent,
         affiliate_commission_percent: isFree ? 0 : (parseFloat(affiliateCommission) || 0),
-        sales_team_tier: isFree ? null : selectedTier,
+        sales_team_tier: isFree ? null : effectiveSelectedTier,
         is_free: isFree,
         stock_quantity: stockNum,
         initial_stock: stockNum,
         product_type: productType,
         demo_video_url: demoVideoUrl || null,
-        has_dright_sales_team: isServiceType ? hasDrightSalesTeam : false,
+        has_dright_sales_team: isServiceType && salesTeamFeatureVisible ? hasDrightSalesTeam : false,
       }).select('id').single();
 
       if (insertErr) throw insertErr;
@@ -1196,7 +1200,7 @@ export default function UploadProductPage() {
                   </div>
 
                   {/* DRIGHT Sales Team Support (SERVICE only) */}
-                  {isServiceType && (
+                  {salesTeamFeatureVisible && isServiceType && (
                     <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
                       <div className="flex items-center gap-3">
                         <Award className="w-5 h-5 text-blue-500" />
@@ -1213,7 +1217,7 @@ export default function UploadProductPage() {
                   )}
 
                   {/* Sales Team Tier */}
-                  <div className="space-y-2">
+                  {salesTeamFeatureVisible && <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-700 flex items-center gap-2"><Users className="w-4 h-4 text-gray-400" />Sales Team Tier (Optional)</label>
                     <div className="relative">
                       <select value={selectedTier || ''} onChange={(e) => setSelectedTier((e.target.value as SalesTeamTier) || null)}
@@ -1230,7 +1234,7 @@ export default function UploadProductPage() {
                       <div className="bg-amber-50 rounded-xl p-3 flex items-start gap-2"><Info className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                         <p className="text-xs text-amber-700">Without a sales team, the default {adminTaskPercent}% admin task applies.</p></div>
                     )}
-                  </div>
+                  </div>}
 
                   {/* Pricing Breakdown */}
                   {basePrice > 0 && (

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { TrendingUp, Award, Target, Users, Plus, X, Send, CheckCircle, AlertCircle, Loader2, Shield, Star, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDisplayCurrency } from '../lib/currency';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
 import { MARKETER_WEEKLY_TARGETS, ADVERTISER_REQUIREMENTS } from '../lib/pricing';
 
 type ProgressionRule={stage_key:string;stage_label:string;weekly_target:number;required_success_streak:number;next_stage_key:string|null};
@@ -10,10 +12,13 @@ interface Profile { id:string; marketer_level:number; advertiser_grade:string|nu
 interface Props { profile:Profile|null; socialLinks:string[]; setSocialLinks:(v:string[])=>void; showMarketerForm:boolean; setShowMarketerForm:(v:boolean)=>void; marketerSubmitting:boolean; marketerError:string|null; marketerSuccess:boolean; setMarketerError:(v:string|null)=>void; setMarketerSuccess:(v:boolean)=>void; setMarketerSubmitting:(v:boolean)=>void; advertiserSubmitting:boolean; advertiserError:string|null; advertiserSuccess:boolean; setAdvertiserError:(v:string|null)=>void; setAdvertiserSuccess:(v:boolean)=>void; setAdvertiserSubmitting:(v:boolean)=>void; refreshProfile:()=>Promise<void>; }
 
 export default function SalesTeamSection({profile,socialLinks,setSocialLinks,showMarketerForm,setShowMarketerForm,marketerSubmitting,marketerError,marketerSuccess,setMarketerError,setMarketerSuccess,setMarketerSubmitting,advertiserSubmitting,advertiserError,advertiserSuccess,setAdvertiserError,setAdvertiserSuccess,setAdvertiserSubmitting,refreshProfile}:Props) {
+  const { isAdmin } = useAuth();
+  const { isVisible } = useNavigationVisibility();
+  const salesTeamFeatureVisible = isVisible('sales_team_features', isAdmin);
   const [progressionRules,setProgressionRules]=useState<ProgressionRule[]>([]);
   useEffect(()=>{let live=true;supabase.from('sales_progression_rules').select('stage_key,stage_label,weekly_target,required_success_streak,next_stage_key').eq('active',true).then(({data})=>{if(live&&data)setProgressionRules(data as ProgressionRule[])});return()=>{live=false}},[]);
   const ruleMap=useMemo(()=>Object.fromEntries(progressionRules.map(r=>[r.stage_key,r])),[progressionRules]);
-  if(!profile)return null;
+  if(!profile || !salesTeamFeatureVisible)return null;
   const isMarketer=profile.marketer_status==='approved';
   const marketerRestricted=profile.marketer_status==='restricted';
   const marketerSuspended=profile.marketer_status==='suspended';

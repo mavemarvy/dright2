@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
 import { supabase } from '../lib/supabase';
 
 import {
@@ -65,8 +66,10 @@ const DURATIONS: { value: Duration; label: string }[] = [
 ];
 
 export default function StorePage() {
-  const { user, isAccountLocked, isAccountBanned, profile, refreshProfile } = useAuth();
+  const { user, isAdmin, isAccountLocked, isAccountBanned, profile, refreshProfile } = useAuth();
   const { t } = useLanguage();
+  const { isVisible } = useNavigationVisibility();
+  const salesTeamFeatureVisible = isVisible('sales_team_features', isAdmin);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<ProductStatus>('all');
@@ -213,7 +216,7 @@ export default function StorePage() {
   }, [products, statusFilter, searchQuery]);
 
   const openTeamModal = (product: Product) => {
-    if (isAccountLocked || isAccountBanned) return;
+    if (!salesTeamFeatureVisible || isAccountLocked || isAccountBanned) return;
     setTeamModalProduct(product);
     setSelectedTier((product.sales_team_tier as SalesTeamTier) || 'Mkt L3');
     setShowTeamModal(true);
@@ -229,7 +232,7 @@ export default function StorePage() {
   };
 
   const handleCreateContract = async () => {
-    if (!teamModalProduct || !user || !systemConfig) return;
+    if (!salesTeamFeatureVisible || !teamModalProduct || !user || !systemConfig) return;
     setTeamSubmitting(true);
     setTeamError(null);
 
@@ -779,7 +782,7 @@ export default function StorePage() {
                 </div>
 
                 {/* Sales team tier */}
-                {product.sales_team_tier && (
+                {salesTeamFeatureVisible && product.sales_team_tier && (
                   <div className="mb-3 flex items-center gap-1.5 text-xs">
                     <Users className="w-3.5 h-3.5 text-warning" />
                     <span className="bg-warning/10 text-warning px-2 py-0.5 rounded-full font-medium">
@@ -800,21 +803,23 @@ export default function StorePage() {
                 )}
 
                 {/* Action buttons */}
-                <div className="mt-auto grid grid-cols-2 gap-2">
+                <div className={`mt-auto grid ${salesTeamFeatureVisible ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                   <Link
                     to={`/product/${product.id}/edit`}
                     className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <Edit2 className="w-4 h-4" />Edit
                   </Link>
-                  <button
-                    onClick={() => openTeamModal(product)}
-                    disabled={isAccountLocked || isAccountBanned}
-                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium bg-warning/10 text-warning hover:bg-warning/20 transition-colors disabled:opacity-50"
-                  >
-                    <Users className="w-4 h-4" />
-                    {product.sales_team_tier ? 'Team' : 'Add Team'}
-                  </button>
+                  {salesTeamFeatureVisible && (
+                    <button
+                      onClick={() => openTeamModal(product)}
+                      disabled={isAccountLocked || isAccountBanned}
+                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium bg-warning/10 text-warning hover:bg-warning/20 transition-colors disabled:opacity-50"
+                    >
+                      <Users className="w-4 h-4" />
+                      {product.sales_team_tier ? 'Team' : 'Add Team'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Secondary actions */}
@@ -853,7 +858,7 @@ export default function StorePage() {
 
       {/* Sales Team Modal */}
       <AnimatePresence>
-        {showTeamModal && teamModalProduct && (
+        {salesTeamFeatureVisible && showTeamModal && teamModalProduct && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
