@@ -36,6 +36,7 @@ export default function AdminSiteSettingsPage() {
   const [canManageBusinessFooter, setCanManageBusinessFooter] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingBusinessFooter, setSavingBusinessFooter] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
@@ -94,29 +95,56 @@ export default function AdminSiteSettingsPage() {
 
       if (error) throw error;
 
-      if (businessFooterSettings) {
-        if (!canManageBusinessFooter) {
-          throw new Error('You do not have permission to manage public business information visibility.');
-        }
-
-        const { error: footerError } = await supabase
-          .from('business_settings')
-          .update({
-            public_footer_visible: businessFooterSettings.public_footer_visible,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', businessFooterSettings.id);
-
-        if (footerError) throw footerError;
-        clearBusinessSettingsCache();
-      }
-
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
       setError('Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleBusinessFooterToggle = async () => {
+    if (!businessFooterSettings || !canManageBusinessFooter || savingBusinessFooter) return;
+
+    const previous = businessFooterSettings;
+    const nextVisible = !previous.public_footer_visible;
+
+    setBusinessFooterSettings({ ...previous, public_footer_visible: nextVisible });
+    setSavingBusinessFooter(true);
+    setError(null);
+
+    try {
+      const { data, error: footerError } = await supabase
+        .from('business_settings')
+        .update({
+          public_footer_visible: nextVisible,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', previous.id)
+        .select('id, public_footer_visible')
+        .single();
+
+      if (footerError || !data) {
+        throw footerError || new Error('Business footer visibility was not saved.');
+      }
+
+      const saved = data as BusinessFooterSettings;
+      setBusinessFooterSettings(saved);
+      clearBusinessSettingsCache();
+
+      window.dispatchEvent(new CustomEvent('dright:business-settings-updated', {
+        detail: saved,
+      }));
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3500);
+    } catch (err) {
+      console.error('Failed to update public business footer visibility:', err);
+      setBusinessFooterSettings(previous);
+      setError('Failed to update the public business information footer. Please try again.');
+    } finally {
+      setSavingBusinessFooter(false);
     }
   };
 
@@ -312,24 +340,22 @@ export default function AdminSiteSettingsPage() {
             type="button"
             role="switch"
             aria-checked={businessFooterSettings?.public_footer_visible !== false}
-            disabled={!businessFooterSettings || !canManageBusinessFooter || saving}
-            onClick={() => {
-              if (!businessFooterSettings) return;
-              setBusinessFooterSettings({
-                ...businessFooterSettings,
-                public_footer_visible: !businessFooterSettings.public_footer_visible,
-              });
-            }}
+            disabled={!businessFooterSettings || !canManageBusinessFooter || savingBusinessFooter}
+            onClick={() => void handleBusinessFooterToggle()}
             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               businessFooterSettings?.public_footer_visible !== false ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
             }`}
             title={canManageBusinessFooter ? 'Toggle public business information footer' : 'You do not have permission to change this setting'}
           >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                businessFooterSettings?.public_footer_visible !== false ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
+            {savingBusinessFooter ? (
+              <Loader2 className="w-4 h-4 text-white animate-spin mx-auto" />
+            ) : (
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  businessFooterSettings?.public_footer_visible !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            )}
           </button>
         </div>
 
@@ -339,9 +365,11 @@ export default function AdminSiteSettingsPage() {
               {businessFooterSettings?.public_footer_visible !== false ? 'Visible' : 'Hidden'}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {businessFooterSettings?.public_footer_visible !== false
-                ? 'The business-information block is shown wherever DRIGHT uses the public footer.'
-                : 'The public business-information block is completely hidden.'}
+              {savingBusinessFooter
+                ? 'Saving visibility setting…'
+                : businessFooterSettings?.public_footer_visible !== false
+                  ? 'The business-information block is shown wherever DRIGHT uses the public footer. Changes save immediately.'
+                  : 'The public business-information block is completely hidden. Changes save immediately.'}
             </p>
           </div>
         </div>

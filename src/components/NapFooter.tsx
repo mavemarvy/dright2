@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapPin, Phone, Mail, Clock, Globe, ExternalLink } from 'lucide-react';
-import { getBusinessSettings, formatHours, isOpenNow, formatShortAddress } from '../lib/seo';
+import { getBusinessSettings, clearBusinessSettingsCache, formatHours, isOpenNow, formatShortAddress } from '../lib/seo';
+import { supabase } from '../lib/supabase';
 import type { BusinessSettings } from '../lib/types';
 
 const SOCIAL_ICONS: Record<string, string> = {
@@ -16,11 +17,47 @@ export default function NapFooter({ compact = false }: { compact?: boolean }) {
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+
+    const refresh = async (bustCache = false) => {
+      if (bustCache) clearBusinessSettingsCache();
       const data = await getBusinessSettings();
-      setSettings(data);
-    })();
-  }, []);
+      if (!cancelled) setSettings(data);
+    };
+
+    void refresh();
+
+    const handleLocalUpdate = () => {
+      void refresh(true);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refresh(true);
+      }
+    };
+
+    window.addEventListener('dright:business-settings-updated', handleLocalUpdate);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    const channel = supabase
+      .channel(`business-settings-footer-${compact ? 'compact' : 'full'}-${Math.random().toString(36).slice(2)}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'business_settings' },
+        () => {
+          void refresh(true);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('dright:business-settings-updated', handleLocalUpdate);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      void supabase.removeChannel(channel);
+    };
+  }, [compact]);
 
   if (!settings) {
     if (compact) return null;
