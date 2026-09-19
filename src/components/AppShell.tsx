@@ -136,7 +136,7 @@ function NavGroup({ group, collapsed, t, query, onNavigate, isFeatureVisible }: 
 }) {
   const visibleItems = group.items.filter(item => {
     const featureKey = USER_NAV_FEATURE_BY_PATH[item.path as keyof typeof USER_NAV_FEATURE_BY_PATH];
-    return !featureKey || canSeeFeature(featureKey);
+    return !featureKey || isFeatureVisible(featureKey);
   });
   const filtered = query
     ? visibleItems.filter(item => navLabel(item, t).toLowerCase().includes(query.toLowerCase()))
