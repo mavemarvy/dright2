@@ -80,7 +80,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'Finance',
+    title: 'Payments & Finance',
     items: [
       { path: '/admin/payouts', label: 'Payouts', icon: DollarSign, page: 'payouts' },
       { path: '/admin/wallet-manager', label: 'Wallet Manager', icon: Wallet, page: 'wallet_manager' },
