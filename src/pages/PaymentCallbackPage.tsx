@@ -282,7 +282,29 @@ export default function PaymentCallbackPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reference, statusParam]);
 
-  const handleRetry = () => navigate(-1);
+  const handleRetry = async () => {
+    if (!reference) return;
+    setStatus('processing');
+    setMessage('Checking the original Paystack transaction again…');
+    timeline.start();
+
+    const result = await verifyPayment(reference);
+    if (result.success || result.status === 'success') {
+      await handleSuccess(reference, result.amount, result.message);
+      return;
+    }
+
+    const failStatus = result.status?.toLowerCase() || '';
+    timeline.fail();
+    if (failStatus === 'abandoned') {
+      setStatus('cancelled');
+      setMessage(result.message || 'Payment was cancelled or abandoned.');
+      return;
+    }
+
+    setStatus('failed');
+    setMessage(result.message || 'Paystack has not confirmed this payment yet. You have not been charged again.');
+  };
   const handleChooseAnother = () => navigate('/wallet');
 
   const cancelAutoRedirect = () => {
@@ -439,7 +461,7 @@ export default function PaymentCallbackPage() {
             )}
             <div className="space-y-2 w-full mt-4">
               <button onClick={handleRetry} className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2">
-                <RefreshCw className="w-4 h-4" />Retry Payment
+                <RefreshCw className="w-4 h-4" />Check Payment Again
               </button>
               {availableGateways.length > 1 && (
                 <button onClick={handleChooseAnother} className="w-full py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2">
