@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabase';
 
+export interface PaystackBank {
+  id?: number | null;
+  name: string;
+  slug?: string | null;
+  code: string;
+  longcode?: string | null;
+  type?: string | null;
+  active?: boolean;
+  country?: string | null;
+  currency?: string | null;
+}
+
 export interface BankAccount {
   id: string;
   user_id: string;
@@ -108,7 +120,7 @@ export async function verifyBankAccount(
   accountId: string,
   _accountNumber: string,
   _bankCode: string
-): Promise<{ success: boolean; verified: boolean; account_name?: string; error?: string }> {
+): Promise<{ success: boolean; verified: boolean; account_name?: string; bank_name?: string; bank_code?: string; error?: string }> {
   const { data, error } = await supabase.functions.invoke('paystack-bank-account', {
     body: { account_id: accountId },
   });
@@ -121,6 +133,8 @@ export async function verifyBankAccount(
     success?: boolean;
     verified?: boolean;
     account_name?: string;
+    bank_name?: string;
+    bank_code?: string;
     error?: string;
   } | null;
 
@@ -136,6 +150,28 @@ export async function verifyBankAccount(
     success: true,
     verified: true,
     account_name: result.account_name,
+    bank_name: result.bank_name,
+    bank_code: result.bank_code,
+  };
+}
+
+export async function fetchPaystackBanks(): Promise<{ banks: PaystackBank[]; source: 'paystack' | 'fallback'; error?: string }> {
+  const { data, error } = await supabase.functions.invoke('paystack-banks', {
+    body: {},
+  });
+
+  const result = data as { success?: boolean; banks?: PaystackBank[]; error?: string } | null;
+  if (!error && result?.success && Array.isArray(result.banks) && result.banks.length > 0) {
+    return {
+      banks: [...result.banks].sort((a, b) => a.name.localeCompare(b.name)),
+      source: 'paystack',
+    };
+  }
+
+  return {
+    banks: NIGERIAN_BANKS,
+    source: 'fallback',
+    error: result?.error || error?.message || 'Unable to load Paystack bank directory',
   };
 }
 
@@ -156,40 +192,30 @@ export function useBankAccounts(userId: string | undefined) {
   return { accounts, loading, reload: load };
 }
 
-// Common Nigerian banks with Paystack codes
-export const NIGERIAN_BANKS: Array<{ code: string; name: string }> = [
+// Conservative fallback only. The UI normally loads Paystack's live Nigerian
+// bank/MFB directory through the paystack-banks Edge Function.
+export const NIGERIAN_BANKS: PaystackBank[] = [
   { code: '044', name: 'Access Bank' },
-  { code: '035A', name: 'ALAT by WEMA' },
-  { code: '401', name: 'ASO Savings and Loans' },
+  { code: '023', name: 'Citibank Nigeria' },
   { code: '050', name: 'Ecobank Nigeria' },
+  { code: '070', name: 'Fidelity Bank' },
   { code: '011', name: 'First Bank of Nigeria' },
   { code: '214', name: 'First City Monument Bank' },
+  { code: '00103', name: 'Globus Bank' },
   { code: '058', name: 'Guaranty Trust Bank' },
-  { code: '070', name: 'Fidelity Bank' },
-  { code: '057', name: 'Zenith Bank' },
-  { code: '032', name: 'Union Bank of Nigeria' },
-  { code: '033', name: 'United Bank For Africa' },
-  { code: '232', name: 'Sterling Bank' },
-  { code: '037', name: 'Polaris Bank' },
-  { code: '215', name: 'Sparkasse Bank' },
-  { code: '221', name: 'Stanbic IBTC Bank' },
-  { code: '063', name: 'Diamond Bank' },
+  { code: '301', name: 'Jaiz Bank' },
   { code: '082', name: 'Keystone Bank' },
-  { code: '030', name: 'Heritage Bank' },
   { code: '076', name: 'Polaris Bank' },
-  { code: '084', name: 'Providus Bank' },
+  { code: '105', name: 'PremiumTrust Bank' },
   { code: '101', name: 'Providus Bank' },
-  { code: '023', name: 'Citibank Nigeria' },
+  { code: '221', name: 'Stanbic IBTC Bank' },
   { code: '068', name: 'Standard Chartered Bank' },
-  { code: '090001', name: 'Kuda Microfinance Bank' },
-  { code: '090267', name: 'Opay' },
-  { code: '090115', name: 'Palmpay' },
-  { code: '090110', name: 'Titan Trust Bank' },
-  { code: '090205', name: 'Rubies Bank' },
-  { code: '090112', name: 'Suntrust Bank' },
-  { code: '090003', name: 'TAJ Bank' },
-  { code: '090097', name: 'Fina Trust MFB' },
-  { code: '090110', name: 'VFD Microfinance Bank' },
-  { code: '999999', name: 'Wema Bank' },
-  { code: '058', name: 'GTBank' },
+  { code: '232', name: 'Sterling Bank' },
+  { code: '100', name: 'SunTrust Bank' },
+  { code: '102', name: 'Titan Trust Bank' },
+  { code: '032', name: 'Union Bank of Nigeria' },
+  { code: '033', name: 'United Bank for Africa' },
+  { code: '215', name: 'Unity Bank' },
+  { code: '035', name: 'Wema Bank' },
+  { code: '057', name: 'Zenith Bank' },
 ];
