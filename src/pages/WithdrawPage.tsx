@@ -43,7 +43,7 @@ export default function WithdrawPage() {
   const [amount, setAmount] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ reference: string; amount: number } | null>(null);
+  const [result, setResult] = useState<{ reference: string; amount: number; status: string; message?: string } | null>(null);
   const [hasPin, setHasPin] = useState(false);
   const { accounts } = useBankAccounts(user?.id);
 
@@ -77,6 +77,10 @@ export default function WithdrawPage() {
   const handleSelectAccount = () => {
     if (!selectedAccount) {
       setError('Please select a bank account');
+      return;
+    }
+    if (!selectedAccount.is_verified || selectedAccount.verification_status !== 'verified' || !selectedAccount.recipient_code) {
+      setError('Verify this bank account with Paystack before withdrawing.');
       return;
     }
     setStep('amount');
@@ -148,6 +152,42 @@ export default function WithdrawPage() {
       return;
     }
 
+    let payoutStatus = 'queued';
+    let payoutMessage = 'Your withdrawal has been queued for processing.';
+
+    if (resultData.withdrawal_id) {
+      const { data: payoutData, error: payoutError } = await supabase.functions.invoke('paystack-withdrawal', {
+        body: { withdrawal_id: resultData.withdrawal_id },
+      });
+
+      if (!payoutError && payoutData) {
+        payoutStatus = String(payoutData.status || 'queued');
+        payoutMessage = String(
+          payoutData.message ||
+          (payoutStatus === 'paid'
+            ? 'Paystack confirmed the transfer.'
+            : payoutStatus === 'processing'
+              ? 'Your bank transfer has been submitted to Paystack.'
+              : payoutStatus === 'manual_review'
+                ? 'Your withdrawal is queued for admin review.'
+                : 'Your withdrawal has been queued for processing.')
+        );
+      } else {
+        const { data: currentWithdrawal } = await supabase
+          .from('withdrawal_requests')
+          .select('status,failure_reason')
+          .eq('id', resultData.withdrawal_id)
+          .maybeSingle();
+
+        if (currentWithdrawal?.status) {
+          payoutStatus = String(currentWithdrawal.status);
+          payoutMessage = currentWithdrawal.failure_reason
+            ? String(currentWithdrawal.failure_reason)
+            : payoutMessage;
+        }
+      }
+    }
+
     // Send notifications
     try {
       const { notifyWithdrawalRequested } = await import('../lib/financialNotifications');
@@ -156,7 +196,12 @@ export default function WithdrawPage() {
       // notifications are non-critical
     }
 
-    setResult({ reference: resultData.reference || '', amount: Math.round(canonicalAmount * 100) / 100 });
+    setResult({
+      reference: resultData.reference || '',
+      amount: Math.round(canonicalAmount * 100) / 100,
+      status: payoutStatus,
+      message: payoutMessage,
+    });
     setStep('success');
   };
 
@@ -172,12 +217,26 @@ export default function WithdrawPage() {
     return (
       <div className="p-4 md:p-8 max-w-md mx-auto">
         <div className="bg-white rounded-3xl border border-gray-100 p-8 text-center">
-          <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mb-4 mx-auto">
-            <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+          <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 mx-auto ${
+            result.status === 'failed' ? 'bg-red-100' : result.status === 'paid' ? 'bg-emerald-100' : 'bg-amber-100'
+          }`}>
+            {result.status === 'failed'
+              ? <AlertCircle className="w-10 h-10 text-red-600" />
+              : result.status === 'paid'
+                ? <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+                : <Clock className="w-10 h-10 text-amber-600" />}
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Withdrawal Submitted</h1>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">
+            {result.status === 'paid'
+              ? 'Withdrawal Completed'
+              : result.status === 'failed'
+                ? 'Withdrawal Not Completed'
+                : result.status === 'processing' || result.status === 'otp_required'
+                  ? 'Withdrawal Processing'
+                  : 'Withdrawal Submitted'}
+          </h1>
           <p className="text-sm text-gray-500 mb-4">
-            Your withdrawal request for <span className="font-semibold text-gray-900">{format(result.amount, walletCurrency)}</span> has been queued for processing.
+            <span className="font-semibold text-gray-900">{format(result.amount, walletCurrency)}</span> — {result.message}
           </p>
           <div className="px-4 py-3 rounded-xl bg-gray-50 mb-4">
             <p className="text-xs text-gray-400">Reference</p>
@@ -186,7 +245,11 @@ export default function WithdrawPage() {
           <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 mb-6 text-left">
             <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-700">
-              Withdrawals are typically processed within 24 hours. You will be notified when it's approved or completed.
+              {result.status === 'failed'
+                ? 'The transfer did not complete. If Paystack failed or reversed it, DRIGHT2 returns the reserved amount to your wallet automatically.'
+                : result.status === 'paid'
+                  ? 'Paystack has confirmed this transfer as successful.'
+                  : 'You will be notified when Paystack or an administrator confirms the final payout status.'}
             </p>
           </div>
           <div className="flex gap-3">
