@@ -45,7 +45,7 @@ export default function WithdrawPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ reference: string; amount: number; status: string; message?: string } | null>(null);
   const [hasPin, setHasPin] = useState(false);
-  const { accounts } = useBankAccounts(user?.id);
+  const { accounts, reload: reloadBankAccounts } = useBankAccounts(user?.id);
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -376,7 +376,7 @@ export default function WithdrawPage() {
             </div>
           )}
 
-          <BankAccountManager compact />
+          <BankAccountManager compact onAccountsChanged={reloadBankAccounts} />
 
           <button
             onClick={handleSelectAccount}
