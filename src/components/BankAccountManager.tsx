@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Trash2, Edit2, Check, Star, X, Shield, Loader2,
   Building2, AlertCircle,
@@ -6,7 +6,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import {
   useBankAccounts, addBankAccount, updateBankAccount, deleteBankAccount,
-  setDefaultBankAccount, verifyBankAccount, NIGERIAN_BANKS, type BankAccount,
+  setDefaultBankAccount, verifyBankAccount, fetchPaystackBanks, NIGERIAN_BANKS,
+  type BankAccount, type PaystackBank,
 } from '../lib/bankAccounts';
 
 interface Props {
@@ -25,6 +26,32 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
   const [saving, setSaving] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [banks, setBanks] = useState<PaystackBank[]>(NIGERIAN_BANKS);
+  const [banksLoading, setBanksLoading] = useState(true);
+  const [bankDirectoryWarning, setBankDirectoryWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadBanks = async () => {
+      setBanksLoading(true);
+      const result = await fetchPaystackBanks();
+      if (cancelled) return;
+      setBanks(result.banks);
+      setBankDirectoryWarning(
+        result.source === 'fallback'
+          ? 'Live Paystack bank list is temporarily unavailable. Showing a limited fallback list.'
+          : null
+      );
+      setBanksLoading(false);
+    };
+    void loadBanks();
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedBank = useMemo(
+    () => banks.find((bank) => bank.code === form.bank_code),
+    [banks, form.bank_code]
+  );
 
   if (!user) return null;
 
@@ -35,8 +62,8 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
   };
 
   const handleSave = async () => {
-    if (!form.bank_name || !form.account_number || !form.account_name) {
-      setError('Please fill all fields');
+    if (!form.bank_code || !form.bank_name || !form.account_number || !form.account_name) {
+      setError('Please select a bank and fill all fields');
       return;
     }
     if (form.account_number.length !== 10) {
@@ -92,6 +119,7 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
     if (result.success) {
       await reload();
       onAccountsChanged?.();
+      setError(null);
     } else {
       setError(result.error || 'Verification failed');
     }
@@ -151,21 +179,27 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
           </div>
 
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-1 block">Bank</label>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Bank / Microfinance Bank</label>
             <select
               value={form.bank_code}
               onChange={(e) => {
-                const bank = NIGERIAN_BANKS.find(b => b.code === e.target.value);
+                const bank = banks.find(b => b.code === e.target.value);
                 setForm({ ...form, bank_code: e.target.value, bank_name: bank?.name || '' });
               }}
-              disabled={!!editing}
+              disabled={!!editing || banksLoading}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
             >
-              <option value="">Select bank...</option>
-              {NIGERIAN_BANKS.map(b => (
+              <option value="">{banksLoading ? 'Loading Paystack banks...' : 'Select bank or MFB...'}</option>
+              {banks.map(b => (
                 <option key={b.code + b.name} value={b.code}>{b.name}</option>
               ))}
             </select>
+            {selectedBank && (
+              <p className="text-[11px] text-gray-400 mt-1">Paystack code: {selectedBank.code}</p>
+            )}
+            {bankDirectoryWarning && (
+              <p className="text-[11px] text-amber-600 mt-1">{bankDirectoryWarning}</p>
+            )}
           </div>
 
           <div>
@@ -205,7 +239,7 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
 
           <button
             onClick={handleSave}
-            disabled={saving || !form.bank_name || !form.account_number || !form.account_name}
+            disabled={saving || banksLoading || !form.bank_code || !form.bank_name || !form.account_number || !form.account_name}
             className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
