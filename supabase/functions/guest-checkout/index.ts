@@ -34,15 +34,32 @@ async function getUsdToNgnRate(): Promise<{ rate: number; source: string }> {
 }
 
 async function verifyTurnstile(token: string, ip: string | null) {
-  const secret = Deno.env.get("TURNSTILE_SECRET") || Deno.env.get("TURNSTILE_SECRET_KEY") || "";
+  const secret =
+    Deno.env.get("TURNSTILE_SECRET") ||
+    Deno.env.get("TURNSTILE_SECRET_KEY") ||
+    Deno.env.get("CLOUDFLARE_TURNSTILE_SECRET") ||
+    Deno.env.get("CLOUDFLARE_TURNSTILE_SECRET_KEY") ||
+    "";
   if (!secret) return { ok: false, status: 503, error: "Security verification is not configured" };
   if (!token) return { ok: false, status: 400, error: "Complete the security verification" };
   const form = new URLSearchParams({ secret, response: token });
-  if (ip) form.set("remoteip", ip);
+  // Supabase Edge Functions may see a proxy address rather than the visitor's
+  // original IP. Turnstile's remoteip is optional, so do not bind otherwise-valid
+  // guest tokens to a potentially incorrect proxy address.
+  void ip;
   const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form.toString() });
   const result = await response.json().catch(() => ({}));
+  const errorCodes = Array.isArray(result?.["error-codes"]) ? result["error-codes"] : [];
+  const { error: verificationLogError } = await db.from("turnstile_verifications").insert({
+    user_id: null,
+    action: "guest_checkout",
+    success: Boolean(result?.success),
+    error_codes: errorCodes.length ? errorCodes : null,
+    verified_at: new Date().toISOString(),
+  });
+  if (verificationLogError) console.warn("[guest-checkout] Turnstile log warning", verificationLogError.message);
   if (!response.ok || !result?.success) {
-    console.warn("[guest-checkout] Turnstile verification failed", result?.["error-codes"] || []);
+    console.warn("[guest-checkout] Turnstile verification failed", errorCodes);
     return { ok: false, status: 403, error: "Security verification failed. Please refresh the challenge and try again." };
   }
   if (result.action && result.action !== "guest_checkout") return { ok: false, status: 403, error: "Security verification action mismatch" };

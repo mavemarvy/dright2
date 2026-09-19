@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Loader2, AlertCircle, Lock, Wallet, Zap, Clock,
@@ -6,19 +6,46 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { getCurrencySymbol } from '../lib/currency';
+import { getCurrencySymbol, tryConvertCurrency } from '../lib/currency';
 import { fetchPaymentProviders, type PaymentProvider } from '../lib/paymentProviders';
 import { saveFundingAmount, fetchPaymentPreferences } from '../lib/paymentPreferences';
 import PaymentProviderCard from '../components/PaymentProviderCard';
 import { initializePayment } from '../lib/paystackService';
 
-const QUICK_AMOUNTS = [500, 1000, 5000, 10000, 20000, 50000];
+const MIN_PAYSTACK_NGN = 100;
+const NGN_QUICK_AMOUNTS = [100, 500, 1000, 5000, 10000, 20000];
+const USD_QUICK_AMOUNTS = [0.1, 0.5, 1, 5, 10, 20];
+
+function roundDisplayAmount(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (value < 1) return Math.ceil(value * 100) / 100;
+  if (value < 100) return Math.round(value * 100) / 100;
+  return Math.round(value);
+}
 
 export default function FundWalletPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { selectedCurrency } = useCurrency();
+  const { selectedCurrency, rates } = useCurrency();
   const currencySymbol = getCurrencySymbol(selectedCurrency);
+
+  const convertAmount = useCallback((value: number, from: string, to: string) => {
+    return tryConvertCurrency(value, from, to, rates);
+  }, [rates]);
+
+  const minimumDisplayAmount = useMemo(() => {
+    if (selectedCurrency === 'NGN') return MIN_PAYSTACK_NGN;
+    const converted = convertAmount(MIN_PAYSTACK_NGN, 'NGN', selectedCurrency);
+    return roundDisplayAmount(converted ?? 0);
+  }, [convertAmount, selectedCurrency]);
+
+  const quickAmounts = useMemo(() => {
+    if (selectedCurrency === 'NGN') return NGN_QUICK_AMOUNTS;
+    if (selectedCurrency === 'USD') return USD_QUICK_AMOUNTS;
+    return NGN_QUICK_AMOUNTS
+      .map((value) => roundDisplayAmount(convertAmount(value, 'NGN', selectedCurrency) ?? 0))
+      .filter((value, index, values) => value > 0 && values.indexOf(value) === index);
+  }, [convertAmount, selectedCurrency]);
   const [providers, setProviders] = useState<PaymentProvider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [selectedProvider, setSelectedProvider] = useState('paystack');
@@ -38,14 +65,18 @@ export default function FundWalletPage() {
 
     if (user) {
       const prefs = await fetchPaymentPreferences(user.id);
-      if (prefs?.recent_amounts?.length) {
+      if (prefs?.preferred_currency === selectedCurrency && prefs?.recent_amounts?.length) {
         setRecentAmounts(prefs.recent_amounts);
+      } else {
+        setRecentAmounts([]);
       }
-      if (prefs?.last_funding_amount) {
+      if (prefs?.preferred_currency === selectedCurrency && prefs?.last_funding_amount) {
         setLastFundingAmount(prefs.last_funding_amount);
+      } else {
+        setLastFundingAmount(null);
       }
     }
-  }, [user]);
+  }, [user, selectedCurrency]);
 
   useEffect(() => {
     loadProviders();
@@ -53,8 +84,14 @@ export default function FundWalletPage() {
 
   const handleFund = async () => {
     const amt = parseFloat(amount);
-    if (!amt || amt < 100) {
-      setError(`Minimum funding amount is ${currencySymbol}100`);
+    if (!amt || amt < minimumDisplayAmount) {
+      setError(`Minimum funding amount is about ${currencySymbol}${minimumDisplayAmount.toLocaleString()}`);
+      return;
+    }
+
+    const ngnAmount = convertAmount(amt, selectedCurrency, 'NGN');
+    if (!ngnAmount || ngnAmount < MIN_PAYSTACK_NGN) {
+      setError(`The selected amount must equal at least ₦${MIN_PAYSTACK_NGN.toLocaleString()} at the current exchange rate.`);
       return;
     }
     if (!user) return;
@@ -64,11 +101,14 @@ export default function FundWalletPage() {
 
     try {
       const result = await initializePayment({
-        amount: amt,
+        amount: Math.round(ngnAmount * 100) / 100,
         purpose: 'wallet_funding',
         metadata: {
           user_id: user.id,
           provider: selectedProvider,
+          display_amount: amt,
+          display_currency: selectedCurrency,
+          authoritative_currency: 'NGN',
           custom_redirect: '/payment/callback',
         },
       });
@@ -80,7 +120,7 @@ export default function FundWalletPage() {
       }
 
       // Save funding amount preference
-      await saveFundingAmount(user.id, amt);
+      await saveFundingAmount(user.id, amt, selectedCurrency);
 
       window.location.href = result.authorization_url;
     } catch (err) {
@@ -90,7 +130,7 @@ export default function FundWalletPage() {
   };
 
   // Determine the most used amount from recent amounts
-  const recommendedAmount = recentAmounts[0] || 5000;
+  const recommendedAmount = recentAmounts[0] || quickAmounts[Math.min(2, Math.max(0, quickAmounts.length - 1))] || minimumDisplayAmount;
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
@@ -125,7 +165,7 @@ export default function FundWalletPage() {
 
             <p className="text-xs font-medium text-gray-400 mt-4 mb-2 uppercase tracking-wide">Quick Amounts</p>
             <div className="grid grid-cols-3 gap-2">
-              {QUICK_AMOUNTS.map((a) => (
+              {quickAmounts.map((a) => (
                 <button
                   key={a}
                   onClick={() => setAmount(a.toString())}
@@ -139,6 +179,9 @@ export default function FundWalletPage() {
                 </button>
               ))}
             </div>
+            <p className="mt-3 text-[11px] text-gray-400">
+              Minimum: about {currencySymbol}{minimumDisplayAmount.toLocaleString()} · Paystack settles wallet funding in NGN and DRIGHT converts from your selected display currency.
+            </p>
           </div>
 
           {/* Recent / Most Used / Recommended */}

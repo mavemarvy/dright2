@@ -108,9 +108,11 @@ export async function saveGatewayPreference(userId: string, gateway: string, amo
   }
 }
 
-export async function saveFundingAmount(userId: string, amount: number): Promise<void> {
+export async function saveFundingAmount(userId: string, amount: number, currency = 'NGN'): Promise<void> {
+  const normalizedCurrency = String(currency || 'NGN').toUpperCase();
   const local = getLocalPrefs();
   local.last_funding_amount = amount;
+  local.preferred_currency = normalizedCurrency;
   setLocalPrefs(local);
 
   try {
@@ -132,6 +134,7 @@ export async function saveFundingAmount(userId: string, amount: number): Promise
         .update({
           last_funding_amount: amount,
           recent_amounts: recentAmounts,
+          preferred_currency: normalizedCurrency,
           updated_at: new Date().toISOString(),
         })
         .eq('user_id', userId);
@@ -142,6 +145,7 @@ export async function saveFundingAmount(userId: string, amount: number): Promise
           user_id: userId,
           last_funding_amount: amount,
           recent_amounts: [amount],
+          preferred_currency: normalizedCurrency,
         });
     }
   } catch {

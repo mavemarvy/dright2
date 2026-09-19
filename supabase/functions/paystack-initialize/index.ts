@@ -177,6 +177,22 @@ Deno.serve(async (req: Request) => {
       paymentCurrency = campaignCurrency;
       referenceId = campaign.id;
       if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) return json({ error: "Payment amount does not match the canonical campaign total", amount: campaignAmount, currency: campaignCurrency }, 409);
+
+      let campaignGatewayAmount = campaignAmount;
+      let campaignFxRate: number | null = null;
+      let campaignFxSource: string | null = null;
+      if (campaignCurrency === "USD") {
+        const fx = await getUsdToNgnRate();
+        campaignFxRate = fx.rate;
+        campaignFxSource = fx.source;
+        campaignGatewayAmount = Math.round(campaignAmount * fx.rate * 100) / 100;
+        gatewayAmountMinor = Math.round(campaignGatewayAmount * 100);
+        gatewayCurrency = "NGN";
+      } else {
+        gatewayAmountMinor = amountMinor;
+        gatewayCurrency = campaignCurrency;
+      }
+
       canonicalMetadata = {
         ...requestedMetadata,
         campaign_id: campaign.id,
@@ -190,11 +206,15 @@ Deno.serve(async (req: Request) => {
         tax_amount: Number(campaign.tax_amount || 0),
         authoritative_amount: campaignAmount,
         authoritative_currency: campaignCurrency,
+        gateway_amount: campaignGatewayAmount,
+        gateway_currency: gatewayCurrency,
+        fx_rate: campaignFxRate,
+        fx_source: campaignFxSource,
         pricing_snapshot: campaign.pricing_snapshot || {},
         provider: "paystack",
       };
     } else {
-      if (!Number.isSafeInteger(amountMinor) || amountMinor < MIN_FUNDING_MINOR) return json({ error: "Minimum amount is 100 NGN" }, 400);
+      if (!Number.isSafeInteger(amountMinor) || amountMinor < MIN_FUNDING_MINOR) return json({ error: "Minimum wallet funding is NGN 100 (or the equivalent in your selected display currency)" }, 400);
       canonicalMetadata = { ...requestedMetadata, user_id: user.id, authoritative_amount: amountMinor / 100 };
     }
 

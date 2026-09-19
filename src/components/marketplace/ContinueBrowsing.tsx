@@ -25,7 +25,7 @@ export default function ContinueBrowsing() {
 
   useEffect(() => {
     (async () => {
-      const ids = recentlyViewed.length > 0 ? recentlyViewed : getRecentlyViewedIds();
+      const ids = Array.from(new Set([...getRecentlyViewedIds(), ...recentlyViewed]));
       if (ids.length === 0) {
         setLoading(false);
         return;

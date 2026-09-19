@@ -230,11 +230,17 @@ export function useRecentlyViewed(userId: string | undefined) {
     const accountIds = Array.from(new Set(
       (data || []).map((row: { product_id: string }) => row.product_id),
     )).slice(0, RECENTLY_VIEWED_ACCOUNT_LIMIT);
-    setRecentlyViewed(accountIds);
+    const localIds = getLocalRecentlyViewedIds();
+    // Browser history is updated synchronously at the moment of the view. Keep it
+    // first so a slower database response can never move the just-viewed product
+    // away from position #1.
+    const mergedIds = Array.from(new Set([...localIds, ...accountIds]))
+      .slice(0, RECENTLY_VIEWED_ACCOUNT_LIMIT);
+    setRecentlyViewed(mergedIds);
 
     // Keep one browser history as the local continuity/fallback store. This also
     // means signing out does not erase products the person just viewed while signed in.
-    setLocalRecentlyViewedIds([...accountIds, ...getLocalRecentlyViewedIds()]);
+    setLocalRecentlyViewedIds(mergedIds);
   }, [userId]);
 
   useEffect(() => { void fetchRecentlyViewed(); }, [fetchRecentlyViewed]);
