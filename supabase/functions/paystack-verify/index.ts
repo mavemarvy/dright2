@@ -154,7 +154,7 @@ Deno.serve(async (req: Request) => {
         .is("processed_at", null);
 
       if (result?.idempotent !== true) {
-        await db.from("notifications").insert({
+        const { error: notificationError } = await db.from("notifications").insert({
           user_id: tx.user_id,
           notification_type: "payment_success",
           title: tx.purpose === "promotion_campaign" ? "Promotion Payment Successful" : "Payment Successful",
@@ -170,7 +170,8 @@ Deno.serve(async (req: Request) => {
             campaign_id: tx.purpose === "promotion_campaign" ? tx.reference_id : undefined,
             channel: verified.data.channel,
           },
-        }).catch(() => {});
+        });
+        if (notificationError) console.warn("[paystack-verify] notification failed", notificationError.message);
       }
 
       return json({

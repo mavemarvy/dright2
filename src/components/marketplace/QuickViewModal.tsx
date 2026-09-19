@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { MarketplaceProduct } from './ProductCard';
 import { formatCurrency } from '../../lib/currency';
+import { getBuyerFacingPrice } from '../../lib/pricing';
 
 interface QuickViewModalProps {
   product: MarketplaceProduct | null;
@@ -131,9 +132,9 @@ export default function QuickViewModal({
                     <span className="text-2xl font-bold text-success">FREE</span>
                   ) : (
                     <>
-                      <span className="text-2xl font-bold text-gray-900">{formatCurrency(product.price)}</span>
-                      {product.old_price && product.old_price > product.price && (
-                        <span className="text-base text-gray-400 line-through">{formatCurrency(product.old_price)}</span>
+                      <span className="text-2xl font-bold text-gray-900">{formatCurrency(getBuyerFacingPrice(product))}</span>
+                      {product.old_price && getBuyerFacingPrice(product, product.old_price) > getBuyerFacingPrice(product) && (
+                        <span className="text-base text-gray-400 line-through">{formatCurrency(getBuyerFacingPrice(product, product.old_price))}</span>
                       )}
                     </>
                   )}
@@ -222,7 +223,7 @@ export default function QuickViewModal({
                           </div>
                           <p className="text-xs font-medium text-gray-700 mt-1.5 line-clamp-2">{rp.name}</p>
                           <p className="text-xs font-bold text-gray-900">
-                            {rp.is_free ? 'FREE' : formatCurrency(rp.price)}
+                            {rp.is_free ? 'FREE' : formatCurrency(getBuyerFacingPrice(rp))}
                           </p>
                         </Link>
                       ))}

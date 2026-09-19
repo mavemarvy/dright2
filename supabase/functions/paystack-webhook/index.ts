@@ -134,7 +134,7 @@ Deno.serve(async (req: Request) => {
         await sendPaymentNotification(db, tx, expectedAmount, expectedCurrency, ref, verified.data.channel);
       }
 
-      await db.from("analytics_events").insert({
+      const { error: analyticsError } = await db.from("analytics_events").insert({
         event_type: "payment_success",
         entity_type: "paystack_transaction",
         entity_id: tx.id,
@@ -149,7 +149,8 @@ Deno.serve(async (req: Request) => {
           channel: verified.data.channel,
           source: "paystack_webhook",
         },
-      }).catch(() => {});
+      });
+      if (analyticsError) console.warn("[paystack-webhook] analytics insert failed", analyticsError.message);
     } else if ([
       "refund.pending",
       "refund.processing",
@@ -177,7 +178,7 @@ Deno.serve(async (req: Request) => {
       "charge.dispute.remind",
       "charge.dispute.resolve",
     ].includes(event.event)) {
-      await db.from("analytics_events").insert({
+      const { error: disputeAnalyticsError } = await db.from("analytics_events").insert({
         event_type: event.event,
         entity_type: "paystack_transaction",
         metadata: {
@@ -185,7 +186,8 @@ Deno.serve(async (req: Request) => {
           source: "paystack_webhook",
           payload: d,
         },
-      }).catch(() => {});
+      });
+      if (disputeAnalyticsError) console.warn("[paystack-webhook] dispute analytics insert failed", disputeAnalyticsError.message);
     } else if (event.event === "charge.failed") {
       if (d.reference) {
         await db.from("paystack_transactions").update({
@@ -233,7 +235,7 @@ async function sendPaymentNotification(
 ) {
   const funding = tx.purpose === "wallet_funding" || tx.purpose === "advertiser_funding";
   const promotion = tx.purpose === "promotion_campaign";
-  await db.from("notifications").insert({
+  const { error: buyerNotificationError } = await db.from("notifications").insert({
     user_id: tx.user_id,
     notification_type: "payment_success",
     title: promotion ? "Promotion Payment Successful" : funding ? "Wallet Funded Successfully" : "Payment Successful",
@@ -251,7 +253,8 @@ async function sendPaymentNotification(
       campaign_id: promotion ? tx.reference_id : null,
       channel,
     },
-  }).catch(() => {});
+  });
+  if (buyerNotificationError) console.warn("[paystack-webhook] buyer notification failed", buyerNotificationError.message);
 
   if ((tx.purpose === "product_purchase" || tx.purpose === "escrow") && tx.reference_id) {
     const { data: order } = await db.from("sales_records")
@@ -259,14 +262,15 @@ async function sendPaymentNotification(
       .eq("order_id", tx.reference_id)
       .maybeSingle();
     if (order?.seller_id) {
-      await db.from("notifications").insert({
+      const { error: sellerNotificationError } = await db.from("notifications").insert({
         user_id: order.seller_id,
         notification_type: "new_order",
         title: "New Order Received!",
         message: `You received a new order for ${order.product_name || "your product"}.`,
         priority: "high",
         metadata: { reference, amount, orderId: tx.reference_id },
-      }).catch(() => {});
+      });
+      if (sellerNotificationError) console.warn("[paystack-webhook] seller notification failed", sellerNotificationError.message);
     }
   }
 }

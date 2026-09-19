@@ -13,7 +13,7 @@ import { trackListingEvent } from '../lib/marketplaceAnalytics';
 import { trackProductView } from '../lib/analyticsService';
 import { generateAffiliateLink, copyToClipboard } from '../lib/affiliate';
 import {
-  fetchSystemConfig, calculateSubscriptionTotal,
+  fetchSystemConfig, calculateSubscriptionTotal, getBuyerFacingPrice,
   ALL_TIERS, DURATIONS,
   type SalesTeamTier, type Duration, type SystemConfig,
 } from '../lib/pricing';
@@ -129,8 +129,8 @@ export default function MarketPage() {
       .from('products')
       .select(`
         id, name, description, price, commission_rate, image_url, category,
-        uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
-        initial_stock, product_type, demo_video_url, total_reviews,
+        uploaded_by, created_at, sales_team_tier, admin_task_percent, sales_team_task_percent,
+        is_free, stock_quantity, initial_stock, product_type, demo_video_url, total_reviews,
         average_rating, total_sales, view_count, is_featured, is_sponsored
       `)
       .eq('is_active', true)
@@ -272,7 +272,7 @@ export default function MarketPage() {
         fuzzyMatch(syn, p.category, 2) || fuzzyMatch(syn, p.seller_name ?? '', 2)
       );
       if (!matchesSearch) return false;
-      if (parsed.priceMax && p.price > parsed.priceMax) return false;
+      if (parsed.priceMax && getBuyerFacingPrice(p) > parsed.priceMax) return false;
     }
     if (filters.category !== 'All') {
       const cat = MARKETPLACE_CATEGORIES.find(c => c.name === filters.category);
@@ -282,8 +282,8 @@ export default function MarketPage() {
       } else if (p.category !== filters.category) return false;
     }
     if (filters.location && !(p.description ?? '').toLowerCase().includes(filters.location.toLowerCase())) return false;
-    if (filters.priceMin && p.price < parseFloat(filters.priceMin)) return false;
-    if (filters.priceMax && p.price > parseFloat(filters.priceMax)) return false;
+    if (filters.priceMin && getBuyerFacingPrice(p) < parseFloat(filters.priceMin)) return false;
+    if (filters.priceMax && getBuyerFacingPrice(p) > parseFloat(filters.priceMax)) return false;
     if (filters.productType && p.product_type !== filters.productType) return false;
     if (filters.verifiedSeller && !p.seller_verified) return false;
     if (filters.minRating > 0 && (p.average_rating ?? 0) < filters.minRating) return false;
@@ -298,8 +298,8 @@ export default function MarketPage() {
     return [...filteredProducts].sort((a, b) => {
       switch (filters.sortBy) {
         case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        case 'price_asc': return a.price - b.price;
-        case 'price_desc': return b.price - a.price;
+        case 'price_asc': return getBuyerFacingPrice(a) - getBuyerFacingPrice(b);
+        case 'price_desc': return getBuyerFacingPrice(b) - getBuyerFacingPrice(a);
         case 'commission_desc': return ((b.is_free ? 0 : b.price * b.commission_rate) / 100) - ((a.is_free ? 0 : a.price * a.commission_rate) / 100);
         case 'best_selling': return (b.total_sales ?? 0) - (a.total_sales ?? 0);
         case 'trending':

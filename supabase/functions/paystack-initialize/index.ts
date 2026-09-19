@@ -171,10 +171,11 @@ Deno.serve(async (req: Request) => {
 
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
     const userAgent = req.headers.get("user-agent") || null;
-    await supabase.from("payment_attempts").insert({
+    const { error: attemptError } = await supabase.from("payment_attempts").insert({
       user_id: user.id, reference, provider: "paystack", amount: amountMajor, currency: paymentCurrency,
       status: "initialized", purpose, ip_address: ip, device_info: userAgent, user_agent: userAgent, metadata: canonicalMetadata,
-    }).then(() => {}).catch(() => {});
+    });
+    if (attemptError) log("WARN", "Unable to record payment attempt", { error: attemptError.message, reference });
 
     const paystackRes = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
       method: "POST",

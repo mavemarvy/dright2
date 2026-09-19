@@ -11,6 +11,7 @@ import { getProductBadges, type ProductBadge } from '../../lib/marketplace';
 import { ProfileLink } from '../Social';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/currency';
+import { getBuyerFacingPrice } from '../../lib/pricing';
 
 export interface MarketplaceProduct {
   id: string;
@@ -24,6 +25,8 @@ export interface MarketplaceProduct {
   uploaded_by: string;
   created_at: string;
   sales_team_tier?: string | null;
+  admin_task_percent?: number | null;
+  sales_team_task_percent?: number | null;
   is_free?: boolean;
   stock_quantity?: number | null;
   initial_stock?: number | null;
@@ -109,9 +112,11 @@ export default function ProductCard({
     is_sponsored: product.is_sponsored,
   });
 
+  const displayPrice = getBuyerFacingPrice(product);
+  const displayOldPrice = product.old_price ? getBuyerFacingPrice(product, product.old_price) : null;
   const commission = product.is_free ? 0 : (product.price * product.commission_rate) / 100;
-  const discountPercent = product.discount_percent ?? (product.old_price && product.old_price > product.price
-    ? Math.round(((product.old_price - product.price) / product.old_price) * 100)
+  const discountPercent = product.discount_percent ?? (displayOldPrice && displayOldPrice > displayPrice
+    ? Math.round(((displayOldPrice - displayPrice) / displayOldPrice) * 100)
     : 0);
 
   const handleImgError = useCallback(() => setImgLoaded(true), []);
@@ -272,18 +277,18 @@ export default function ProductCard({
           ) : isJob ? (
             <div className="flex flex-col">
               <span className="text-xs text-gray-400">Salary</span>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(product.price)}</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(displayPrice)}</span>
             </div>
           ) : isService ? (
             <div className="flex flex-col">
               <span className="text-xs text-gray-400 dark:text-gray-500">Starting at</span>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(product.price)}</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(displayPrice)}</span>
             </div>
           ) : (
             <>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(product.price)}</span>
-              {product.old_price && product.old_price > product.price && (
-                <span className="text-sm text-gray-400 dark:text-gray-500 line-through">{formatCurrency(product.old_price)}</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(displayPrice)}</span>
+              {displayOldPrice && displayOldPrice > displayPrice && (
+                <span className="text-sm text-gray-400 dark:text-gray-500 line-through">{formatCurrency(displayOldPrice)}</span>
               )}
             </>
           )}

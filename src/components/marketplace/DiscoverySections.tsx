@@ -12,11 +12,12 @@ import { getRecentlyViewedIds } from '../../lib/marketplace';
 import { fetchSponsoredListings, logSponsoredImpression } from '../../lib/promotionEngine';
 import type { MarketplaceProduct } from './ProductCard';
 import { formatCurrency } from '../../lib/currency';
+import { getBuyerFacingPrice } from '../../lib/pricing';
 
 const PRODUCT_SELECT = `
   id, name, description, price, commission_rate, image_url, category,
-  uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
-  initial_stock, product_type, demo_video_url, total_reviews,
+  uploaded_by, created_at, sales_team_tier, admin_task_percent, sales_team_task_percent,
+  is_free, stock_quantity, initial_stock, product_type, demo_video_url, total_reviews,
   average_rating, total_sales, view_count, is_featured, is_sponsored
 `;
 
@@ -244,7 +245,7 @@ function ProductRow({
                   <p className="text-xs text-gray-400 mt-0.5">{product.category}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-gray-900">
-                      {product.is_free ? 'FREE' : formatCurrency(product.price)}
+                      {product.is_free ? 'FREE' : formatCurrency(getBuyerFacingPrice(product))}
                     </span>
                     {(product.average_rating ?? 0) > 0 && (
                       <div className="flex items-center gap-0.5">

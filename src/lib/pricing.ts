@@ -317,3 +317,30 @@ export function calculateCheckoutPricing(input: CheckoutPricingInput): CheckoutP
     isFreeOrder: finalPrice === 0,
   };
 }
+
+
+export interface BuyerFacingListingPrice {
+  price: number;
+  is_free?: boolean | null;
+  admin_task_percent?: number | null;
+  sales_team_task_percent?: number | null;
+}
+
+/**
+ * Canonical buyer-facing listing price used by marketplace discovery surfaces.
+ * Mirrors checkout/product-detail pricing for the base listing price:
+ * a Sales Team task replaces the Admin Task when present.
+ */
+export function getBuyerFacingPrice(
+  listing: BuyerFacingListingPrice,
+  basePriceOverride?: number | null,
+): number {
+  const basePrice = Number(basePriceOverride ?? listing.price ?? 0);
+  if (listing.is_free || !Number.isFinite(basePrice) || basePrice <= 0) return 0;
+
+  const salesTeamTaskPercent = Number(listing.sales_team_task_percent || 0);
+  const adminTaskPercent = Number(listing.admin_task_percent || 0);
+  const effectiveTaskPercent = salesTeamTaskPercent > 0 ? salesTeamTaskPercent : adminTaskPercent;
+
+  return basePrice + (basePrice * effectiveTaskPercent) / 100;
+}

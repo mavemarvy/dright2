@@ -422,7 +422,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 9. Seller notification remains best-effort and does not affect order creation.
-    await supabase.from("notifications").insert({
+    const { error: sellerNotificationError } = await supabase.from("notifications").insert({
       user_id: product.uploaded_by,
       title: "New Order Received!",
       message: `A customer purchased "${product.name}" for ${finalPrice.toFixed(2)}.`,
@@ -445,9 +445,10 @@ Deno.serve(async (req: Request) => {
       is_read: false,
       is_archived: false,
       is_deleted: false,
-    }).catch(() => {});
+    });
+    if (sellerNotificationError) console.warn("[checkout] seller notification failed", sellerNotificationError.message);
 
-    await supabase.from("notification_event_log").insert({
+    const { error: notificationLogError } = await supabase.from("notification_event_log").insert({
       event_type: "marketplace.product_purchased",
       module: "marketplace",
       actor_id: buyerId,
@@ -470,7 +471,8 @@ Deno.serve(async (req: Request) => {
         team_lead_id: teamLeadId,
       },
       processed: true,
-    }).catch(() => {});
+    });
+    if (notificationLogError) console.warn("[checkout] notification event log failed", notificationLogError.message);
 
     return json({
       success: true,
