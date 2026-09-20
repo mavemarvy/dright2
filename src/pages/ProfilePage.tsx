@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
   User,
   Mail,
@@ -11,10 +11,8 @@ import {
   Check,
   ChevronRight,
   Wallet,
-  DollarSign,
   ArrowUpRight,
   Shield,
-  AlertCircle,
   Loader2,
   History,
   ShieldAlert,
@@ -29,6 +27,12 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { supabase } from '../lib/supabase';
 import SalesTeamSection from '../components/SalesTeamSection';
 import { useFollowStats, useFriendsCount } from '../lib/socialHooks';
+import {
+  getWalletSummary,
+  getOrCreateWallet,
+  type WalletSummary as TWalletSummary,
+} from '../lib/walletEngine';
+import { fetchBankAccounts, type BankAccount } from '../lib/bankAccounts';
 
 interface WithdrawalRequest {
   id: string;
@@ -37,31 +41,26 @@ interface WithdrawalRequest {
   status: string;
   created_at: string;
   admin_notes: string | null;
+  reference?: string | null;
+  bank_account_id?: string | null;
 }
 
 export default function ProfilePage() {
   const { user, profile, signOut, refreshProfile, isAdmin, isAccountLocked, isAccountBanned } = useAuth();
+  const navigate = useNavigate();
   const { format: formatWithCurrency } = useCurrency();
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
+  const [walletSummary, setWalletSummary] = useState<TWalletSummary | null>(null);
+  const [payoutAccount, setPayoutAccount] = useState<BankAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
-    account_number: '',
     location: '',
     preferred_currency: 'USD',
   });
   const [saving, setSaving] = useState(false);
-
-  // Withdrawal state
-  const [showWithdrawalForm, setShowWithdrawalForm] = useState(false);
-  const [withdrawalAmount, setWithdrawalAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
-  const [accountDetails, setAccountDetails] = useState('');
-  const [withdrawalError, setWithdrawalError] = useState<string | null>(null);
-  const [withdrawalSuccess, setWithdrawalSuccess] = useState(false);
-  const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false);
 
   // Social stats
   const { followers, following } = useFollowStats(user?.id);
@@ -97,7 +96,6 @@ export default function ProfilePage() {
       setFormData({
         full_name: profile.full_name || '',
         phone: profile.phone || '',
-        account_number: profile.account_number || '',
         location: profile.location || '',
         preferred_currency: profile.preferred_currency || 'USD',
       });
@@ -105,20 +103,36 @@ export default function ProfilePage() {
   }, [profile]);
 
   const fetchData = async () => {
+    if (!user?.id) return;
     try {
-      // Fetch withdrawal requests
-      const { data: withdrawalData } = await supabase
-        .from('withdrawal_requests')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      await getOrCreateWallet(user.id);
+
+      const [{ data: withdrawalData }, summary, bankAccounts] = await Promise.all([
+        supabase
+          .from('withdrawal_requests')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        getWalletSummary(user.id),
+        fetchBankAccounts(user.id),
+      ]);
 
       if (withdrawalData) {
         setWithdrawals(withdrawalData as WithdrawalRequest[]);
       }
+      setWalletSummary(summary);
+
+      const verifiedAccounts = bankAccounts.filter(
+        (account) => account.is_verified && account.verification_status === 'verified'
+      );
+      setPayoutAccount(
+        verifiedAccounts.find((account) => account.is_default) ||
+        verifiedAccounts[0] ||
+        null
+      );
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error fetching profile wallet data:', error);
     } finally {
       setLoading(false);
     }
@@ -132,7 +146,6 @@ export default function ProfilePage() {
         .update({
           full_name: formData.full_name,
           phone: formData.phone || null,
-          account_number: formData.account_number || null,
           location: formData.location || null,
         })
         .eq('id', user?.id);
@@ -204,82 +217,6 @@ export default function ProfilePage() {
     if (avatarInputRef.current) avatarInputRef.current.value = '';
   };
 
-  const handleWithdrawalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setWithdrawalError(null);
-
-    if (isAccountLocked || isAccountBanned) {
-      setWithdrawalError('Your account is restricted. Withdrawals are disabled.');
-      return;
-    }
-
-    const amount = parseFloat(withdrawalAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setWithdrawalError('Enter a valid amount');
-      return;
-    }
-
-    if (amount > (profile?.balance || 0)) {
-      setWithdrawalError('Amount exceeds your available balance');
-      return;
-    }
-
-    if (!accountDetails.trim()) {
-      setWithdrawalError('Enter your payment account details');
-      return;
-    }
-
-    setSubmittingWithdrawal(true);
-    try {
-      const { error } = await supabase.from('withdrawal_requests').insert({
-        user_id: user?.id,
-        amount,
-        payment_method: paymentMethod,
-        account_details: accountDetails.trim(),
-      });
-
-      if (error) throw error;
-
-      // Notify admins about new withdrawal request
-      // Get all active admins
-      const { data: admins } = await supabase
-        .from('users')
-        .select('id')
-        .eq('is_admin', true)
-        .eq('admin_status', 'active');
-
-      if (admins && admins.length > 0) {
-        const adminIds = admins.map(a => a.id);
-        const { emitEventBatch } = await import('../lib/notificationEvents');
-        await emitEventBatch({
-          module: 'wallet',
-          eventType: 'withdrawal_requested',
-          recipientIds: adminIds,
-          actorId: user?.id,
-          metadata: {
-            amount: amount,
-            currency: 'USD',
-            reference: `withdrawal-${Date.now()}`,
-          },
-        });
-      }
-
-      setWithdrawalSuccess(true);
-      setWithdrawalAmount('');
-      setAccountDetails('');
-      setTimeout(() => {
-        setShowWithdrawalForm(false);
-        setWithdrawalSuccess(false);
-        fetchData();
-      }, 2000);
-    } catch (error) {
-      console.error('Error submitting withdrawal:', error);
-      setWithdrawalError('Failed to submit request. Please try again.');
-    } finally {
-      setSubmittingWithdrawal(false);
-    }
-  };
-
   const getInitials = () => {
     if (profile?.full_name) {
       return profile.full_name
@@ -292,7 +229,19 @@ export default function ProfilePage() {
     return profile?.email?.[0]?.toUpperCase() || 'P';
   };
 
-  const formatCurrency = (amount: number) => formatWithCurrency(amount, 'USD');
+  const walletCurrency = walletSummary?.currency || 'NGN';
+  const availableBalance = Number(walletSummary?.balance || 0);
+  const formatWalletAmount = (amount: number) => formatWithCurrency(amount, walletCurrency);
+  const formatWithdrawalAmount = (withdrawal: WithdrawalRequest) => {
+    const isSecureWalletWithdrawal = Boolean(
+      withdrawal.bank_account_id ||
+      withdrawal.reference?.startsWith('WDL-')
+    );
+    return formatWithCurrency(
+      withdrawal.amount,
+      isSecureWalletWithdrawal ? 'NGN' : 'USD'
+    );
+  };
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', {
@@ -351,19 +300,20 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-green-100 text-sm">Available Balance</p>
-            <p className="text-4xl font-bold">{formatCurrency(profile?.balance || 0)}</p>
+            <p className="text-4xl font-bold">{formatWalletAmount(availableBalance)}</p>
+            <p className="text-[11px] text-green-100/80 mt-1">Live wallet ledger balance</p>
           </div>
           <div className="p-3 bg-white dark:bg-gray-800/20 rounded-xl">
             <Wallet className="w-8 h-8" />
           </div>
         </div>
         <button
-          onClick={() => setShowWithdrawalForm(true)}
-          disabled={(profile?.balance || 0) <= 0 || isAccountLocked || isAccountBanned}
+          onClick={() => navigate('/wallet/withdraw')}
+          disabled={availableBalance <= 0 || isAccountLocked || isAccountBanned || walletSummary?.is_frozen === true}
           className="w-full py-3 bg-white dark:bg-gray-800 text-success rounded-xl font-semibold hover:bg-green-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px]"
         >
           <ArrowUpRight className="w-5 h-5" />
-          Request Withdrawal
+          Withdraw with Verified Account
         </button>
       </motion.div>
 
@@ -383,7 +333,7 @@ export default function ProfilePage() {
             {withdrawals.map((w) => (
               <div key={w.id} className="flex items-center justify-between p-4">
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(w.amount)}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatWithdrawalAmount(w)}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(w.created_at)}</p>
                 </div>
                 <div className="text-right flex items-center gap-2">
@@ -580,19 +530,6 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <CreditCard className="w-4 h-4 inline mr-2" />
-                  Account/Payout Number
-                </label>
-                <input
-                  type="text"
-                  value={formData.account_number}
-                  onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 dark:text-gray-100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   <MapPin className="w-4 h-4 inline mr-2" />
                   Location
                 </label>
@@ -626,9 +563,8 @@ export default function ProfilePage() {
                     setFormData({
                       full_name: profile?.full_name || '',
                       phone: profile?.phone || '',
-                      account_number: profile?.account_number || '',
-                  location: profile?.location || '',
-                  preferred_currency: profile?.preferred_currency || 'USD',
+                      location: profile?.location || '',
+                      preferred_currency: profile?.preferred_currency || 'USD',
                     });
                   }}
                   className="px-6 py-3 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:bg-gray-900/50 rounded-xl font-medium transition-colors min-h-[48px]"
@@ -657,24 +593,46 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                <CreditCard className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Payout Account</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">
-                    {profile?.account_number || 'Not set'}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4" /> Location
-                    </span>
-                    <span className={`font-medium ${profile?.location_verified ? 'text-success' : 'text-gray-900 dark:text-gray-100'}`}>
-                      {profile?.location || 'Not set'}
-                      {profile?.location_verified && (
-                        <span className="ml-1.5 text-xs text-success bg-success-muted px-2 py-0.5 rounded-full">Verified</span>
-                      )}
-                    </span>
+              <div className="flex items-start gap-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                <CreditCard className="w-5 h-5 text-gray-400 dark:text-gray-500 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Verified Payout Account</p>
+                    {payoutAccount && (
+                      <span className="text-[10px] font-semibold text-success bg-success-muted px-2 py-0.5 rounded-full">Verified</span>
+                    )}
                   </div>
+                  {payoutAccount ? (
+                    <>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100 mt-1 truncate">{payoutAccount.bank_name}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{payoutAccount.account_name}</p>
+                      <p className="text-xs font-mono text-gray-500 dark:text-gray-400 mt-0.5">
+                        ••••••{payoutAccount.account_number.slice(-4)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="font-medium text-gray-900 dark:text-gray-100 mt-1">Not set</p>
+                  )}
+                  <Link
+                    to="/wallet/withdraw"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2"
+                  >
+                    {payoutAccount ? 'Manage payout accounts' : 'Add verified payout account'}
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                <MapPin className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                <div className="flex-1 flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Location</span>
+                  <span className={`font-medium text-right ${profile?.location_verified ? 'text-success' : 'text-gray-900 dark:text-gray-100'}`}>
+                    {profile?.location || 'Not set'}
+                    {profile?.location_verified && (
+                      <span className="ml-1.5 text-xs text-success bg-success-muted px-2 py-0.5 rounded-full">Verified</span>
+                    )}
+                  </span>
                 </div>
               </div>
 
@@ -724,122 +682,7 @@ export default function ProfilePage() {
         Sign Out
       </motion.button>
 
-      {/* Withdrawal Request Modal */}
-      <AnimatePresence>
-        {showWithdrawalForm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={() => setShowWithdrawalForm(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 bg-success-muted rounded-xl">
-                  <Wallet className="w-6 h-6 text-success" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 dark:text-gray-100">Request Withdrawal</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Available: {formatCurrency(profile?.balance || 0)}</p>
-                </div>
-              </div>
 
-              {withdrawalError && (
-                <div className="bg-error-muted text-error rounded-xl p-3 mb-4 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
-                  {withdrawalError}
-                </div>
-              )}
-
-              {withdrawalSuccess && (
-                <div className="bg-success-muted text-success rounded-xl p-4 mb-4">
-                  Withdrawal request submitted! An admin will review it shortly.
-                </div>
-              )}
-
-              <form onSubmit={handleWithdrawalSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Amount (USD)
-                  </label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      max={profile?.balance || 0}
-                      value={withdrawalAmount}
-                      onChange={(e) => setWithdrawalAmount(e.target.value)}
-                      placeholder="0.00"
-                      required
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 dark:text-gray-100"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Payment Method
-                  </label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 dark:text-gray-100"
-                  >
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <option value="paypal">PayPal</option>
-                    <option value="mobile_money">Mobile Money</option>
-                    <option value="crypto">Cryptocurrency</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Account Details
-                  </label>
-                  <textarea
-                    value={accountDetails}
-                    onChange={(e) => setAccountDetails(e.target.value)}
-                    placeholder="Enter your account number, PayPal email, wallet address, etc."
-                    rows={2}
-                    required
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 dark:text-gray-100 resize-none"
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowWithdrawalForm(false)}
-                    className="flex-1 py-3 border border-gray-200 dark:border-gray-700 rounded-xl font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:bg-gray-900/50 transition-colors min-h-[48px]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingWithdrawal}
-                    className="flex-1 py-3 bg-success text-white rounded-xl font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 min-h-[48px] flex items-center justify-center"
-                  >
-                    {submittingWithdrawal ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      'Submit Request'
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
