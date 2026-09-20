@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Banknote, Search, CheckCircle, XCircle, Clock,
-  Loader2, CreditCard, AlertTriangle, X,
+  Loader2, CreditCard, AlertTriangle, X, Copy, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { emitEvent } from '../../lib/notificationEvents';
@@ -20,8 +20,14 @@ interface WithdrawalRequest {
   processed_at: string | null;
   created_at: string;
   reference?: string | null;
+  bank_account_id?: string | null;
   user_email?: string;
   user_name?: string;
+  bank_name?: string | null;
+  verified_account_number?: string | null;
+  verified_account_name?: string | null;
+  verified_account?: boolean;
+  payout_queue_status?: string | null;
 }
 
 type WithdrawalRpcResult = {
@@ -42,6 +48,7 @@ export default function AdminWithdrawalsPage() {
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [copiedWithdrawalId, setCopiedWithdrawalId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchWithdrawals();
@@ -61,18 +68,47 @@ export default function AdminWithdrawalsPage() {
       if (data && data.length > 0) {
         const rows = data as WithdrawalRequest[];
         const userIds = [...new Set(rows.map((withdrawal) => withdrawal.user_id))];
-        const { data: users, error: usersError } = await supabase
-          .from('users')
-          .select('id, email, full_name')
-          .in('id', userIds);
+        const withdrawalIds = rows.map((withdrawal) => withdrawal.id);
+        const bankAccountIds = [...new Set(rows.map((withdrawal) => withdrawal.bank_account_id).filter(Boolean))] as string[];
+
+        const [{ data: users, error: usersError }, { data: queues, error: queueError }, bankResult] = await Promise.all([
+          supabase.from('users').select('id, email, full_name').in('id', userIds),
+          supabase
+            .from('withdrawal_queue')
+            .select('withdrawal_request_id, account_number, account_name, recipient_code, status')
+            .in('withdrawal_request_id', withdrawalIds),
+          bankAccountIds.length > 0
+            ? supabase.from('bank_accounts').select('id, bank_name, is_verified, verification_status').in('id', bankAccountIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+
         if (usersError) throw usersError;
+        if (queueError) throw queueError;
+        if (bankResult.error) throw bankResult.error;
 
         const userMap = new Map((users || []).map((item) => [item.id, { email: item.email, name: item.full_name }]));
-        setWithdrawals(rows.map((withdrawal) => ({
-          ...withdrawal,
-          user_email: userMap.get(withdrawal.user_id)?.email || 'Unknown',
-          user_name: userMap.get(withdrawal.user_id)?.name || 'Unknown',
-        })));
+        const queueMap = new Map((queues || []).map((item) => [item.withdrawal_request_id, item]));
+        const bankMap = new Map((bankResult.data || []).map((item) => [item.id, item]));
+
+        setWithdrawals(rows.map((withdrawal) => {
+          const queue = queueMap.get(withdrawal.id);
+          const bank = withdrawal.bank_account_id ? bankMap.get(withdrawal.bank_account_id) : null;
+          const fallbackBankName = withdrawal.account_details?.split(' - ')[0] || null;
+          return {
+            ...withdrawal,
+            user_email: userMap.get(withdrawal.user_id)?.email || 'Unknown',
+            user_name: userMap.get(withdrawal.user_id)?.name || 'Unknown',
+            bank_name: bank?.bank_name || fallbackBankName,
+            verified_account_number: queue?.account_number || null,
+            verified_account_name: queue?.account_name || null,
+            verified_account: Boolean(
+              queue?.recipient_code ||
+              bank?.is_verified ||
+              bank?.verification_status === 'verified'
+            ),
+            payout_queue_status: queue?.status || null,
+          };
+        }));
       } else {
         setWithdrawals([]);
       }
@@ -116,7 +152,7 @@ export default function AdminWithdrawalsPage() {
           actorId: user.id,
           metadata: {
             amount: Number(withdrawal.amount),
-            currency: 'USD',
+            currency: 'NGN',
             reference: withdrawal.reference || withdrawal.id,
             reason: reason?.trim() || undefined,
           },
@@ -143,6 +179,62 @@ export default function AdminWithdrawalsPage() {
     await runWithdrawalAction(withdrawal, 'paid');
   };
 
+  const markManualAsPaid = async (withdrawal: WithdrawalRequest) => {
+    if (!user?.id) return;
+
+    const payoutName = withdrawal.verified_account_name || 'the verified account holder';
+    const payoutNumber = withdrawal.verified_account_number || 'the saved account number';
+    const confirmed = window.confirm(
+      `Only continue after you have manually sent ${formatCurrency(Number(withdrawal.amount), 'NGN')} to ${payoutName} (${payoutNumber}). Mark this withdrawal as paid?`
+    );
+    if (!confirmed) return;
+
+    setProcessingId(withdrawal.id);
+    setActionError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-manual-withdrawal-paid', {
+        body: { withdrawal_id: withdrawal.id },
+      });
+      if (error) throw error;
+
+      const result = data as { success?: boolean; error?: string; status?: string } | null;
+      if (!result?.success) throw new Error(result?.error || 'Unable to mark manual withdrawal as paid');
+
+      await emitEvent({
+        module: 'wallet',
+        eventType: 'withdrawal_completed',
+        recipientIds: withdrawal.user_id,
+        actorId: user.id,
+        metadata: {
+          amount: Number(withdrawal.amount),
+          currency: 'NGN',
+          reference: withdrawal.reference || withdrawal.id,
+          method: 'manual_bank_transfer',
+        },
+      });
+
+      await fetchWithdrawals();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to mark manual withdrawal as paid';
+      console.error('Error completing manual withdrawal:', error);
+      setActionError(message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const copyAccountNumber = async (withdrawal: WithdrawalRequest) => {
+    const accountNumber = withdrawal.verified_account_number;
+    if (!accountNumber) return;
+    try {
+      await navigator.clipboard.writeText(accountNumber);
+      setCopiedWithdrawalId(withdrawal.id);
+      window.setTimeout(() => setCopiedWithdrawalId((current) => current === withdrawal.id ? null : current), 1500);
+    } catch {
+      setActionError('Could not copy the account number. Press and hold the number to copy it manually.');
+    }
+  };
+
   const openRejectModal = (withdrawal: WithdrawalRequest) => {
     setSelectedWithdrawal(withdrawal);
     setRejectionReason('');
@@ -166,14 +258,17 @@ export default function AdminWithdrawalsPage() {
     return withdrawal.user_email?.toLowerCase().includes(query)
       || withdrawal.user_name?.toLowerCase().includes(query)
       || withdrawal.payment_method?.toLowerCase().includes(query)
-      || withdrawal.reference?.toLowerCase().includes(query);
+      || withdrawal.reference?.toLowerCase().includes(query)
+      || withdrawal.bank_name?.toLowerCase().includes(query)
+      || withdrawal.verified_account_name?.toLowerCase().includes(query)
+      || withdrawal.verified_account_number?.includes(query);
   });
 
   return (
     <div className="p-4 md:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Withdrawal Requests</h1>
-        <p className="text-gray-500 mt-1">Approve, reject, and complete withdrawals through the audited wallet state machine</p>
+        <p className="text-gray-500 mt-1">Review verified payout details, send bank transfers manually, then mark withdrawals paid</p>
       </div>
 
       {actionError && (
@@ -229,7 +324,7 @@ export default function AdminWithdrawalsPage() {
                 <div className="shrink-0 flex items-center justify-center">
                   <div className="w-20 h-20 bg-gradient-to-br from-success to-green-600 rounded-2xl flex flex-col items-center justify-center text-white">
                     <Banknote className="w-6 h-6 mb-1" />
-                    <span className="text-sm font-bold">{formatCurrency(Number(withdrawal.amount))}</span>
+                    <span className="text-sm font-bold">{formatCurrency(Number(withdrawal.amount), 'NGN')}</span>
                   </div>
                 </div>
 
@@ -249,12 +344,55 @@ export default function AdminWithdrawalsPage() {
                     </div>
                   </div>
 
-                  <div className="bg-gray-50 rounded-xl p-3 mb-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CreditCard className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-700 capitalize">{(withdrawal.payment_method || 'unspecified').replace(/_/g, ' ')}</span>
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-3">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm font-semibold text-blue-900">Manual bank payout details</span>
+                      </div>
+                      {withdrawal.verified_account && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold">
+                          <ShieldCheck className="w-3 h-3" />Verified
+                        </span>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-500 break-words">{withdrawal.account_details || 'No account details supplied'}</p>
+
+                    {withdrawal.verified_account_number && withdrawal.verified_account_name ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-blue-500 font-semibold">Bank</p>
+                          <p className="font-semibold text-gray-900 mt-0.5">{withdrawal.bank_name || 'Verified bank account'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-blue-500 font-semibold">Amount to send</p>
+                          <p className="font-bold text-gray-900 mt-0.5">{formatCurrency(Number(withdrawal.amount), 'NGN')}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-blue-500 font-semibold">Verified account name</p>
+                          <p className="font-semibold text-gray-900 mt-0.5 break-words">{withdrawal.verified_account_name}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-blue-500 font-semibold">Account number</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="font-mono font-bold text-gray-900 text-base select-all">{withdrawal.verified_account_number}</p>
+                            <button
+                              type="button"
+                              onClick={() => void copyAccountNumber(withdrawal)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 text-xs font-medium hover:bg-blue-100"
+                            >
+                              <Copy className="w-3 h-3" />
+                              {copiedWithdrawalId === withdrawal.id ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-600 break-words">{withdrawal.account_details || 'No verified payout details were found for this withdrawal.'}</p>
+                    )}
+
+                    <p className="text-[11px] text-blue-600 mt-3">
+                      Send this exact NGN amount manually. Only mark the withdrawal paid after your bank confirms the transfer.
+                    </p>
                   </div>
 
                   {withdrawal.admin_notes && (
@@ -267,12 +405,19 @@ export default function AdminWithdrawalsPage() {
                     {withdrawal.status === 'pending' && (
                       <>
                         <button
-                          onClick={() => approveWithdrawal(withdrawal)}
-                          disabled={processingId === withdrawal.id || !user?.id}
-                          className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-1"
+                          onClick={() => void markManualAsPaid(withdrawal)}
+                          disabled={processingId === withdrawal.id || !user?.id || !withdrawal.verified_account_number || !withdrawal.verified_account_name}
+                          className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1"
                         >
                           {processingId === withdrawal.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                          Approve
+                          Mark Paid — Manual Transfer
+                        </button>
+                        <button
+                          onClick={() => approveWithdrawal(withdrawal)}
+                          disabled={processingId === withdrawal.id || !user?.id}
+                          className="px-4 py-2 bg-primary-50 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-100 disabled:opacity-50"
+                        >
+                          Approve only
                         </button>
                         <button
                           onClick={() => openRejectModal(withdrawal)}
@@ -286,12 +431,12 @@ export default function AdminWithdrawalsPage() {
                     {withdrawal.status === 'approved' && (
                       <>
                         <button
-                          onClick={() => markAsPaid(withdrawal)}
+                          onClick={() => void markManualAsPaid(withdrawal)}
                           disabled={processingId === withdrawal.id || !user?.id}
                           className="px-4 py-2 bg-success text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 inline-flex items-center gap-1"
                         >
                           {processingId === withdrawal.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                          Mark paid
+                          Mark Paid — Manual Transfer
                         </button>
                         <button
                           onClick={() => openRejectModal(withdrawal)}
