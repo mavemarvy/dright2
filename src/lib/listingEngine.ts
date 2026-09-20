@@ -38,6 +38,9 @@ export interface MarketplaceCategory {
   image_url: string | null;
   sort_order: number;
   is_leaf: boolean;
+  synonyms?: string[];
+  form_template_key?: string | null;
+  moderation_tier?: string | null;
 }
 
 export interface MarketplaceCategoryTreeNode extends MarketplaceCategory {
@@ -132,11 +135,22 @@ export async function fetchMarketplaceListingTypes(): Promise<MarketplaceListing
 export async function fetchMarketplaceCategoryTree(
   listingTypeCode: MarketplaceListingTypeCode
 ): Promise<MarketplaceCategoryTreeNode[]> {
-  const { data, error } = await supabase.rpc('get_marketplace_category_tree', {
+  let data: any[] | null = null;
+
+  const v2 = await supabase.rpc('get_marketplace_category_tree_v2', {
     p_listing_type_code: listingTypeCode,
   });
 
-  if (error || !Array.isArray(data)) return [];
+  if (!v2.error && Array.isArray(v2.data)) {
+    data = v2.data;
+  } else {
+    const legacy = await supabase.rpc('get_marketplace_category_tree', {
+      p_listing_type_code: listingTypeCode,
+    });
+    if (!legacy.error && Array.isArray(legacy.data)) data = legacy.data;
+  }
+
+  if (!data) return [];
 
   return data.map(row => ({
     id: String(row.id),
@@ -149,11 +163,26 @@ export async function fetchMarketplaceCategoryTree(
     image_url: row.image_url ?? null,
     sort_order: Number(row.sort_order ?? 100),
     is_leaf: Boolean(row.is_leaf),
+    synonyms: Array.isArray(row.synonyms) ? row.synonyms.map(String) : [],
+    form_template_key: row.form_template_key ?? null,
+    moderation_tier: row.moderation_tier ?? null,
     depth: Number(row.depth ?? 0),
     path_ids: Array.isArray(row.path_ids) ? row.path_ids.map(String) : [],
     path_names: Array.isArray(row.path_names) ? row.path_names.map(String) : [],
     has_children: Boolean(row.has_children),
   }));
+}
+
+export function marketplaceTaxonomyLevelLabel(depth: number): string {
+  switch (depth) {
+    case 0: return 'Main Category';
+    case 1: return 'Category';
+    case 2: return 'Subcategory';
+    case 3: return 'Mini Category';
+    case 4: return 'Micro Category';
+    case 5: return 'Leaf Category';
+    default: return 'Tiny Category';
+  }
 }
 
 export function getCategoryPath(
