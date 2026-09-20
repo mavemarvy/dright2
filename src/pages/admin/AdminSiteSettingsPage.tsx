@@ -7,7 +7,6 @@ import {
   CheckCircle,
   AlertCircle,
   Globe,
-  Image as ImageIcon,
   Wrench,
   Eye,
   EyeOff,
@@ -23,8 +22,6 @@ import { clearBusinessSettingsCache } from '../../lib/seo';
 interface SiteSettings {
   id: string;
   site_name: string;
-  favicon_url: string | null;
-  logo_url: string | null;
   maintenance_mode: boolean;
 }
 
@@ -67,8 +64,6 @@ export default function AdminSiteSettingsPage() {
   const [savingBusinessFooter, setSavingBusinessFooter] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uploadingFavicon, setUploadingFavicon] = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [communityStats, setCommunityStats] = useState<CommunityStatsSettings | null>(null);
   const [communityLive, setCommunityLive] = useState<CommunityLiveStats | null>(null);
   const [communityLoading, setCommunityLoading] = useState(false);
@@ -201,8 +196,6 @@ export default function AdminSiteSettingsPage() {
         .from('site_settings')
         .update({
           site_name: settings.site_name,
-          favicon_url: settings.favicon_url,
-          logo_url: settings.logo_url,
           maintenance_mode: settings.maintenance_mode,
         })
         .eq('id', settings.id);
@@ -262,35 +255,6 @@ export default function AdminSiteSettingsPage() {
     }
   };
 
-  const uploadImage = async (file: File, type: 'favicon' | 'logo') => {
-    const setUploading = type === 'favicon' ? setUploadingFavicon : setUploadingLogo;
-    setUploading(true);
-    try {
-      const ext = file.name.split('.').pop();
-      const path = `site-assets/${type}-${Date.now()}.${ext}`;
-      const { error: uploadErr } = await supabase.storage
-        .from('product-images')
-        .upload(path, file, { upsert: false });
-
-      if (uploadErr) throw uploadErr;
-
-      const { data: urlData } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(path);
-
-      if (settings) {
-        setSettings({
-          ...settings,
-          [type === 'favicon' ? 'favicon_url' : 'logo_url']: urlData.publicUrl,
-        });
-      }
-    } catch (err) {
-      setError(`Failed to upload ${type}. Please try again.`);
-    } finally {
-      setUploading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -318,7 +282,7 @@ export default function AdminSiteSettingsPage() {
             <Palette className="w-6 h-6 text-warning" />
             Site Settings
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Manage site branding and maintenance mode</p>
+          <p className="text-sm text-gray-500 mt-1">Manage the site name, public information and maintenance mode</p>
         </div>
         <button
           onClick={handleSave}
@@ -361,76 +325,6 @@ export default function AdminSiteSettingsPage() {
             onChange={(e) => setSettings({ ...settings, site_name: e.target.value })}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-warning focus:ring-2 focus:ring-warning/20 outline-none text-gray-900"
           />
-        </div>
-      </div>
-
-      {/* Favicon */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-          <ImageIcon className="w-5 h-5 text-primary-600" />
-          Favicon
-        </h2>
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-xl border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center shrink-0">
-            {settings.favicon_url ? (
-              <img src={settings.favicon_url} alt="Favicon" className="w-full h-full object-cover" />
-            ) : (
-              <ImageIcon className="w-8 h-8 text-gray-300" />
-            )}
-          </div>
-          <label className="flex-1 cursor-pointer">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadImage(file, 'favicon');
-              }}
-            />
-            <div className="px-4 py-3 border-2 border-dashed border-gray-300 hover:border-warning rounded-xl text-center text-sm text-gray-600 hover:bg-warning-muted/30 transition-colors">
-              {uploadingFavicon ? (
-                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-              ) : (
-                'Click to upload favicon'
-              )}
-            </div>
-          </label>
-        </div>
-      </div>
-
-      {/* Logo */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-          <ImageIcon className="w-5 h-5 text-primary-600" />
-          Logo
-        </h2>
-        <div className="flex items-center gap-4">
-          <div className="w-32 h-16 rounded-xl border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center shrink-0">
-            {settings.logo_url ? (
-              <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain" />
-            ) : (
-              <ImageIcon className="w-8 h-8 text-gray-300" />
-            )}
-          </div>
-          <label className="flex-1 cursor-pointer">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadImage(file, 'logo');
-              }}
-            />
-            <div className="px-4 py-3 border-2 border-dashed border-gray-300 hover:border-warning rounded-xl text-center text-sm text-gray-600 hover:bg-warning-muted/30 transition-colors">
-              {uploadingLogo ? (
-                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-              ) : (
-                'Click to upload logo'
-              )}
-            </div>
-          </label>
         </div>
       </div>
 
