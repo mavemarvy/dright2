@@ -27,6 +27,7 @@ export default function PublicAppShell() {
   return (
     <div className="min-h-screen bg-surface-muted">
       <CompactPromoStrip />
+      {/* Starter checkout owns its gated auth actions; do not show duplicate guest navigation here. */}
       {!starterCheckoutRoute && (
         <nav className="sticky top-0 z-40 bg-white border-b border-gray-100 safe-area-top dark:bg-gray-950 dark:border-gray-800">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
