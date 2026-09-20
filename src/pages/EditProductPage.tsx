@@ -59,6 +59,7 @@ export default function EditProductPage() {
   const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
   const [attributeDefinitions, setAttributeDefinitions] = useState<MarketplaceAttributeDefinition[]>([]);
   const [originalExtensionCategoryId, setOriginalExtensionCategoryId] = useState<string | null>(null);
+  const [originalTaxonomyPath, setOriginalTaxonomyPath] = useState<Array<{ id: string; name: string }>>([]);
   const [originalExtensionAttributes, setOriginalExtensionAttributes] = useState<Record<string, unknown>>({});
 
   const [editHistory, setEditHistory] = useState<ProductEditLog[]>([]);
@@ -109,10 +110,12 @@ export default function EditProductPage() {
           const pathNames = Array.isArray(extension.metadata.taxonomy_path)
             ? extension.metadata.taxonomy_path.map(String)
             : [];
-          setSelectedTaxonomyPath(pathIds.map((pathId, index) => ({
+          const restoredPath = pathIds.map((pathId, index) => ({
             id: pathId,
             name: pathNames[index] ?? pathId,
-          })));
+          }));
+          setSelectedTaxonomyPath(restoredPath);
+          setOriginalTaxonomyPath(restoredPath);
         }
       } catch {
         // Additive metadata is best-effort; legacy editing remains available.
@@ -243,7 +246,7 @@ export default function EditProductPage() {
         image_url: product.image_url ?? undefined,
         listing_extension: {
           category_id: originalExtensionCategoryId,
-          taxonomy_path: selectedTaxonomyPath.map(node => ({ id: node.id, name: node.name })),
+          taxonomy_path: originalTaxonomyPath.map(node => ({ id: node.id, name: node.name })),
           dynamic_attributes: editableAttributes(originalExtensionAttributes),
         },
       };
