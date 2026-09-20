@@ -36,6 +36,10 @@ export interface DraftData {
   portfolioLinks: Array<{ platform: string; url: string }>;
   // Image previews (base64 data URLs for offline restore)
   imagePreviews: string[];
+  // Additive listing-engine metadata. Optional so all older drafts remain valid.
+  taxonomyCategoryId?: string | null;
+  taxonomyPath?: Array<{ id: string; name: string }>;
+  dynamicAttributes?: Record<string, unknown>;
 }
 
 export interface Draft {
@@ -263,5 +267,8 @@ export function createDefaultDraftData(): DraftData {
     customizations: [],
     portfolioLinks: [],
     imagePreviews: [],
+    taxonomyCategoryId: null,
+    taxonomyPath: [],
+    dynamicAttributes: {},
   };
 }
