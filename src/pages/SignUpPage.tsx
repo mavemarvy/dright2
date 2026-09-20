@@ -27,6 +27,7 @@ import { createKycProfile, createKycSubmission, uploadKycDocument } from '../lib
 import {
   claimPendingDrightStarterPurchase,
   getDrightStarterSignupEligibility,
+  getDrightStarterSignupPolicy,
   getPendingDrightStarterPurchase,
   isDrightStarterSignupFunnelRequired,
   setPendingDrightStarterPurchase,
@@ -80,6 +81,10 @@ export default function SignUpPage() {
   const [starterGateVerified, setStarterGateVerified] = useState(!starterFlow);
   const [starterGateMessage, setStarterGateMessage] = useState<string | null>(starterFlow ? 'Verifying your DRIGHT Starter payment…' : null);
   const [starterEmailLocked, setStarterEmailLocked] = useState(false);
+  const [starterRequiredProfiles, setStarterRequiredProfiles] = useState<string[]>([
+    'service_provider', 'affiliate', 'marketer', 'employer', 'task_creator', 'task_worker',
+  ]);
+  const [starterProductRequired, setStarterProductRequired] = useState(true);
 
   const country = findCountry(countryIso) ?? COUNTRIES.find((c) => c.iso2 === 'NG')!;
   const filteredCountries = useMemo(() => {
@@ -94,7 +99,14 @@ export default function SignUpPage() {
   const kycRequired = selectedKycRules.some((r) => r.is_required);
 
   useEffect(() => {
-    void Promise.all([loadAgeRules().then(setAgeRules), loadPublicKycRequirements().then(setKycRequirements)]).catch(() => undefined);
+    void Promise.all([
+      loadAgeRules().then(setAgeRules),
+      loadPublicKycRequirements().then(setKycRequirements),
+      getDrightStarterSignupPolicy().then((policy) => {
+        setStarterProductRequired(policy.starterProductRequired);
+        setStarterRequiredProfiles(policy.requiredProfiles);
+      }),
+    ]).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -226,6 +238,9 @@ export default function SignUpPage() {
     }
     if (step === 2) {
       if (profiles.length === 0) return setError('Choose at least one way you want to use DRIGHT.'), false;
+      if (selectedProfilesRequireStarter && !(starterFlow && starterGateVerified)) {
+        return setError('A verified DRIGHT Starter purchase is required for the selected professional role. Buyer access remains free.'), false;
+      }
       const failed = ageFailure();
       if (failed) return setError(`${PROFILE_OPTIONS.find((p) => p.value === failed.profile)?.label ?? failed.profile} requires a minimum age of ${failed.minimum} in your selected country.`), false;
     }
@@ -243,6 +258,8 @@ export default function SignUpPage() {
   const skipCurrent = () => { setError(null); setStep((s) => Math.min(STEPS.length - 1, s + 1)); };
   const back = () => { setError(null); setStep((s) => Math.max(0, s - 1)); };
   const toggleProfile = (value: string) => setProfiles((prev) => prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value]);
+  const selectedProfilesRequireStarter = starterProductRequired
+    && profiles.some((profile) => starterRequiredProfiles.includes(profile));
   const toggleInterest = (value: string) => setInterests((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
 
   const handleCreate = async () => {
@@ -413,7 +430,7 @@ export default function SignUpPage() {
 
             {step === 1 && <div className="space-y-5"><div><label className="label">Username</label><div className="relative"><AtSign className="icon" /><input value={username} onChange={(e) => setUsername(e.target.value)} className="base-input pl-12" placeholder="marvelous" autoCapitalize="none" autoComplete="username" /></div><div className="mt-2 text-xs">{usernameChecking ? <span className="text-gray-400">Checking…</span> : usernameStatus?.available ? <span className="text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> @{usernameStatus.normalized} is available</span> : usernameStatus ? <span className="text-red-600 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> Username unavailable</span> : null}</div>{suggestions.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{suggestions.map((s) => <button key={s} type="button" onClick={() => setUsername(s)} className="px-2.5 py-1 text-xs rounded-full border border-primary-200 text-primary-700 dark:text-primary-300">@{s}</button>)}</div>}</div><div><label className="label">Date of birth <span className="text-gray-400 font-normal">(private)</span></label><div className="relative"><Calendar className="icon" /><input type="date" value={dob} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDob(e.target.value)} className="base-input pl-12" /></div><p className="helper">Your DOB is used for eligibility and is not public by default.</p></div><div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900 text-sm flex items-center gap-3"><span className="text-xl">{countryFlag(country.iso2)}</span><div className="flex-1"><div className="font-semibold text-gray-900 dark:text-gray-100">{country.name}</div><div className="text-xs text-gray-500 dark:text-gray-400">Phone prefix {country.callingCode}</div></div><button type="button" onClick={() => setStep(0)} className="text-xs font-semibold text-primary-600 dark:text-primary-300">Change</button></div></div>}
 
-            {step === 2 && <div><div className="flex items-center gap-2 mb-2"><Briefcase className="w-5 h-5 text-primary-600" /><h2 className="font-bold text-gray-900 dark:text-gray-100">How do you want to use DRIGHT?</h2></div><p className="helper mb-4">One account can hold multiple capabilities. Age and verification requirements are evaluated for every capability you choose.</p><div className="grid sm:grid-cols-2 gap-3">{PROFILE_OPTIONS.map((p) => <button key={p.value} type="button" onClick={() => toggleProfile(p.value)} className={`text-left p-4 rounded-2xl border-2 transition-colors ${profiles.includes(p.value) ? 'border-primary-500 bg-primary-50 dark:bg-primary-950' : 'border-gray-100 dark:border-gray-700'}`}><div className="flex items-center justify-between"><span className="font-semibold text-gray-900 dark:text-gray-100">{p.label}</span>{profiles.includes(p.value) && <CheckCircle2 className="w-5 h-5 text-primary-600" />}</div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{p.description}</p></button>)}</div></div>}
+            {step === 2 && <div><div className="flex items-center gap-2 mb-2"><Briefcase className="w-5 h-5 text-primary-600" /><h2 className="font-bold text-gray-900 dark:text-gray-100">How do you want to use DRIGHT?</h2></div><p className="helper mb-4">One account can hold multiple capabilities. Buyer access remains free. Professional roles marked by Admin require verified Starter access before signup.</p>{selectedProfilesRequireStarter && !(starterFlow && starterGateVerified) && <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4"><p className="text-sm font-bold text-amber-900 dark:text-amber-100">Starter payment required for your selected role</p><p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Continue as Buyer only, or purchase DRIGHT Starter Access to unlock the selected professional capability.</p><Link to="/dright/starter" className="inline-flex mt-3 px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold">Open Starter Access</Link></div>}<div className="grid sm:grid-cols-2 gap-3">{PROFILE_OPTIONS.map((p) => <button key={p.value} type="button" onClick={() => toggleProfile(p.value)} className={`text-left p-4 rounded-2xl border-2 transition-colors ${profiles.includes(p.value) ? 'border-primary-500 bg-primary-50 dark:bg-primary-950' : 'border-gray-100 dark:border-gray-700'}`}><div className="flex items-center justify-between"><span className="font-semibold text-gray-900 dark:text-gray-100">{p.label}</span>{profiles.includes(p.value) && <CheckCircle2 className="w-5 h-5 text-primary-600" />}</div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{p.description}</p>{starterProductRequired && starterRequiredProfiles.includes(p.value) && <p className="text-[10px] font-bold text-amber-600 dark:text-amber-300 mt-2">Starter access required</p>}</button>)}</div></div>}
 
             {step === 3 && <div className="space-y-6"><div className="rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 p-4 flex gap-3"><Clock3 className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" /><div><p className="font-semibold text-blue-900 dark:text-blue-100 text-sm">Answer now or finish later</p><p className="text-xs text-blue-700 dark:text-blue-300 mt-1">You can skip any questionnaire during signup. Incomplete answers are saved as drafts and will appear in Settings → Verification.</p></div></div>{questionnaires.length === 0 ? <div className="text-center py-8 text-gray-500 dark:text-gray-400">No additional questionnaire is required for the selected profile.</div> : questionnaires.map((q) => <section key={q.id}><div className="flex items-center justify-between gap-3"><h3 className="font-bold text-gray-900 dark:text-gray-100">{q.name}</h3><span className={`text-xs px-2 py-1 rounded-full ${questionnaireComplete(q) ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>{questionnaireComplete(q) ? 'Ready to submit' : 'Can finish later'}</span></div>{q.description && <p className="helper mb-3">{q.description}</p>}<div className="space-y-4 mt-3">{q.questions.filter((question) => visible(q, question)).map((question) => <QuestionField key={question.id} question={question} value={answerFor(q, question.question_key)} onChange={(value) => setAnswer(q, question.question_key, value)} />)}</div></section>)}<button type="button" onClick={skipCurrent} className="w-full py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold text-sm">Skip questionnaires for now</button></div>}
 
