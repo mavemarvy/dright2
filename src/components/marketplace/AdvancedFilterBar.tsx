@@ -68,9 +68,15 @@ interface AdvancedFilterBarProps {
   filters: AdvancedFilterState;
   onFilterChange: (filters: AdvancedFilterState) => void;
   resultCount: number;
+  showResultCount?: boolean;
 }
 
-export default function AdvancedFilterBar({ filters, onFilterChange, resultCount }: AdvancedFilterBarProps) {
+export default function AdvancedFilterBar({
+  filters,
+  onFilterChange,
+  resultCount,
+  showResultCount = true,
+}: AdvancedFilterBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
 
@@ -186,9 +192,11 @@ export default function AdvancedFilterBar({ filters, onFilterChange, resultCount
         </button>
 
         {/* Result count */}
-        <span className="text-sm text-gray-400 ml-auto shrink-0 px-2">
-          {resultCount} result{resultCount !== 1 ? 's' : ''}
-        </span>
+        {showResultCount && (
+          <span className="text-sm text-gray-400 ml-auto shrink-0 px-2">
+            {resultCount} result{resultCount !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {/* Expanded filters */}
