@@ -373,9 +373,10 @@ function CategoryExplorer() {
     <section className="py-12 sm:py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          initial={{ y: 10 }}
+          whileInView={{ y: 0 }}
+          viewport={{ once: true, amount: 0.15 }}
+          transition={{ type: 'spring', stiffness: 95, damping: 18 }}
           className="mb-8"
         >
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">Explore the marketplace</h2>
@@ -385,10 +386,10 @@ function CategoryExplorer() {
           {QUICK_CATEGORIES.map((cat, i) => (
             <motion.div
               key={cat.name}
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.05 }}
+              initial={{ y: 10, scale: 0.985 }}
+              whileInView={{ y: 0, scale: 1 }}
+              viewport={{ once: true, amount: 0.12 }}
+              transition={{ type: 'spring', stiffness: 105, damping: 18, delay: i * 0.035 }}
             >
               <Link
                 to={cat.href}
@@ -447,10 +448,10 @@ function ContinueBrowsingSection() {
           {products.map((product, idx) => (
             <motion.div
               key={product.id}
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: Math.min(idx * 0.05, 0.3) }}
+              initial={{ y: 8, scale: 0.99 }}
+              whileInView={{ y: 0, scale: 1 }}
+              viewport={{ once: true, amount: 0.1 }}
+              transition={{ type: 'spring', stiffness: 110, damping: 19, delay: Math.min(idx * 0.03, 0.18) }}
             >
               <Link
                 to={`/product/${product.id}`}
@@ -524,10 +525,10 @@ function RecommendationPreview({ user }: { user: any }) {
           {products.map((product, idx) => (
             <motion.div
               key={product.id}
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: Math.min(idx * 0.05, 0.3) }}
+              initial={{ y: 10, scale: 0.985 }}
+              whileInView={{ y: 0, scale: 1 }}
+              viewport={{ once: true, amount: 0.1 }}
+              transition={{ type: 'spring', stiffness: 105, damping: 18, delay: Math.min(idx * 0.03, 0.18) }}
             >
               <Link
                 to={`/product/${product.id}`}
@@ -581,9 +582,10 @@ function MarketplaceHighlights() {
     <section className="py-12 sm:py-16 bg-gray-50 dark:bg-gray-900/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          initial={{ y: 10 }}
+          whileInView={{ y: 0 }}
+          viewport={{ once: true, amount: 0.15 }}
+          transition={{ type: 'spring', stiffness: 95, damping: 18 }}
           className="mb-8"
         >
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">What's new on Dright</h2>
@@ -593,10 +595,10 @@ function MarketplaceHighlights() {
           {HIGHLIGHTS.map((item, i) => (
             <motion.div
               key={item.title}
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
+              initial={{ y: 10, scale: 0.985 }}
+              whileInView={{ y: 0, scale: 1 }}
+              viewport={{ once: true, amount: 0.12 }}
+              transition={{ type: 'spring', stiffness: 105, damping: 18, delay: i * 0.05 }}
               className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 hover:shadow-md card-hover transition-all"
             >
               <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mb-4">
@@ -709,9 +711,10 @@ function QuickAccess({ user }: { user: any }) {
     <section className="py-12 sm:py-16 bg-gray-50 dark:bg-gray-900/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          initial={{ y: 10 }}
+          whileInView={{ y: 0 }}
+          viewport={{ once: true, amount: 0.15 }}
+          transition={{ type: 'spring', stiffness: 95, damping: 18 }}
           className="mb-8"
         >
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">Quick actions</h2>
@@ -721,10 +724,10 @@ function QuickAccess({ user }: { user: any }) {
           {visibleActions.map((action, i) => (
             <motion.div
               key={action.label}
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.05 }}
+              initial={{ y: 10, scale: 0.985 }}
+              whileInView={{ y: 0, scale: 1 }}
+              viewport={{ once: true, amount: 0.12 }}
+              transition={{ type: 'spring', stiffness: 105, damping: 18, delay: i * 0.035 }}
             >
               <Link
                 to={action.href}
