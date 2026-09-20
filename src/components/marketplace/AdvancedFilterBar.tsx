@@ -20,6 +20,12 @@ import {
   MARKETPLACE_CARD_SIZE_LABELS,
   type MarketplaceCardSize,
 } from '../../lib/marketplaceLayout';
+import TaxonomyCategoryPicker from '../listing/TaxonomyCategoryPicker';
+import DynamicListingFilterFields from './DynamicListingFilterFields';
+import type {
+  MarketplaceAttributeDefinition,
+  MarketplaceListingTypeCode,
+} from '../../lib/listingEngine';
 
 export interface AdvancedFilterState {
   category: string;
@@ -36,6 +42,8 @@ export interface AdvancedFilterState {
   sortBy: string;
   hasDiscount: boolean;
   freeDelivery: boolean;
+  taxonomyCategoryId: string;
+  attributeFilters: Record<string, unknown>;
 }
 
 export const DEFAULT_FILTER_STATE: AdvancedFilterState = {
@@ -53,6 +61,8 @@ export const DEFAULT_FILTER_STATE: AdvancedFilterState = {
   sortBy: 'newest',
   hasDiscount: false,
   freeDelivery: false,
+  taxonomyCategoryId: '',
+  attributeFilters: {},
 };
 
 const PRODUCT_TYPES = [
@@ -89,6 +99,8 @@ interface AdvancedFilterBarProps {
   onSearchQueryChange?: (query: string) => void;
   cardSize?: MarketplaceCardSize;
   onCardSizeChange?: (size: MarketplaceCardSize) => void;
+  taxonomyEnabled?: boolean;
+  dynamicFilterDefinitions?: MarketplaceAttributeDefinition[];
 }
 
 export default function AdvancedFilterBar({
@@ -101,6 +113,8 @@ export default function AdvancedFilterBar({
   onSearchQueryChange,
   cardSize = 'medium',
   onCardSizeChange,
+  taxonomyEnabled = false,
+  dynamicFilterDefinitions = [],
 }: AdvancedFilterBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -179,6 +193,10 @@ export default function AdvancedFilterBar({
     filters.availability,
     filters.hasDiscount,
     filters.freeDelivery,
+    filters.taxonomyCategoryId,
+    ...Object.values(filters.attributeFilters).map(value =>
+      Array.isArray(value) ? value.length > 0 : value !== '' && value !== null && value !== undefined
+    ),
   ].filter(Boolean).length;
 
   const update = (partial: Partial<AdvancedFilterState>) => {
@@ -253,6 +271,10 @@ export default function AdvancedFilterBar({
 
   const sortLabel = SORT_OPTIONS.find(o => o.value === filters.sortBy)?.label ?? 'Sort';
   const cardSizeIndex = Math.max(0, MARKETPLACE_CARD_SIZES.indexOf(cardSize));
+  const taxonomyListingType: MarketplaceListingTypeCode | null =
+    ['PHYSICAL', 'DIGITAL', 'SERVICE', 'COURSE'].includes(filters.productType)
+      ? filters.productType as MarketplaceListingTypeCode
+      : null;
 
   const updateSortMenuPosition = useCallback(() => {
     const button = sortButtonRef.current;
@@ -348,7 +370,11 @@ export default function AdvancedFilterBar({
         </button>
 
         <button
-          onClick={() => update({ productType: filters.productType === 'DIGITAL' ? '' : 'DIGITAL' })}
+          onClick={() => update({
+            productType: filters.productType === 'DIGITAL' ? '' : 'DIGITAL',
+            taxonomyCategoryId: '',
+            attributeFilters: {},
+          })}
           className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0 ${
             filters.productType === 'DIGITAL' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
@@ -357,7 +383,11 @@ export default function AdvancedFilterBar({
         </button>
 
         <button
-          onClick={() => update({ productType: filters.productType === 'PHYSICAL' ? '' : 'PHYSICAL' })}
+          onClick={() => update({
+            productType: filters.productType === 'PHYSICAL' ? '' : 'PHYSICAL',
+            taxonomyCategoryId: '',
+            attributeFilters: {},
+          })}
           className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0 ${
             filters.productType === 'PHYSICAL' ? 'bg-teal-50 text-teal-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
@@ -538,12 +568,44 @@ export default function AdvancedFilterBar({
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Type</label>
                 <select
                   value={filters.productType}
-                  onChange={e => update({ productType: e.target.value })}
+                  onChange={e => update({
+                    productType: e.target.value,
+                    taxonomyCategoryId: '',
+                    attributeFilters: {},
+                  })}
                   className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-primary-500 outline-none bg-white transition-all"
                 >
                   {PRODUCT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
+
+              {taxonomyEnabled && taxonomyListingType && (
+                <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4 rounded-2xl border border-primary-100 bg-primary-50/40 p-4">
+                  <TaxonomyCategoryPicker
+                    listingTypeCode={taxonomyListingType}
+                    selectedCategoryId={filters.taxonomyCategoryId || null}
+                    compact
+                    label="Detailed Category"
+                    onChange={(categoryId) => update({
+                      taxonomyCategoryId: categoryId ?? '',
+                      attributeFilters: {},
+                    })}
+                  />
+                </div>
+              )}
+
+              {taxonomyEnabled && taxonomyListingType && dynamicFilterDefinitions.length > 0 && (
+                <DynamicListingFilterFields
+                  definitions={dynamicFilterDefinitions}
+                  values={filters.attributeFilters}
+                  onChange={(key, value) => update({
+                    attributeFilters: {
+                      ...filters.attributeFilters,
+                      [key]: value,
+                    },
+                  })}
+                />
+              )}
 
               {/* Availability */}
               <div>
