@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import TurnstileWidget from './TurnstileWidget';
+import { getAttribution, getAffiliateCookie, getSessionId, getVisitorId } from '../lib/affiliate';
 
 interface GuestCheckoutProps {
   productId: string;
@@ -103,6 +104,10 @@ export default function GuestCheckout({
           customization_option_ids: customizationOptionIds,
           buyer_requirements: buyerRequirements?.trim() || null,
           turnstile_token: turnstileToken,
+          tracking_code: getAttribution()?.trackingCode || getAffiliateCookie() || null,
+          referral_link_id: getAttribution()?.linkId || null,
+          visitor_id: getVisitorId() || null,
+          session_id: getSessionId() || null,
         },
       });
 
