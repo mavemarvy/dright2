@@ -13,6 +13,11 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  getAdminPlatformAccessPolicy,
+  updateAdminPlatformAccessPolicy,
+  type PlatformAccessAdminPolicy,
+} from '../../lib/platformAccess';
 
 interface ConfigData {
   id: string;
@@ -34,10 +39,69 @@ export default function AdminSystemSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [platformPolicy, setPlatformPolicy] = useState<PlatformAccessAdminPolicy | null>(null);
+  const [platformLoading, setPlatformLoading] = useState(true);
+  const [platformSaving, setPlatformSaving] = useState(false);
+  const [platformMessage, setPlatformMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchConfig();
+    void loadPlatformPolicy();
   }, []);
+
+  const loadPlatformPolicy = async () => {
+    setPlatformLoading(true);
+    try {
+      const policy = await getAdminPlatformAccessPolicy();
+      setPlatformPolicy(policy);
+    } finally {
+      setPlatformLoading(false);
+    }
+  };
+
+  const savePlatformPolicy = async () => {
+    if (!platformPolicy || platformSaving) return;
+    setPlatformSaving(true);
+    setPlatformMessage(null);
+    try {
+      if (platformPolicy.settings.enabled && Number(platformPolicy.settings.monthly_price) <= 0) {
+        setPlatformMessage('Set a monthly price above 0 before enabling paid platform access.');
+        return;
+      }
+      const next = await updateAdminPlatformAccessPolicy(platformPolicy);
+      setPlatformPolicy(next);
+      setPlatformMessage('DRIGHT platform subscription policy saved.');
+    } catch (err) {
+      console.error('Platform access policy save failed', err);
+      setPlatformMessage(err instanceof Error ? err.message : 'Unable to save platform subscription policy.');
+    } finally {
+      setPlatformSaving(false);
+    }
+  };
+
+  const togglePlatformRole = (roleKey: string) => {
+    if (!platformPolicy) return;
+    setPlatformPolicy({
+      ...platformPolicy,
+      roles: platformPolicy.roles.map(role =>
+        role.role_key === roleKey && !role.locked_free
+          ? { ...role, requires_subscription: !role.requires_subscription }
+          : role
+      ),
+    });
+  };
+
+  const togglePlatformFeature = (featureKey: string) => {
+    if (!platformPolicy) return;
+    setPlatformPolicy({
+      ...platformPolicy,
+      features: platformPolicy.features.map(feature =>
+        feature.feature_key === featureKey
+          ? { ...feature, requires_subscription: !feature.requires_subscription }
+          : feature
+      ),
+    });
+  };
 
   const fetchConfig = async () => {
     setLoading(true);
@@ -185,6 +249,208 @@ export default function AdminSystemSettingsPage() {
           {error}
         </div>
       )}
+
+
+      {/* DRIGHT Platform Access Subscription */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-gray-900">DRIGHT Platform Access Subscription</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Buyers always keep free platform access. Paid access only gates the professional roles and features enabled below.
+            </p>
+          </div>
+          {platformPolicy && (
+            <button
+              type="button"
+              onClick={savePlatformPolicy}
+              disabled={platformSaving}
+              className="px-4 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {platformSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save Platform Subscription
+            </button>
+          )}
+        </div>
+
+        {platformMessage && (
+          <div className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700">
+            {platformMessage}
+          </div>
+        )}
+
+        {platformLoading ? (
+          <div className="py-8 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-primary-600" />
+          </div>
+        ) : !platformPolicy ? (
+          <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm text-gray-500">
+            Platform subscription controls are unavailable for this admin account.
+          </div>
+        ) : (
+          <>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <label className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Paid platform access</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Turn enforcement on/off globally.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPlatformPolicy({
+                    ...platformPolicy,
+                    settings: { ...platformPolicy.settings, enabled: !platformPolicy.settings.enabled },
+                  })}
+                  className={`relative w-12 h-7 rounded-full transition-colors ${platformPolicy.settings.enabled ? 'bg-primary-600' : 'bg-gray-300'}`}
+                  aria-pressed={platformPolicy.settings.enabled}
+                >
+                  <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${platformPolicy.settings.enabled ? 'translate-x-5' : ''}`} />
+                </button>
+              </label>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Price</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={platformPolicy.settings.monthly_price}
+                  onChange={(e) => setPlatformPolicy({
+                    ...platformPolicy,
+                    settings: { ...platformPolicy.settings, monthly_price: Number(e.target.value || 0) },
+                  })}
+                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                <input
+                  type="text"
+                  maxLength={3}
+                  value={platformPolicy.settings.currency}
+                  onChange={(e) => setPlatformPolicy({
+                    ...platformPolicy,
+                    settings: { ...platformPolicy.settings, currency: e.target.value.toUpperCase().slice(0, 3) },
+                  })}
+                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none uppercase"
+                />
+              </div>
+
+              <label className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Free trial</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Default is 90 days (about three months).</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPlatformPolicy({
+                    ...platformPolicy,
+                    settings: { ...platformPolicy.settings, trial_enabled: !platformPolicy.settings.trial_enabled },
+                  })}
+                  className={`relative w-12 h-7 rounded-full transition-colors ${platformPolicy.settings.trial_enabled ? 'bg-success' : 'bg-gray-300'}`}
+                  aria-pressed={platformPolicy.settings.trial_enabled}
+                >
+                  <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${platformPolicy.settings.trial_enabled ? 'translate-x-5' : ''}`} />
+                </button>
+              </label>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Trial Days</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="730"
+                  disabled={!platformPolicy.settings.trial_enabled}
+                  value={platformPolicy.settings.trial_days}
+                  onChange={(e) => setPlatformPolicy({
+                    ...platformPolicy,
+                    settings: { ...platformPolicy.settings, trial_days: Math.max(0, Number(e.target.value || 0)) },
+                  })}
+                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none disabled:bg-gray-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Grace Period (days)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="60"
+                  value={platformPolicy.settings.grace_period_days}
+                  onChange={(e) => setPlatformPolicy({
+                    ...platformPolicy,
+                    settings: { ...platformPolicy.settings, grace_period_days: Math.max(0, Number(e.target.value || 0)) },
+                  })}
+                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Who needs the monthly subscription?</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Buyer is permanently free. Toggle each earning/professional role independently.</p>
+              </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                {platformPolicy.roles.map(role => (
+                  <div key={role.role_key} className="rounded-xl border border-gray-200 p-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{role.label}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{role.description}</p>
+                      {role.locked_free && (
+                        <span className="inline-block mt-2 text-[11px] font-semibold text-success">Always free</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={role.locked_free}
+                      onClick={() => togglePlatformRole(role.role_key)}
+                      className={`relative shrink-0 w-12 h-7 rounded-full transition-colors disabled:opacity-70 ${role.requires_subscription ? 'bg-primary-600' : 'bg-gray-300'}`}
+                      aria-pressed={role.requires_subscription}
+                    >
+                      <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${role.requires_subscription ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Features unavailable without payment</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  These switches decide which role tools are locked after the trial when the user has no active platform subscription.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {platformPolicy.features.map(feature => (
+                  <div key={feature.feature_key} className="rounded-xl border border-gray-200 p-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{feature.label}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{feature.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => togglePlatformFeature(feature.feature_key)}
+                      className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${feature.requires_subscription ? 'bg-primary-600' : 'bg-gray-300'}`}
+                      aria-pressed={feature.requires_subscription}
+                    >
+                      <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${feature.requires_subscription ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {!platformPolicy.settings.enabled && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-3">
+                The policy is configured but currently OFF. No user is blocked until you set a positive price, turn Paid platform access ON, and save.
+              </p>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Global settings */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
