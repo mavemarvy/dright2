@@ -1,951 +1,217 @@
-import { formatDisplayCurrency } from '../lib/currency';
-import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence, useInView, useMotionValue, useTransform, animate } from 'framer-motion';
-import {
-  Search, Sparkles, ArrowRight, TrendingUp, Shield, Users, Package,
-  ShoppingBag, Briefcase, GraduationCap, Megaphone, Star, Clock,
-  ChevronRight, Store, Plus, Zap, Menu, X, CheckCircle2,
-} from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Menu, Sparkles, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useRecentlyViewed } from '../lib/marketplaceHooks';
-import { getRecentlyViewedIds } from '../lib/marketplace';
 import SeoHead from '../components/SeoHead';
-import { CmsPageRenderer } from '../components/cms/CmsPageRenderer';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+type DrightLogoProps = {
+  size?: 'large' | 'small';
+};
 
-interface FeaturedProduct {
-  id: string; name: string; price: number; image_url: string | null;
-  category: string; is_free: boolean; average_rating: number | null;
-}
-
-interface TrustStats {
-  active_users: number;
-  verified_sellers: number;
-  affiliates: number;
-  sales: number;
-}
-
-interface TrustStatsResponse {
-  success?: boolean;
-  mode?: 'live' | 'gamified';
-  stats?: TrustStats;
-  error?: string;
-}
-
-// ─── Search Placeholders (rotating) ───────────────────────────────────────────
-
-const SEARCH_PLACEHOLDERS = [
-  'Search products...',
-  'Find trusted sellers...',
-  'Discover services...',
-  'Search jobs...',
-  'Explore campaigns...',
-  'Find affordable graphic designers in Lagos...',
-];
-
-const QUICK_CATEGORIES = [
-  { icon: ShoppingBag, name: 'Products', description: 'Digital downloads, templates & more', color: 'bg-blue-500', href: '/market' },
-  { icon: Briefcase, name: 'Services', description: 'Freelance work & professional services', color: 'bg-purple-500', href: '/market' },
-  { icon: GraduationCap, name: 'Courses', description: 'Learn from expert creators', color: 'bg-emerald-500', href: '/market' },
-  { icon: Megaphone, name: 'Campaigns', description: 'Promote & earn with affiliate marketing', color: 'bg-orange-500', href: '/campaigns' },
-  { icon: Briefcase, name: 'Jobs', description: 'Find work or hire talent', color: 'bg-pink-500', href: '/jobs' },
-  { icon: Store, name: 'Stores', description: 'Browse seller storefronts', color: 'bg-indigo-500', href: '/market' },
-];
-
-const HIGHLIGHTS = [
-  { icon: Zap, title: 'New: AI-Powered Search', description: 'Find exactly what you need with natural language queries.' },
-  { icon: Shield, title: 'Verified Sellers', description: 'Every seller is identity-verified for your peace of mind.' },
-  { icon: TrendingUp, title: 'Low 10% Commission', description: 'Keep more of what you earn. No hidden fees, ever.' },
-];
-
-const QUICK_ACCESS = [
-  { icon: Store, label: 'Browse Marketplace', href: '/market', color: 'text-blue-600 bg-blue-50' },
-  { icon: Plus, label: 'Sell a Product', href: '/upload-product', color: 'text-emerald-600 bg-emerald-50', authRequired: true },
-  { icon: Briefcase, label: 'Offer a Service', href: '/upload-product', color: 'text-purple-600 bg-purple-50', authRequired: true },
-  { icon: Megaphone, label: 'Post a Job', href: '/post-job', color: 'text-orange-600 bg-orange-50', authRequired: true },
-  { icon: Users, label: 'Become an Affiliate', href: '/refer', color: 'text-pink-600 bg-pink-50', authRequired: true },
-  { icon: Sparkles, label: 'View Promotions', href: '/campaigns', color: 'text-indigo-600 bg-indigo-50' },
-];
-
-const FOOTER_SECTIONS = [
-  { heading: 'Platform', links: [
-    { label: 'Marketplace', href: '/market' },
-    { label: 'Jobs', href: '/jobs' },
-    { label: 'Campaigns', href: '/campaigns' },
-    { label: 'Leaderboards', href: '/leaderboards' },
-  ]},
-  { heading: 'Resources', links: [
-    { label: 'Help Center', href: '/help' },
-    { label: 'Tutorials', href: '/tutorials' },
-    { label: 'Announcements', href: '/announcements' },
-    { label: 'Challenges', href: '/challenges' },
-  ]},
-  { heading: 'Legal', links: [
-    { label: 'Terms', href: '/legal' },
-    { label: 'Privacy Policy', href: '/legal' },
-    { label: 'Permissions', href: '/permissions' },
-  ]},
-];
-
-// ─── Count-up hook ────────────────────────────────────────────────────────────
-
-function useCountUp(target: number, start: boolean, duration = 2) {
-  const count = useMotionValue(0);
-  const rounded = useTransform(count, (v) => Math.round(v).toLocaleString());
-  useEffect(() => {
-    if (start) {
-      const controls = animate(count, target, { duration, ease: 'easeOut' });
-      return controls.stop;
-    }
-  }, [start, target, count, duration]);
-  return rounded;
-}
-
-// ─── AI Search Bar ────────────────────────────────────────────────────────────
-
-function AISearchBar() {
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const [placeholderIdx, setPlaceholderIdx] = useState(0);
-  const [focused, setFocused] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPlaceholderIdx(prev => (prev + 1) % SEARCH_PLACEHOLDERS.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('dright_recent_searches');
-      if (raw) setRecentSearches(JSON.parse(raw).slice(0, 5));
-    } catch { /* ignore */ }
-  }, []);
-
-  const saveSearch = (term: string) => {
-    if (!term.trim()) return;
-    try {
-      const existing = recentSearches.filter(s => s !== term);
-      const updated = [term, ...existing].slice(0, 5);
-      localStorage.setItem('dright_recent_searches', JSON.stringify(updated));
-      setRecentSearches(updated);
-    } catch { /* ignore */ }
-  };
-
-  const handleSearch = (term?: string) => {
-    const q = term ?? query;
-    if (!q.trim()) return;
-    saveSearch(q);
-    navigate(`/market?q=${encodeURIComponent(q)}`);
-  };
-
-  const popularSearches = ['Notion templates', 'Logo design', 'SEO course', 'Virtual assistant', 'E-book'];
+function DrightLogo({ size = 'large' }: DrightLogoProps) {
+  const isLarge = size === 'large';
+  const metalSurfaceId = 'metal-surface-' + size;
+  const metalBevelId = 'metal-bevel-' + size;
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className={`relative flex items-center gap-3 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border transition-all duration-300 ${
-          focused ? 'border-blue-400 shadow-blue-100 shadow-2xl dark:border-blue-500 dark:shadow-blue-900/20' : 'border-gray-200 dark:border-gray-700 shadow-gray-100 dark:shadow-gray-900/50'
-        }`}
+    <div
+      className={
+        isLarge
+          ? 'relative h-56 w-56 min-[390px]:h-60 min-[390px]:w-60 sm:h-72 sm:w-72 rounded-[2.35rem] p-[4px] bg-gradient-to-br from-white via-slate-400 to-slate-800 shadow-[0_28px_70px_-18px_rgba(0,0,0,0.98),0_0_55px_rgba(59,130,246,0.16)]'
+          : 'relative h-11 w-11 rounded-[0.9rem] p-[2px] bg-gradient-to-br from-white via-slate-400 to-slate-800 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.95),0_0_18px_rgba(59,130,246,0.12)]'
+      }
+    >
+      <div
+        className={
+          isLarge
+            ? 'relative flex h-full w-full items-center justify-center overflow-hidden rounded-[2.15rem] bg-gradient-to-b from-neutral-700 via-neutral-950 to-black p-4 shadow-[inset_0_4px_10px_rgba(255,255,255,0.38),inset_0_-12px_24px_rgba(0,0,0,0.96)]'
+            : 'relative flex h-full w-full items-center justify-center overflow-hidden rounded-[0.78rem] bg-gradient-to-b from-neutral-700 via-neutral-950 to-black p-1 shadow-[inset_0_2px_4px_rgba(255,255,255,0.36),inset_0_-5px_10px_rgba(0,0,0,0.95)]'
+        }
       >
-        <div className="pl-5 flex items-center">
-          <Sparkles className="w-5 h-5 text-blue-500" />
-        </div>
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => setFocused(false), 200)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          placeholder={SEARCH_PLACEHOLDERS[placeholderIdx]}
-          className="flex-1 py-4 px-1 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 bg-transparent outline-none"
-          aria-label="Search the marketplace"
-        />
-        <button
-          onClick={() => handleSearch()}
-          className="mr-2 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-5 py-2.5 transition-colors min-h-[44px]"
-        >
-          <Search className="w-4 h-4" />
-          <span className="hidden sm:inline">Search</span>
-        </button>
-      </motion.div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[48%] rounded-t-[inherit] bg-gradient-to-b from-white/16 via-white/6 to-transparent" />
+        <div className="pointer-events-none absolute bottom-1 right-2 h-3 w-3 rounded-full bg-blue-400/50 blur-[9px]" />
 
-      {/* Search suggestions dropdown */}
-      <AnimatePresence>
-        {focused && (
+        {isLarge && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden"
-          >
-            {recentSearches.length > 0 && (
-              <div className="p-3">
-                <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2 mb-2">Recent Searches</p>
-                {recentSearches.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSearch(s)}
-                    className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 text-left"
-                  >
-                    <Clock className="w-4 h-4 text-gray-400" /> {s}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="p-3 border-t border-gray-50">
-              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2 mb-2">Popular Searches</p>
-              <div className="flex flex-wrap gap-2 px-1">
-                {popularSearches.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSearch(s)}
-                    className="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 text-sm text-gray-600 dark:text-gray-300 transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="p-3 border-t border-gray-50">
-              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2 mb-2">Quick Links</p>
-              {QUICK_CATEGORIES.slice(0, 4).map((cat) => (
-                <Link
-                  key={cat.name}
-                  to={cat.href}
-                  className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300"
-                >
-                  <cat.icon className="w-4 h-4 text-gray-400" /> {cat.name}
-                </Link>
-              ))}
-            </div>
-          </motion.div>
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-[45%] top-[-20%] h-[145%] w-[34%] rotate-[16deg] bg-gradient-to-r from-transparent via-white/14 to-transparent blur-[2px]"
+            animate={{ x: ['0%', '430%'] }}
+            transition={{ duration: 5.8, repeat: Infinity, repeatDelay: 3.6, ease: 'easeInOut' }}
+          />
         )}
-      </AnimatePresence>
+
+        <svg
+          viewBox="0 0 100 100"
+          className={
+            isLarge
+              ? 'relative z-10 h-40 w-40 min-[390px]:h-44 min-[390px]:w-44 sm:h-52 sm:w-52 drop-shadow-[0_14px_20px_rgba(0,0,0,0.98)]'
+              : 'relative z-10 h-8 w-8 drop-shadow-[0_5px_7px_rgba(0,0,0,0.95)]'
+          }
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="DRIGHT"
+          role="img"
+        >
+          <defs>
+            <linearGradient id={metalSurfaceId} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="18%" stopColor="#f8fafc" />
+              <stop offset="36%" stopColor="#cbd5e1" />
+              <stop offset="56%" stopColor="#94a3b8" />
+              <stop offset="76%" stopColor="#e2e8f0" />
+              <stop offset="100%" stopColor="#64748b" />
+            </linearGradient>
+            <linearGradient id={metalBevelId} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.96" />
+              <stop offset="42%" stopColor="#94a3b8" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#0f172a" stopOpacity="0.98" />
+            </linearGradient>
+          </defs>
+
+          <path
+            d="M26 15 H52 C72 15 85 28 85 50 C85 72 72 85 52 85 H26 V15 Z M42 32 V68 H51 C62 68 68 60 68 50 C68 40 62 32 51 32 H42 Z"
+            fill={'url(#' + metalBevelId + ')'}
+            transform="translate(0, 3)"
+          />
+          <path
+            d="M26 15 H52 C72 15 85 28 85 50 C85 72 72 85 52 85 H26 V15 Z M41 31 V69 H51 C63 69 69 61 69 50 C69 39 63 31 51 31 H41 Z"
+            fill={'url(#' + metalSurfaceId + ')'}
+            stroke="#475569"
+            strokeWidth="0.7"
+          />
+        </svg>
+      </div>
     </div>
   );
 }
 
-// ─── Hero Section ─────────────────────────────────────────────────────────────
-
-function HeroSection({ user, firstName, logoUrl }: { user: any; firstName: string | null; logoUrl: string }) {
-  return (
-    <section className="relative pt-24 pb-16 sm:pt-32 sm:pb-24 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.14),transparent_38%),linear-gradient(to_bottom,#eff6ff,#ffffff_46%,#ffffff)] dark:bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.18),transparent_36%),linear-gradient(to_bottom,#111827,#111827)]" />
-      <motion.div
-        aria-hidden="true"
-        className="absolute -top-32 left-[8%] w-72 h-72 rounded-full bg-blue-400/10 blur-3xl"
-        animate={{ x: [0, 28, 0], y: [0, 18, 0], scale: [1, 1.08, 1] }}
-        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        aria-hidden="true"
-        className="absolute top-20 right-[4%] w-64 h-64 rounded-full bg-indigo-400/10 blur-3xl"
-        animate={{ x: [0, -22, 0], y: [0, -16, 0], scale: [1.05, 0.96, 1.05] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: { opacity: 0 },
-            visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
-          }}
-          className="text-center"
-        >
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: -16, scale: 0.94 },
-              visible: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 115, damping: 15 } },
-            }}
-            className="relative inline-flex items-center justify-center mb-7"
-          >
-            <motion.div
-              animate={{ y: [0, -5, 0] }}
-              transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
-              className="relative rounded-3xl border border-white/70 dark:border-white/10 bg-white/85 dark:bg-gray-900/80 backdrop-blur-xl px-6 py-4 shadow-[0_22px_60px_-24px_rgba(37,99,235,0.48)]"
-            >
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-blue-500/5 via-indigo-500/10 to-cyan-500/5" />
-              <img
-                src={logoUrl}
-                alt="DRIGHT"
-                loading="eager"
-                fetchPriority="high"
-                decoding="async"
-                className="relative h-14 sm:h-16 md:h-20 w-auto max-w-[260px] sm:max-w-[320px] object-contain"
-                onError={(event) => {
-                  event.currentTarget.onerror = null;
-                  event.currentTarget.src = '/dright-logo.webp';
-                }}
-              />
-            </motion.div>
-          </motion.div>
-
-          {/* Announcement badge */}
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: 12 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 125, damping: 16 } },
-            }}
-            className="inline-flex items-center gap-2 bg-blue-50/90 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-full px-4 py-1.5 mb-6 shadow-sm"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
-            <span className="text-xs font-medium text-blue-700 dark:text-blue-300">AI-powered marketplace, now live</span>
-          </motion.div>
-
-          {/* Personalized greeting */}
-          <motion.h1
-            variants={{
-              hidden: { opacity: 0, y: 18 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 105, damping: 16 } },
-            }}
-            className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 dark:text-gray-100 leading-[1.1]"
-          >
-            {user && firstName ? (
-              <>Welcome back, {firstName}</>
-            ) : (
-              <>Welcome to DRIGHT</>
-            )}
-          </motion.h1>
-          <motion.p
-            variants={{
-              hidden: { opacity: 0, y: 16 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100, damping: 17 } },
-            }}
-            className="mt-5 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed"
-          >
-            {user
-              ? 'Continue where you left off. Discover products, services, jobs, and opportunities tailored for you.'
-              : 'Discover products, services, jobs, and opportunities — all in one AI-powered marketplace.'}
-          </motion.p>
-        </motion.div>
-
-        {/* AI Search */}
-        <div className="mt-10">
-          <AISearchBar />
-        </div>
-
-        {/* CTA buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3"
-        >
-          <Link
-            to="/market"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-white text-white dark:text-gray-900 font-semibold rounded-xl px-6 py-3.5 transition-all min-h-[48px]"
-          >
-            Browse Marketplace <ArrowRight className="w-4 h-4" />
-          </Link>
-          {!user && (
-            <Link
-              to="/sign-up"
-              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-900 dark:text-gray-100 font-semibold rounded-xl px-6 py-3.5 transition-all min-h-[48px]"
-            >
-              Start Selling <ChevronRight className="w-4 h-4" />
-            </Link>
-          )}
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Category Explorer ────────────────────────────────────────────────────────
-
-function CategoryExplorer() {
-  return (
-    <section className="py-12 sm:py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ y: 10 }}
-          whileInView={{ y: 0 }}
-          viewport={{ once: true, amount: 0.15 }}
-          transition={{ type: 'spring', stiffness: 95, damping: 18 }}
-          className="mb-8"
-        >
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">Explore the marketplace</h2>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">Find exactly what you're looking for</p>
-        </motion.div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {QUICK_CATEGORIES.map((cat, i) => (
-            <motion.div
-              key={cat.name}
-              initial={{ y: 10, scale: 0.985 }}
-              whileInView={{ y: 0, scale: 1 }}
-              viewport={{ once: true, amount: 0.12 }}
-              transition={{ type: 'spring', stiffness: 105, damping: 18, delay: i * 0.035 }}
-            >
-              <Link
-                to={cat.href}
-                className="group block bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 hover:shadow-lg hover:border-gray-200 dark:hover:border-gray-600 card-hover transition-all duration-300"
-              >
-                <div className={`w-12 h-12 rounded-xl ${cat.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                  <cat.icon className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{cat.name}</h3>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 line-clamp-2">{cat.description}</p>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Continue Browsing ─────────────────────────────────────────────────────────
-
-function ContinueBrowsingSection() {
+export default function LandingPage() {
   const { user } = useAuth();
-  const { recentlyViewed } = useRecentlyViewed(user?.id);
-  const [products, setProducts] = useState<FeaturedProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const ids = recentlyViewed.length > 0 ? recentlyViewed : getRecentlyViewedIds();
-      if (ids.length === 0) { setLoading(false); return; }
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, price, image_url, category, is_free, average_rating')
-        .in('id', ids.slice(0, 8))
-        .eq('is_active', true)
-        .eq('approval_status', 'approved');
-      const map = new Map((data || []).map(p => [p.id, p]));
-      setProducts(ids.map(id => map.get(id)).filter((p): p is FeaturedProduct => p !== undefined));
-      setLoading(false);
-    })();
-  }, [recentlyViewed]);
-
-  if (loading || products.length === 0) return null;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <section className="py-12 sm:py-16 bg-gray-50 dark:bg-gray-900/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2.5 mb-6">
-          <div className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-            <Clock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Continue Browsing</h2>
-        </div>
-        <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
-          {products.map((product, idx) => (
-            <motion.div
-              key={product.id}
-              initial={{ y: 8, scale: 0.99 }}
-              whileInView={{ y: 0, scale: 1 }}
-              viewport={{ once: true, amount: 0.1 }}
-              transition={{ type: 'spring', stiffness: 110, damping: 19, delay: Math.min(idx * 0.03, 0.18) }}
-            >
-              <Link
-                to={`/product/${product.id}`}
-                className="block w-44 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow group shrink-0"
-              >
-                <div className="h-32 bg-gray-50 dark:bg-gray-700 overflow-hidden">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package className="w-10 h-10 text-gray-300 dark:text-gray-500" />
-                    </div>
-                  )}
-                </div>
-                <div className="p-3">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{product.name}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{product.category}</p>
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100 mt-1.5 block">
-                    {product.is_free ? 'FREE' : `${formatDisplayCurrency(Number(Number(product.price).toFixed(2)))}`}
-                  </span>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
+    <div className="relative min-h-[100dvh] w-full overflow-hidden bg-[#030712] font-sans text-white">
+      <SeoHead
+        title={null}
+        description="DRIGHT is the AI-powered digital marketplace for creators, sellers, and marketers."
+        canonical="/welcome"
+        keywords={['digital marketplace', 'AI marketplace', 'DRIGHT', 'digital products', 'creator platform']}
+        breadcrumbs={[{ name: 'Home', url: '/welcome' }]}
+      />
+
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute left-1/2 top-[18%] h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-blue-600/12 blur-[120px]" />
+        <div className="absolute right-[-220px] top-[5%] h-[620px] w-[620px] rounded-full bg-indigo-600/9 blur-[140px]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#030712] via-[#030712]/72 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#030712] via-transparent to-[#030712]" />
       </div>
-    </section>
-  );
-}
 
-// ─── Recommendation Preview ───────────────────────────────────────────────────
-
-function RecommendationPreview({ user }: { user: any }) {
-  const [products, setProducts] = useState<FeaturedProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, price, image_url, category, is_free, average_rating')
-        .eq('is_active', true)
-        .eq('is_hidden', false)
-        .eq('approval_status', 'approved')
-        .order('total_sales', { ascending: false })
-        .limit(8);
-      setProducts(data || []);
-      setLoading(false);
-    })();
-  }, []);
-
-  if (loading || products.length === 0) return null;
-
-  return (
-    <section className="py-12 sm:py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2.5 mb-6">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              {user ? 'Recommended For You' : 'You May Like'}
-            </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {user ? 'Based on your activity' : 'Popular with other buyers'}
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {products.map((product, idx) => (
-            <motion.div
-              key={product.id}
-              initial={{ y: 10, scale: 0.985 }}
-              whileInView={{ y: 0, scale: 1 }}
-              viewport={{ once: true, amount: 0.1 }}
-              transition={{ type: 'spring', stiffness: 105, damping: 18, delay: Math.min(idx * 0.03, 0.18) }}
-            >
-              <Link
-                to={`/product/${product.id}`}
-                className="group block bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-lg card-hover transition-all"
-              >
-                <div className="h-40 bg-gray-50 dark:bg-gray-700 overflow-hidden">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package className="w-12 h-12 text-gray-300 dark:text-gray-500" />
-                    </div>
-                  )}
-                </div>
-                <div className="p-4">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{product.name}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{product.category}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {product.is_free ? 'FREE' : `${formatDisplayCurrency(Number(Number(product.price).toFixed(2)))}`}
-                    </span>
-                    {(product.average_rating ?? 0) > 0 && (
-                      <div className="flex items-center gap-0.5">
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{Number(product.average_rating).toFixed(1)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-        <div className="text-center mt-8">
-          <Link
-            to="/market"
-            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
-          >
-            Discover More <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Marketplace Highlights ─────────────────────────────────────────────────────
-
-function MarketplaceHighlights() {
-  return (
-    <section className="py-12 sm:py-16 bg-gray-50 dark:bg-gray-900/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ y: 10 }}
-          whileInView={{ y: 0 }}
-          viewport={{ once: true, amount: 0.15 }}
-          transition={{ type: 'spring', stiffness: 95, damping: 18 }}
-          className="mb-8"
-        >
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">What's new on DRIGHT</h2>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">Platform updates and announcements</p>
-        </motion.div>
-        <div className="grid md:grid-cols-3 gap-5">
-          {HIGHLIGHTS.map((item, i) => (
-            <motion.div
-              key={item.title}
-              initial={{ y: 10, scale: 0.985 }}
-              whileInView={{ y: 0, scale: 1 }}
-              viewport={{ once: true, amount: 0.12 }}
-              transition={{ type: 'spring', stiffness: 105, damping: 18, delay: i * 0.05 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 hover:shadow-md card-hover transition-all"
-            >
-              <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mb-4">
-                <item.icon className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1.5">{item.title}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{item.description}</p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Trust & Community Section ─────────────────────────────────────────────────
-
-function TrustSection() {
-  const [stats, setStats] = useState<TrustStats | null>(null);
-  const [displayMode, setDisplayMode] = useState<'live' | 'gamified'>('live');
-  const statsRef = useRef<HTMLDivElement>(null);
-  const inView = useInView(statsRef, { once: true, margin: '-100px' });
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke('community-stats', {
-          body: { action: 'public' },
-        });
-        if (error) throw error;
-
-        const result = data as TrustStatsResponse | null;
-        if (!result?.success || !result.stats) {
-          throw new Error(result?.error || 'Unable to load community statistics');
-        }
-
-        setDisplayMode(result.mode === 'gamified' ? 'gamified' : 'live');
-        setStats({
-          active_users: Number(result.stats.active_users || 0),
-          verified_sellers: Number(result.stats.verified_sellers || 0),
-          affiliates: Number(result.stats.affiliates || 0),
-          sales: Number(result.stats.sales || 0),
-        });
-      } catch (error) {
-        console.error('Failed to load community statistics:', error);
-        setStats({ active_users: 0, verified_sellers: 0, affiliates: 0, sales: 0 });
-      }
-    })();
-  }, []);
-
-  const usersCount = useCountUp(stats?.active_users ?? 0, inView);
-  const sellersCount = useCountUp(stats?.verified_sellers ?? 0, inView);
-  const affiliatesCount = useCountUp(stats?.affiliates ?? 0, inView);
-  const salesCount = useCountUp(stats?.sales ?? 0, inView);
-
-  const items = [
-    { icon: Users, label: 'Active Users', value: usersCount },
-    { icon: Shield, label: 'Verified Sellers', value: sellersCount },
-    { icon: Megaphone, label: 'Affiliates', value: affiliatesCount },
-    { icon: CheckCircle2, label: 'Successful Sales', value: salesCount },
-  ];
-
-  return (
-    <section className="py-12 sm:py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div ref={statsRef} className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 sm:p-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-10"
-          >
-            <h2 className="text-2xl sm:text-3xl font-bold text-white">A marketplace you can trust</h2>
-            <p className="mt-2 text-gray-400">
-              {displayMode === 'live'
-                ? 'Live numbers from our growing community'
-                : 'Configured community highlights — promotional display, not live analytics'}
-            </p>
-          </motion.div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            {items.map((item, i) => (
-              <motion.div
-                key={item.label}
-                initial={{ opacity: 0, y: 15 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="text-center"
-              >
-                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center mx-auto mb-3">
-                  <item.icon className="w-6 h-6 text-blue-400" />
-                </div>
-                <motion.p className="text-3xl sm:text-4xl font-bold text-white">{item.value}</motion.p>
-                <p className="text-sm text-gray-400 mt-1">{item.label}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Quick Access ─────────────────────────────────────────────────────────────
-
-function QuickAccess({ user }: { user: any }) {
-  const visibleActions = QUICK_ACCESS.filter(a => !a.authRequired || user);
-
-  return (
-    <section className="py-12 sm:py-16 bg-gray-50 dark:bg-gray-900/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ y: 10 }}
-          whileInView={{ y: 0 }}
-          viewport={{ once: true, amount: 0.15 }}
-          transition={{ type: 'spring', stiffness: 95, damping: 18 }}
-          className="mb-8"
-        >
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">Quick actions</h2>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">Jump right in</p>
-        </motion.div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {visibleActions.map((action, i) => (
-            <motion.div
-              key={action.label}
-              initial={{ y: 10, scale: 0.985 }}
-              whileInView={{ y: 0, scale: 1 }}
-              viewport={{ once: true, amount: 0.12 }}
-              transition={{ type: 'spring', stiffness: 105, damping: 18, delay: i * 0.035 }}
-            >
-              <Link
-                to={action.href}
-                className="group flex flex-col items-center text-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md card-hover transition-all"
-              >
-                <div className={`w-12 h-12 rounded-xl ${action.color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-                  <action.icon className="w-6 h-6" />
-                </div>
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{action.label}</span>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Footer ────────────────────────────────────────────────────────────────────
-
-function WelcomeFooter({ logoUrl }: { logoUrl: string }) {
-  return (
-    <footer className="bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
-          <div className="col-span-2">
-            <Link to="/welcome" className="inline-flex items-center mb-4">
-              <img
-                src={logoUrl}
-                alt="DRIGHT"
-                loading="lazy"
-                decoding="async"
-                className="h-11 w-auto max-w-[190px] object-contain"
-                onError={(event) => {
-                  event.currentTarget.onerror = null;
-                  event.currentTarget.src = '/dright-logo.webp';
-                }}
-              />
-            </Link>
-            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mb-4">
-              The AI-powered marketplace for creators, sellers, and marketers. Sell digital products, offer services, and grow your income.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {['YouTube', 'TikTok', 'Instagram', 'X', 'LinkedIn'].map(s => (
-                <a key={s} href="#" aria-label={s} className="w-9 h-9 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:border-gray-300 dark:hover:border-gray-500 transition-colors">
-                  {s[0]}
-                </a>
-              ))}
-            </div>
-          </div>
-          {FOOTER_SECTIONS.map(section => (
-            <div key={section.heading}>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">{section.heading}</h4>
-              <ul className="space-y-2">
-                {section.links.map(link => (
-                  <li key={link.label}>
-                    <Link to={link.href} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">{link.label}</Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-        <div className="pt-6 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-400 dark:text-gray-500">© 2026 DRIGHT. All rights reserved.</p>
-          <div className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
-            <Sparkles className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" /> Built for creators, by creators.
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-// ─── Navigation Bar ────────────────────────────────────────────────────────────
-
-function NavBar({ user, firstName, logoUrl }: { user: any; firstName: string | null; logoUrl: string }) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-100 dark:border-gray-700">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-        <Link to="/welcome" className="flex items-center min-w-0">
-          <img
-            src={logoUrl}
-            alt="DRIGHT"
-            loading="eager"
-            fetchPriority="high"
-            decoding="async"
-            className="h-10 sm:h-11 w-auto max-w-[165px] sm:max-w-[205px] object-contain"
-            onError={(event) => {
-              event.currentTarget.onerror = null;
-              event.currentTarget.src = '/dright-logo.webp';
-            }}
-          />
+      <motion.header
+        initial={{ opacity: 0, y: -14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-white/[0.035] bg-[#07101f]/48 px-5 py-4 backdrop-blur-md sm:px-7 sm:py-5"
+      >
+        <Link to="/welcome" aria-label="DRIGHT home" className="rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-400/60">
+          <DrightLogo size="small" />
         </Link>
-        <div className="hidden md:flex items-center gap-6">
-          <Link to="/market" className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">Browse</Link>
-          {user ? (
-            <Link to="/" className="text-sm font-semibold text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-white rounded-lg px-5 py-2.5 transition-colors min-h-[44px] flex items-center">
-              {firstName ? `Hi, ${firstName}` : 'Dashboard'}
-            </Link>
-          ) : (
-            <>
-              <Link to="/sign-in" className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">Login</Link>
-              <Link to="/sign-up" className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-5 py-2.5 transition-colors min-h-[44px] flex items-center">
-                Sign Up
-              </Link>
-            </>
-          )}
-        </div>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 text-gray-600 dark:text-gray-300" aria-label="Menu">
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+
+        <button
+          type="button"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          className="rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+        >
+          {menuOpen ? <X className="h-8 w-8" strokeWidth={1.5} /> : <Menu className="h-8 w-8" strokeWidth={1.5} />}
         </button>
-      </div>
+      </motion.header>
+
       <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="md:hidden overflow-hidden bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
-            <div className="px-4 py-4 space-y-3">
-              <Link to="/market" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">Browse</Link>
-              {user ? (
-                <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-center font-semibold text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 rounded-lg">Dashboard</Link>
-              ) : (
-                <>
-                  <Link to="/sign-in" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">Login</Link>
-                  <Link to="/sign-up" onClick={() => setMobileMenuOpen(false)} className="block py-3 text-center font-semibold text-white bg-blue-600 rounded-lg">Sign Up</Link>
-                </>
-              )}
-            </div>
+        {menuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="fixed right-5 top-[82px] z-40 w-[min(300px,calc(100vw-40px))] overflow-hidden rounded-2xl border border-white/10 bg-[#08111f]/95 p-2 shadow-2xl backdrop-blur-xl"
+          >
+            <Link onClick={() => setMenuOpen(false)} to="/market" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-200 hover:bg-white/5">
+              Marketplace
+            </Link>
+            {user ? (
+              <Link onClick={() => setMenuOpen(false)} to="/" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-200 hover:bg-white/5">
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link onClick={() => setMenuOpen(false)} to="/sign-in" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-200 hover:bg-white/5">
+                  Sign In
+                </Link>
+                <Link onClick={() => setMenuOpen(false)} to="/sign-up" className="block rounded-xl px-4 py-3 text-sm font-medium text-blue-300 hover:bg-blue-500/10">
+                  Create Account
+                </Link>
+              </>
+            )}
+            <Link onClick={() => setMenuOpen(false)} to="/help" className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-200 hover:bg-white/5">
+              Help Center
+            </Link>
           </motion.div>
         )}
       </AnimatePresence>
-    </nav>
-  );
-}
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+      <main className="relative z-10 flex min-h-[100dvh] items-center justify-center px-5 pb-28 pt-24 sm:px-8 sm:pb-32 sm:pt-28">
+        <div className="flex w-full max-w-5xl flex-col items-center justify-center text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 95, damping: 16, delay: 0.08 }}
+            className="relative"
+          >
+            <motion.div
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-[-42px] left-1/2 h-20 w-64 -translate-x-1/2 -rotate-6 rounded-full bg-blue-500/25 blur-3xl"
+              animate={{ opacity: [0.45, 0.75, 0.45], scale: [0.94, 1.06, 0.94] }}
+              transition={{ duration: 4.6, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+              animate={{ y: [0, -4, 0] }}
+              transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <DrightLogo size="large" />
+            </motion.div>
+          </motion.div>
 
-export default function LandingPage() {
-  const { user } = useAuth();
-  const [firstName, setFirstName] = useState<string | null>(null);
-  const [brandLogoUrl, setBrandLogoUrl] = useState('/dright-logo.webp');
-
-  useEffect(() => {
-    if (!user) { setFirstName(null); return; }
-    (async () => {
-      const { data } = await supabase
-        .from('users')
-        .select('full_name')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (data?.full_name) {
-        setFirstName(data.full_name.split(' ')[0]);
-      }
-    })();
-  }, [user]);
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const { data, error } = await supabase.functions.invoke('public-branding', {
-        body: {},
-      });
-      if (error || !mounted) return;
-
-      const result = data as {
-        success?: boolean;
-        branding?: { logo_url?: string | null };
-      } | null;
-
-      if (result?.success && result.branding?.logo_url) {
-        setBrandLogoUrl(result.branding.logo_url);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  return (
-    <CmsPageRenderer
-      slug="welcome"
-      fallbackSeoDescription="DRIGHT is the AI-powered digital marketplace for creators, sellers, and marketers. Discover products, services, jobs, and opportunities."
-      fallback={
-        <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased">
-          <SeoHead
-            title={null}
-            description="DRIGHT is the AI-powered digital marketplace for creators, sellers, and marketers. Discover products, services, jobs, and opportunities."
-            canonical="/welcome"
-            keywords={['digital products marketplace', 'sell digital products', 'AI marketplace', 'freelance services', 'creator platform', 'digital downloads']}
-            breadcrumbs={[{ name: 'Home', url: '/welcome' }]}
-          />
-
-          <NavBar user={user} firstName={firstName} logoUrl={brandLogoUrl} />
-
-          {/* 1. Hero with AI Search */}
-          <HeroSection user={user} firstName={firstName} logoUrl={brandLogoUrl} />
-
-          {/* 2. Category Explorer */}
-          <CategoryExplorer />
-
-          {/* 3. Continue Browsing (only if history exists) */}
-          <ContinueBrowsingSection />
-
-          {/* 4. Recommendation Preview */}
-          <RecommendationPreview user={user} />
-
-          {/* 5. Marketplace Highlights */}
-          <MarketplaceHighlights />
-
-          {/* 6. Trust & Community */}
-          <TrustSection />
-
-          {/* 7. Quick Access */}
-          <QuickAccess user={user} />
-
-          {/* 8. Footer */}
-          <WelcomeFooter logoUrl={brandLogoUrl} />
+          <motion.h1
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 95, damping: 17, delay: 0.2 }}
+            className="mt-10 whitespace-nowrap text-[2.05rem] font-black leading-none tracking-[0.025em] text-white min-[390px]:text-[2.25rem] sm:mt-12 sm:text-5xl md:text-7xl"
+          >
+            Welcome <span className="text-slate-300">to</span> DRIGHT
+          </motion.h1>
         </div>
-      }
-    />
+      </main>
+
+      <motion.div
+        initial={{ opacity: 0, y: 22 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 95, damping: 17, delay: 0.32 }}
+        className="fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:pb-8"
+      >
+        <Link
+          to="/market"
+          className="group relative flex min-h-[54px] w-full max-w-[620px] items-center justify-center gap-2.5 overflow-hidden rounded-full border border-blue-600/65 bg-[#050B1D]/95 px-5 py-3.5 shadow-[0_14px_42px_rgba(37,99,235,0.28),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl transition-all duration-300 hover:scale-[1.015] hover:border-blue-400/90"
+        >
+          <div className="pointer-events-none absolute inset-0 rounded-full bg-blue-600/10 opacity-70 blur-xl transition-opacity group-hover:opacity-100" />
+          <Sparkles className="relative h-5 w-5 shrink-0 text-blue-400 sm:h-6 sm:w-6" strokeWidth={1.5} />
+          <span className="relative text-center text-[0.95rem] font-normal tracking-[0.055em] text-slate-100 min-[390px]:text-base sm:text-xl sm:tracking-[0.08em]">
+            AI-powered marketplace, now live
+          </span>
+          <Sparkles className="relative h-5 w-5 shrink-0 text-blue-400 sm:h-6 sm:w-6" strokeWidth={1.5} />
+        </Link>
+      </motion.div>
+    </div>
   );
 }
