@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   SlidersHorizontal, X, MapPin, DollarSign, Star, Package,
@@ -14,6 +15,11 @@ import {
   type FilterState,
   type SavedFilterConfig,
 } from '../../lib/filterConfigs';
+import {
+  MARKETPLACE_CARD_SIZES,
+  MARKETPLACE_CARD_SIZE_LABELS,
+  type MarketplaceCardSize,
+} from '../../lib/marketplaceLayout';
 
 export interface AdvancedFilterState {
   category: string;
@@ -81,6 +87,8 @@ interface AdvancedFilterBarProps {
   userId?: string;
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
+  cardSize?: MarketplaceCardSize;
+  onCardSizeChange?: (size: MarketplaceCardSize) => void;
 }
 
 export default function AdvancedFilterBar({
@@ -91,6 +99,8 @@ export default function AdvancedFilterBar({
   userId,
   searchQuery = '',
   onSearchQueryChange,
+  cardSize = 'medium',
+  onCardSizeChange,
 }: AdvancedFilterBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -102,7 +112,10 @@ export default function AdvancedFilterBar({
   const [activeConfigId, setActiveConfigId] = useState<string>('');
   const [deletingConfig, setDeletingConfig] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [sortMenuPosition, setSortMenuPosition] = useState({ top: 0, left: 0 });
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sortButtonRef = useRef<HTMLButtonElement | null>(null);
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
 
   const savedFilterState = useMemo<FilterState>(() => ({
     searchQuery,
@@ -239,6 +252,51 @@ export default function AdvancedFilterBar({
   };
 
   const sortLabel = SORT_OPTIONS.find(o => o.value === filters.sortBy)?.label ?? 'Sort';
+  const cardSizeIndex = Math.max(0, MARKETPLACE_CARD_SIZES.indexOf(cardSize));
+
+  const updateSortMenuPosition = useCallback(() => {
+    const button = sortButtonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const menuWidth = 208;
+    const viewportPadding = 8;
+    const left = Math.min(
+      Math.max(viewportPadding, rect.right - menuWidth),
+      Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding),
+    );
+    setSortMenuPosition({
+      top: rect.bottom + 6,
+      left,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showSortMenu) return;
+
+    updateSortMenuPosition();
+
+    const handleViewportChange = () => updateSortMenuPosition();
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        sortButtonRef.current?.contains(target) ||
+        sortMenuRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setShowSortMenu(false);
+    };
+
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+    document.addEventListener('pointerdown', handlePointerDown, true);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+    };
+  }, [showSortMenu, updateSortMenuPosition]);
 
   return (
     <div className="sticky top-[56px] md:top-0 z-30 bg-white/95 backdrop-blur border border-gray-100 rounded-2xl shadow-sm">
@@ -262,39 +320,21 @@ export default function AdvancedFilterBar({
           )}
         </button>
 
-        {/* Sort dropdown */}
+        {/* Sort dropdown — rendered in a portal so the horizontal filter row cannot clip it */}
         <div className="relative shrink-0">
           <button
-            onClick={() => setShowSortMenu(!showSortMenu)}
+            ref={sortButtonRef}
+            type="button"
+            onClick={() => {
+              if (!showSortMenu) updateSortMenuPosition();
+              setShowSortMenu(!showSortMenu);
+            }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-medium transition-colors"
           >
             <span className="hidden sm:inline">{sortLabel}</span>
             <span className="sm:hidden">Sort</span>
             <ChevronDown className={`w-4 h-4 transition-transform ${showSortMenu ? 'rotate-180' : ''}`} />
           </button>
-          <AnimatePresence>
-            {showSortMenu && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="absolute top-full mt-1 right-0 w-52 bg-white rounded-xl shadow-lg border border-gray-100 z-40 overflow-hidden max-h-80 overflow-y-auto"
-              >
-                {SORT_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => { update({ sortBy: opt.value }); setShowSortMenu(false); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-primary-50 transition-colors flex items-center justify-between ${
-                      filters.sortBy === opt.value ? 'text-primary-600 font-semibold bg-primary-50' : 'text-gray-700'
-                    }`}
-                  >
-                    {opt.label}
-                    {filters.sortBy === opt.value && <Check className="w-4 h-4" />}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* Quick toggles */}
@@ -414,6 +454,47 @@ export default function AdvancedFilterBar({
             className="overflow-hidden border-t border-gray-100"
           >
             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {/* Listing card size / grid density */}
+              <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Listing Card Size</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Resize marketplace item cards without changing the product detail page.
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700">
+                    {MARKETPLACE_CARD_SIZE_LABELS[cardSize]}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-medium text-gray-500 w-10">Micro</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={MARKETPLACE_CARD_SIZES.length - 1}
+                    step={1}
+                    value={cardSizeIndex}
+                    onChange={(event) => {
+                      const next = MARKETPLACE_CARD_SIZES[Number(event.target.value)] || 'medium';
+                      onCardSizeChange?.(next);
+                    }}
+                    className="w-full accent-primary-600 cursor-pointer"
+                    aria-label="Marketplace listing card size"
+                  />
+                  <span className="text-[11px] font-medium text-gray-500 whitespace-nowrap">Extra Large</span>
+                </div>
+
+                <div className="mt-2 grid grid-cols-5 gap-1 text-[10px] text-gray-400">
+                  {MARKETPLACE_CARD_SIZES.map(size => (
+                    <span key={size} className={`text-center ${size === cardSize ? 'text-primary-600 font-semibold' : ''}`}>
+                      {MARKETPLACE_CARD_SIZE_LABELS[size]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
               {/* Location */}
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
@@ -541,6 +622,40 @@ export default function AdvancedFilterBar({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showSortMenu && typeof document !== 'undefined' && createPortal(
+        <motion.div
+          ref={sortMenuRef}
+          initial={{ opacity: 0, y: -8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.98 }}
+          transition={{ duration: 0.12 }}
+          className="fixed z-[200] w-52 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden max-h-80 overflow-y-auto"
+          style={{ top: sortMenuPosition.top, left: sortMenuPosition.left }}
+          role="menu"
+        >
+          {SORT_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                update({ sortBy: opt.value });
+                setShowSortMenu(false);
+              }}
+              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-primary-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
+                filters.sortBy === opt.value
+                  ? 'text-primary-600 font-semibold bg-primary-50 dark:bg-gray-700'
+                  : 'text-gray-700 dark:text-gray-200'
+              }`}
+              role="menuitem"
+            >
+              {opt.label}
+              {filters.sortBy === opt.value && <Check className="w-4 h-4" />}
+            </button>
+          ))}
+        </motion.div>,
+        document.body,
+      )}
 
       <AnimatePresence>
         {showSaveModal && (

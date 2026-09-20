@@ -42,6 +42,13 @@ import ShareMenu from '../components/marketplace/ShareMenu';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
+import {
+  MARKETPLACE_GRID_CLASSES,
+  MARKETPLACE_IMAGE_HEIGHT_CLASSES,
+  MARKETPLACE_LAYOUT_STORAGE_KEY,
+  isMarketplaceCardSize,
+  type MarketplaceCardSize,
+} from '../lib/marketplaceLayout';
 
 export default function MarketPage() {
   const { user, isAdmin, isAccountLocked, isAccountBanned } = useAuth();
@@ -67,6 +74,11 @@ export default function MarketPage() {
   const [filters, setFilters] = useState<AdvancedFilterState>({ ...DEFAULT_FILTER_STATE, sortBy: 'recommended' });
   const [showCategorySection, setShowCategorySection] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [listingCardSize, setListingCardSize] = useState<MarketplaceCardSize>(() => {
+    if (typeof window === 'undefined') return 'medium';
+    const saved = window.localStorage.getItem(MARKETPLACE_LAYOUT_STORAGE_KEY);
+    return isMarketplaceCardSize(saved) ? saved : 'medium';
+  });
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
@@ -88,6 +100,14 @@ export default function MarketPage() {
   const { recordView } = useRecentlyViewed(user?.id);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [rankingWeights, setRankingWeights] = useState<RankingWeights | null>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MARKETPLACE_LAYOUT_STORAGE_KEY, listingCardSize);
+    } catch {
+      // Layout preference persistence is best-effort.
+    }
+  }, [listingCardSize]);
 
   const recommendedMode = filters.sortBy === 'recommended';
   const usingMarketplaceV2 = recommendedMode && !marketV2Failed;
@@ -418,6 +438,8 @@ export default function MarketPage() {
           userId={user?.id}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
+          cardSize={listingCardSize}
+          onCardSizeChange={setListingCardSize}
         />
       </div>
 
@@ -465,8 +487,17 @@ export default function MarketPage() {
         {contextualPlacement && <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />}
 
         {loading && (
-          <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'} gap-3 sm:gap-5 mt-6`}>
-            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden"><div className="h-48 skeleton" /><div className="p-4 space-y-3"><div className="h-4 skeleton w-3/4" /><div className="h-3 skeleton w-1/2" /><div className="h-6 skeleton w-1/3" /></div></div>)}
+          <div className={`grid ${viewMode === 'grid' ? MARKETPLACE_GRID_CLASSES[listingCardSize] : 'grid-cols-1'} gap-3 sm:gap-5 mt-6`}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className={`${MARKETPLACE_IMAGE_HEIGHT_CLASSES[listingCardSize]} skeleton`} />
+                <div className="p-4 space-y-3">
+                  <div className="h-4 skeleton w-3/4" />
+                  <div className="h-3 skeleton w-1/2" />
+                  <div className="h-6 skeleton w-1/3" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -481,7 +512,7 @@ export default function MarketPage() {
 
         {!loading && displayProducts.length > 0 && (
           <>
-            <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1 max-w-3xl'} gap-3 sm:gap-5 mt-6`}>
+            <div className={`grid ${viewMode === 'grid' ? MARKETPLACE_GRID_CLASSES[listingCardSize] : 'grid-cols-1 max-w-3xl'} gap-3 sm:gap-5 mt-6 transition-all duration-200`}>
               {visibleProducts.map((product, index) => (
                 <ProductCard
                   key={product.id}
@@ -494,6 +525,7 @@ export default function MarketPage() {
                   onCopyAffiliate={handleCopyAffiliateLink}
                   copiedId={copiedId}
                   affiliateCode={referralCode}
+                  cardSize={listingCardSize}
                 />
               ))}
             </div>
