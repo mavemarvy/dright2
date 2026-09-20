@@ -1,7 +1,7 @@
 export type TurnstileAction =
   | 'registration' | 'signup' | 'login' | 'signin' | 'password_reset'
   | 'password_reset_code' | 'account_verification_code'
-  | 'forgot_password' | 'contact_form' | 'guest_checkout'
+  | 'forgot_password' | 'contact_form' | 'guest_checkout' | 'dright_starter_checkout'
   | 'customer_support' | 'report_abuse' | 'product_creation'
   | 'service_creation' | 'course_creation' | 'job_posting'
   | 'wallet_funding' | 'withdrawals' | 'comments' | 'reviews'
