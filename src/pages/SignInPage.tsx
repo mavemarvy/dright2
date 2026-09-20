@@ -8,6 +8,7 @@ import { getPendingRedirect, clearPendingRedirect } from '../lib/affiliate';
 import TurnstileWidget from '../components/TurnstileWidget';
 import { DrightMark, DrightWordmark } from '../components/DrightBrand';
 import { verifyTurnstileToken } from '../lib/security/turnstile';
+import { claimPendingDrightStarterPurchase } from '../lib/drightStarter';
 
 export default function SignInPage() {
   const [isPhoneMode, setIsPhoneMode] = useState(false);
@@ -59,6 +60,8 @@ export default function SignInPage() {
         setLoading(false);
         return;
       }
+      const starterClaim = await claimPendingDrightStarterPurchase();
+      if (starterClaim.error) console.warn('Starter purchase claim pending:', starterClaim.error);
       navigate(getPendingRedirect() || '/');
       clearPendingRedirect();
     }
