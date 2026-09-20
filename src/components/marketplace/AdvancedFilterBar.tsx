@@ -107,7 +107,7 @@ export default function AdvancedFilterBar({
   const sortLabel = SORT_OPTIONS.find(o => o.value === filters.sortBy)?.label ?? 'Sort';
 
   return (
-    <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border border-gray-100 rounded-2xl shadow-sm">
+    <div className="sticky top-[56px] md:top-0 z-30 bg-white/95 backdrop-blur border border-gray-100 rounded-2xl shadow-sm">
       {/* Main bar */}
       <div className="flex items-center gap-2 p-3 overflow-x-auto">
         {/* Filter toggle */}
