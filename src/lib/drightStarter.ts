@@ -190,9 +190,12 @@ export async function startDrightStarterCheckout(input: {
 
 export function setPendingDrightStarterPurchase(reference: string, email?: string): void {
   try {
+    const existing = getPendingDrightStarterPurchase();
+    const normalizedEmail = email?.trim().toLowerCase()
+      || (existing?.reference === reference ? existing.email : null);
     localStorage.setItem(PENDING_KEY, JSON.stringify({
       reference,
-      email: email?.trim().toLowerCase() || null,
+      email: normalizedEmail,
       saved_at: new Date().toISOString(),
     }));
   } catch { /* storage unavailable */ }
