@@ -240,39 +240,98 @@ function AISearchBar() {
 
 // ─── Hero Section ─────────────────────────────────────────────────────────────
 
-function HeroSection({ user, firstName }: { user: any; firstName: string | null }) {
+function HeroSection({ user, firstName, logoUrl }: { user: any; firstName: string | null; logoUrl: string }) {
   return (
-    <section className="relative pt-24 pb-16 sm:pt-32 sm:pb-20 overflow-hidden">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-blue-50 via-white to-white dark:from-gray-900 dark:via-gray-900 dark:to-gray-900" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-200/30 dark:bg-blue-900/20 rounded-full blur-3xl" />
+    <section className="relative pt-24 pb-16 sm:pt-32 sm:pb-24 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.14),transparent_38%),linear-gradient(to_bottom,#eff6ff,#ffffff_46%,#ffffff)] dark:bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.18),transparent_36%),linear-gradient(to_bottom,#111827,#111827)]" />
+      <motion.div
+        aria-hidden="true"
+        className="absolute -top-32 left-[8%] w-72 h-72 rounded-full bg-blue-400/10 blur-3xl"
+        animate={{ x: [0, 28, 0], y: [0, 18, 0], scale: [1, 1.08, 1] }}
+        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        aria-hidden="true"
+        className="absolute top-20 right-[4%] w-64 h-64 rounded-full bg-indigo-400/10 blur-3xl"
+        animate={{ x: [0, -22, 0], y: [0, -16, 0], scale: [1.05, 0.96, 1.05] }}
+        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+      />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
+          }}
           className="text-center"
         >
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, y: -16, scale: 0.94 },
+              visible: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 115, damping: 15 } },
+            }}
+            className="relative inline-flex items-center justify-center mb-7"
+          >
+            <motion.div
+              animate={{ y: [0, -5, 0] }}
+              transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="relative rounded-3xl border border-white/70 dark:border-white/10 bg-white/85 dark:bg-gray-900/80 backdrop-blur-xl px-6 py-4 shadow-[0_22px_60px_-24px_rgba(37,99,235,0.48)]"
+            >
+              <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-blue-500/5 via-indigo-500/10 to-cyan-500/5" />
+              <img
+                src={logoUrl}
+                alt="DRIGHT"
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
+                className="relative h-14 sm:h-16 md:h-20 w-auto max-w-[260px] sm:max-w-[320px] object-contain"
+                onError={(event) => {
+                  event.currentTarget.onerror = null;
+                  event.currentTarget.src = '/dright-logo.webp';
+                }}
+              />
+            </motion.div>
+          </motion.div>
+
           {/* Announcement badge */}
-          <div className="inline-flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-full px-4 py-1.5 mb-6">
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, y: 12 },
+              visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 125, damping: 16 } },
+            }}
+            className="inline-flex items-center gap-2 bg-blue-50/90 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-full px-4 py-1.5 mb-6 shadow-sm"
+          >
             <Sparkles className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
             <span className="text-xs font-medium text-blue-700 dark:text-blue-300">AI-powered marketplace, now live</span>
-          </div>
+          </motion.div>
 
           {/* Personalized greeting */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 dark:text-gray-100 leading-[1.1]">
+          <motion.h1
+            variants={{
+              hidden: { opacity: 0, y: 18 },
+              visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 105, damping: 16 } },
+            }}
+            className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 dark:text-gray-100 leading-[1.1]"
+          >
             {user && firstName ? (
               <>Welcome back, {firstName}</>
             ) : (
               <>Welcome to Dright</>
             )}
-          </h1>
-          <p className="mt-5 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
+          </motion.h1>
+          <motion.p
+            variants={{
+              hidden: { opacity: 0, y: 16 },
+              visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100, damping: 17 } },
+            }}
+            className="mt-5 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed"
+          >
             {user
               ? 'Continue where you left off. Discover products, services, jobs, and opportunities tailored for you.'
               : 'Discover products, services, jobs, and opportunities — all in one AI-powered marketplace.'}
-          </p>
+          </motion.p>
         </motion.div>
 
         {/* AI Search */}
@@ -686,15 +745,24 @@ function QuickAccess({ user }: { user: any }) {
 
 // ─── Footer ────────────────────────────────────────────────────────────────────
 
-function WelcomeFooter() {
+function WelcomeFooter({ logoUrl }: { logoUrl: string }) {
   return (
     <footer className="bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
           <div className="col-span-2">
-            <Link to="/welcome" className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-white">D</div>
-              <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Dright</span>
+            <Link to="/welcome" className="inline-flex items-center mb-4">
+              <img
+                src={logoUrl}
+                alt="DRIGHT"
+                loading="lazy"
+                decoding="async"
+                className="h-11 w-auto max-w-[190px] object-contain"
+                onError={(event) => {
+                  event.currentTarget.onerror = null;
+                  event.currentTarget.src = '/dright-logo.webp';
+                }}
+              />
             </Link>
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mb-4">
               The AI-powered marketplace for creators, sellers, and marketers. Sell digital products, offer services, and grow your income.
@@ -733,15 +801,25 @@ function WelcomeFooter() {
 
 // ─── Navigation Bar ────────────────────────────────────────────────────────────
 
-function NavBar({ user, firstName }: { user: any; firstName: string | null }) {
+function NavBar({ user, firstName, logoUrl }: { user: any; firstName: string | null; logoUrl: string }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-100 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-        <Link to="/welcome" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-white text-sm">D</div>
-          <span className="text-lg font-bold text-gray-900 dark:text-gray-100 tracking-tight">Dright</span>
+        <Link to="/welcome" className="flex items-center min-w-0">
+          <img
+            src={logoUrl}
+            alt="DRIGHT"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            className="h-10 sm:h-11 w-auto max-w-[165px] sm:max-w-[205px] object-contain"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = '/dright-logo.webp';
+            }}
+          />
         </Link>
         <div className="hidden md:flex items-center gap-6">
           <Link to="/market" className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">Browse</Link>
@@ -788,6 +866,7 @@ function NavBar({ user, firstName }: { user: any; firstName: string | null }) {
 export default function LandingPage() {
   const { user } = useAuth();
   const [firstName, setFirstName] = useState<string | null>(null);
+  const [brandLogoUrl, setBrandLogoUrl] = useState('/dright-logo.webp');
 
   useEffect(() => {
     if (!user) { setFirstName(null); return; }
@@ -803,6 +882,22 @@ export default function LandingPage() {
     })();
   }, [user]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase
+        .from('site_settings')
+        .select('logo_url')
+        .limit(1)
+        .maybeSingle();
+
+      if (mounted && data?.logo_url) {
+        setBrandLogoUrl(data.logo_url);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   return (
     <CmsPageRenderer
       slug="welcome"
@@ -817,10 +912,10 @@ export default function LandingPage() {
             breadcrumbs={[{ name: 'Home', url: '/welcome' }]}
           />
 
-          <NavBar user={user} firstName={firstName} />
+          <NavBar user={user} firstName={firstName} logoUrl={brandLogoUrl} />
 
           {/* 1. Hero with AI Search */}
-          <HeroSection user={user} firstName={firstName} />
+          <HeroSection user={user} firstName={firstName} logoUrl={brandLogoUrl} />
 
           {/* 2. Category Explorer */}
           <CategoryExplorer />
@@ -841,7 +936,7 @@ export default function LandingPage() {
           <QuickAccess user={user} />
 
           {/* 8. Footer */}
-          <WelcomeFooter />
+          <WelcomeFooter logoUrl={brandLogoUrl} />
         </div>
       }
     />
