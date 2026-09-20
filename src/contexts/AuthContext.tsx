@@ -7,7 +7,7 @@ import type { StoreTheme } from '../lib/storeThemes';
 import { logger, ErrorCategory } from '../lib/logger';
 import { getDeviceFingerprint, getBrowserName, getRedirectPath } from '../lib/authSecurity';
 import { resumePendingSignupOnboarding } from '../lib/onboarding';
-import { getDrightStarterSignupEligibility } from '../lib/drightStarter';
+import { claimPendingDrightStarterPurchase, getDrightStarterSignupEligibility } from '../lib/drightStarter';
 
 export type AdminRole =
   | 'super_admin' | 'platform_admin' | 'user_management_admin' | 'marketplace_admin' | 'marketplace_moderator'
@@ -132,6 +132,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await createMissingProfile(session.user);
         await fetchProfile(session.user.id);
         await resumeOnboarding();
+        const starterClaim = await claimPendingDrightStarterPurchase();
+        if (starterClaim.error) console.warn('Pending DRIGHT Starter claim could not be completed yet:', starterClaim.error);
       } else setLoading(false);
     };
     void getSession();
@@ -142,6 +144,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await createMissingProfile(authSession.user);
           await fetchProfile(authSession.user.id);
           await resumeOnboarding();
+          const starterClaim = await claimPendingDrightStarterPurchase();
+          if (starterClaim.error) console.warn('Pending DRIGHT Starter claim could not be completed yet:', starterClaim.error);
           if (event === 'SIGNED_IN') {
             await logAuthActivity('login', true);
             await supabase.rpc('reset_login_attempts', { p_email: authSession.user.email || '' });
