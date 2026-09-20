@@ -3,7 +3,7 @@ import {
   ChevronRight, Edit3, Eye, EyeOff, FolderTree, Loader2, Plus, RotateCcw, Save,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import type { MarketplaceListingTypeCode } from '../../lib/listingEngine';
+import { marketplaceTaxonomyLevelLabel, type MarketplaceListingTypeCode } from '../../lib/listingEngine';
 
 interface AdminTaxonomyNode {
   id: string;
@@ -21,6 +21,9 @@ interface AdminTaxonomyNode {
   path_ids: string[];
   path_names: string[];
   has_children: boolean;
+  synonyms: string[];
+  form_template_key: string | null;
+  moderation_tier: string | null;
 }
 
 const LISTING_TYPES: Array<{ code: MarketplaceListingTypeCode; label: string }> = [
@@ -49,9 +52,15 @@ export default function AdminTaxonomyManager() {
   const loadTree = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: rpcError } = await supabase.rpc('admin_get_marketplace_taxonomy_tree', {
+    const v2 = await supabase.rpc('admin_get_marketplace_taxonomy_tree_v2', {
       p_listing_type_code: listingType,
     });
+    const result = v2.error
+      ? await supabase.rpc('admin_get_marketplace_taxonomy_tree', {
+          p_listing_type_code: listingType,
+        })
+      : v2;
+    const { data, error: rpcError } = result;
 
     if (rpcError) {
       setError(rpcError.message);
@@ -73,6 +82,9 @@ export default function AdminTaxonomyManager() {
         path_ids: Array.isArray(row.path_ids) ? row.path_ids.map(String) : [],
         path_names: Array.isArray(row.path_names) ? row.path_names.map(String) : [],
         has_children: Boolean(row.has_children),
+        synonyms: Array.isArray(row.synonyms) ? row.synonyms.map(String) : [],
+        form_template_key: row.form_template_key ? String(row.form_template_key) : null,
+        moderation_tier: row.moderation_tier ? String(row.moderation_tier) : null,
       })) as AdminTaxonomyNode[]);
     }
     setLoading(false);
@@ -167,7 +179,7 @@ export default function AdminTaxonomyManager() {
             Taxonomy Tree
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            Build nested categories without changing legacy listing tables.
+            Main → Category → Subcategory → Mini → Micro → Leaf → Tiny. Leaf Category is the corrected selectable end-category term.
           </p>
         </div>
         <select
@@ -267,7 +279,7 @@ export default function AdminTaxonomyManager() {
               checked={isLeaf}
               onChange={event => setIsLeaf(event.target.checked)}
             />
-            Final/leaf category
+            Leaf category (selectable end category)
           </label>
           <button
             type="button"
@@ -309,15 +321,30 @@ export default function AdminTaxonomyManager() {
                 <div className="flex items-center gap-1.5 min-w-0">
                   {node.depth > 0 && <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
                   <p className="text-sm font-semibold text-gray-800 truncate">{node.name}</p>
+                  <span className="text-[10px] rounded-full bg-gray-100 text-gray-600 px-1.5 py-0.5 shrink-0">
+                    {marketplaceTaxonomyLevelLabel(node.depth)}
+                  </span>
                   {node.is_leaf && (
                     <span className="text-[10px] rounded-full bg-primary-50 text-primary-700 px-1.5 py-0.5 shrink-0">
-                      leaf
+                      Leaf
+                    </span>
+                  )}
+                  {node.moderation_tier && node.moderation_tier !== 'standard' && (
+                    <span className="text-[10px] rounded-full bg-amber-50 text-amber-700 px-1.5 py-0.5 shrink-0">
+                      {node.moderation_tier.replace(/_/g, ' ')}
                     </span>
                   )}
                 </div>
                 <p className="text-[11px] text-gray-400 truncate mt-0.5">
                   {node.path_names.join(' › ')}
                 </p>
+                {(node.synonyms.length > 0 || node.form_template_key) && (
+                  <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                    {node.synonyms.length > 0 ? `Aliases: ${node.synonyms.join(', ')}` : ''}
+                    {node.synonyms.length > 0 && node.form_template_key ? ' · ' : ''}
+                    {node.form_template_key ? `Form: ${node.form_template_key}` : ''}
+                  </p>
+                )}
               </div>
 
               <button
