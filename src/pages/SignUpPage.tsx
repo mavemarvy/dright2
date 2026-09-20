@@ -24,7 +24,7 @@ import {
 } from '../lib/onboarding';
 import type { AgeRule, QuestionnaireDefinition, QuestionnaireQuestion, PublicKycRequirement, UsernameAvailability } from '../lib/onboarding';
 import { createKycProfile, createKycSubmission, uploadKycDocument } from '../lib/kycHooks';
-import { claimPendingDrightStarterPurchase, getDrightStarterSignupEligibility, getPendingDrightStarterPurchase } from '../lib/drightStarter';
+import { claimPendingDrightStarterPurchase, getDrightStarterSignupEligibility, getPendingDrightStarterPurchase, setPendingDrightStarterPurchase } from '../lib/drightStarter';
 import { KYC_DOC_TYPE_LABELS } from '../lib/kycTypes';
 
 type Answers = Record<string, Record<string, unknown>>;
@@ -121,6 +121,7 @@ export default function SignUpPage() {
       const eligibility = await getDrightStarterSignupEligibility(starterReference, normalizedEmail);
       setStarterGateVerified(eligibility.eligible);
       setStarterGateMessage(eligibility.message);
+      if (eligibility.eligible) setPendingDrightStarterPurchase(starterReference, normalizedEmail);
       setStarterGateChecking(false);
     }, 350);
 
@@ -255,6 +256,7 @@ export default function SignUpPage() {
         }
         setStarterGateVerified(true);
         setStarterGateMessage(eligibility.message);
+        setPendingDrightStarterPurchase(starterReference, email);
       }
 
       const onboardingToken = createPendingOnboardingToken();
