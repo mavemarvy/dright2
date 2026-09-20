@@ -40,6 +40,7 @@ type ProFile = { file: File; documentType: string; title: string };
 const STEPS = ['Account', 'Identity', 'Use DRIGHT', 'Questionnaire', 'Interests', 'Documents', 'Review'];
 const DISCOVERY_INTERESTS = ['Products', 'Services', 'Courses', 'Jobs', 'Tasks', 'Creators', 'Communities', 'Technology', 'Business', 'Fashion', 'Home', 'Education', 'Entertainment'];
 
+// Starter journeys fail closed until server-side payment verification succeeds.
 export default function SignUpPage() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
