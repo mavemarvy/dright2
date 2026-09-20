@@ -68,9 +68,15 @@ interface AdvancedFilterBarProps {
   filters: AdvancedFilterState;
   onFilterChange: (filters: AdvancedFilterState) => void;
   resultCount: number;
+  showResultCount?: boolean;
 }
 
-export default function AdvancedFilterBar({ filters, onFilterChange, resultCount }: AdvancedFilterBarProps) {
+export default function AdvancedFilterBar({
+  filters,
+  onFilterChange,
+  resultCount,
+  showResultCount = true,
+}: AdvancedFilterBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
 
@@ -101,7 +107,7 @@ export default function AdvancedFilterBar({ filters, onFilterChange, resultCount
   const sortLabel = SORT_OPTIONS.find(o => o.value === filters.sortBy)?.label ?? 'Sort';
 
   return (
-    <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border border-gray-100 rounded-2xl shadow-sm">
+    <div className="sticky top-[56px] md:top-0 z-30 bg-white/95 backdrop-blur border border-gray-100 rounded-2xl shadow-sm">
       {/* Main bar */}
       <div className="flex items-center gap-2 p-3 overflow-x-auto">
         {/* Filter toggle */}
@@ -186,9 +192,11 @@ export default function AdvancedFilterBar({ filters, onFilterChange, resultCount
         </button>
 
         {/* Result count */}
-        <span className="text-sm text-gray-400 ml-auto shrink-0 px-2">
-          {resultCount} result{resultCount !== 1 ? 's' : ''}
-        </span>
+        {showResultCount && (
+          <span className="text-sm text-gray-400 ml-auto shrink-0 px-2">
+            {resultCount} result{resultCount !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {/* Expanded filters */}

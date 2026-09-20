@@ -43,10 +43,14 @@ import AdvancedFilterBar, {
 import ShareMenu from '../components/marketplace/ShareMenu';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
 
 export default function MarketPage() {
-  const { user, isAccountLocked, isAccountBanned } = useAuth();
+  const { user, isAdmin, isAccountLocked, isAccountBanned } = useAuth();
   const { t } = useLanguage();
+  const { isVisible: isFeatureVisible } = useNavigationVisibility();
+  const showFeaturedSellers = isFeatureVisible('marketplace_featured_sellers', isAdmin);
+  const showListingCount = isFeatureVisible('marketplace_listing_count', isAdmin);
 
   // Marketplace V2 is canonical for the Recommended discovery surface.
   // The legacy catalog path remains a resilience/deterministic-sort fallback.
@@ -417,8 +421,18 @@ export default function MarketPage() {
         </div>
       )}
 
-      <HeroBanner onSearch={handleSearch} onBrowseCategories={() => setShowCategorySection(s => !s)} />
-      <div className="mt-6"><SmartSearch onSearch={handleSearch} /></div>
+      <HeroBanner onBrowseCategories={() => setShowCategorySection(s => !s)} />
+      <div className="mt-6">
+        <SmartSearch onSearch={handleSearch} />
+      </div>
+      <div className="mt-3">
+        <AdvancedFilterBar
+          filters={filters}
+          onFilterChange={setFilters}
+          resultCount={displayProducts.length}
+          showResultCount={showListingCount}
+        />
+      </div>
 
       <AnimatePresence>
         {showCategorySection && (
@@ -434,20 +448,23 @@ export default function MarketPage() {
           {filters.sortBy !== 'trending' && <SponsoredPlacementCard placement="suggestions" variant="recommendation" className="my-8" />}
           <ContinueBrowsing />
           <NewArrivalsSection />
-          <FeaturedSellersSection />
+          {showFeaturedSellers && <FeaturedSellersSection />}
           <FeaturedServicesSection />
           <JobsSection />
         </div>
       )}
 
-      <div className="mt-10" id="marketplace-products">
-        <AdvancedFilterBar filters={filters} onFilterChange={setFilters} resultCount={displayProducts.length} />
+      <div className="mt-8" id="marketplace-products">
         {filters.sortBy === 'trending' && <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />}
 
         <div className="flex items-center justify-between mb-4 mt-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('allProducts')}</h1>
-            <p className="text-gray-500 mt-0.5 text-sm">{resultLabel}{usingMarketplaceV2 ? ` · v${marketAlgorithmVersion}` : ''}</p>
+            {showListingCount && (
+              <p className="text-gray-500 mt-0.5 text-sm">
+                {resultLabel}{usingMarketplaceV2 ? ` · v${marketAlgorithmVersion}` : ''}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">

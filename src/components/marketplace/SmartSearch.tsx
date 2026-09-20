@@ -41,6 +41,11 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
   const [smartSuggestions, setSmartSuggestions] = useState<SearchSuggestion[]>([]);
   const [aiIntent, setAiIntent] = useState<string | null>(null);
   const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const voiceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,6 +66,34 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.abort?.();
+      } catch {
+        // Recognition cleanup is best-effort.
+      }
+      recognitionRef.current = null;
+
+      if (voiceTimeoutRef.current) {
+        clearTimeout(voiceTimeoutRef.current);
+        voiceTimeoutRef.current = null;
+      }
+
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } catch {
+        // Recorder cleanup is best-effort.
+      }
+      mediaRecorderRef.current = null;
+
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    };
   }, []);
 
   const searchDb = useCallback(async (q: string) => {
@@ -166,29 +199,199 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
     inputRef.current?.blur();
   };
 
-  const handleVoiceSearch = useCallback(() => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Voice search is not supported on this browser. Please use Chrome or Edge.');
+  const applyVoiceTranscript = useCallback((rawTranscript: string) => {
+    const transcript = rawTranscript.trim();
+    if (!transcript) {
+      setVoiceError('No speech was detected. Tap the microphone and try again.');
       return;
     }
-    setVoiceListening(true);
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
 
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setQuery(transcript);
+    setQuery(transcript);
+    addRecentSearch(transcript);
+    setRecentSearches(getRecentSearches());
+    setVoiceError(null);
+
+    // Voice search behaves exactly like submitting the single marketplace search bar.
+    onSearch(transcript);
+    void searchDb(transcript);
+    setIsOpen(true);
+  }, [onSearch, searchDb]);
+
+  const transcribeRecordedAudio = useCallback(async (audioBlob: Blob, mimeType: string) => {
+    const extension = mimeType.includes('mp4')
+      ? 'm4a'
+      : mimeType.includes('ogg')
+        ? 'ogg'
+        : 'webm';
+
+    const formData = new FormData();
+    formData.append('audio', audioBlob, `marketplace-voice-search.${extension}`);
+    formData.append('language', (navigator.language || 'en-US').split('-')[0]);
+
+    const { data, error } = await supabase.functions.invoke('voice-search-transcribe', {
+      body: formData,
+    });
+
+    if (error) throw error;
+    if (!data?.success || !data?.transcript) {
+      throw new Error(data?.error || 'No transcript was returned');
+    }
+
+    applyVoiceTranscript(String(data.transcript));
+  }, [applyVoiceTranscript]);
+
+  const startRecordedVoiceSearch = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setVoiceError('Voice search is not supported by this browser. You can still type your search.');
+      return;
+    }
+
+    setVoiceError(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      const preferredMimeTypes = [
+        'audio/mp4',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+      ];
+      const mimeType = preferredMimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) chunks.push(event.data);
+      };
+
+      recorder.onerror = () => {
+        setVoiceError('Microphone recording failed. Please try again.');
+        setVoiceListening(false);
+      };
+
+      recorder.onstop = async () => {
+        if (voiceTimeoutRef.current) {
+          clearTimeout(voiceTimeoutRef.current);
+          voiceTimeoutRef.current = null;
+        }
+
+        const actualMimeType = recorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(chunks, { type: actualMimeType });
+
+        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+
+        if (blob.size === 0) {
+          setVoiceListening(false);
+          setVoiceError('No audio was recorded. Tap the microphone and try again.');
+          return;
+        }
+
+        try {
+          await transcribeRecordedAudio(blob, actualMimeType);
+        } catch (error) {
+          console.error('Server voice transcription failed:', error);
+          setVoiceError('Voice transcription could not complete. Please sign in, check your connection, and try again.');
+        } finally {
+          setVoiceListening(false);
+        }
+      };
+
+      recorder.start();
+      setVoiceListening(true);
+
+      // Keep voice searches short, responsive, and inexpensive.
+      voiceTimeoutRef.current = setTimeout(() => {
+        if (recorder.state !== 'inactive') recorder.stop();
+      }, 10000);
+    } catch (error) {
+      console.error('Microphone access failed:', error);
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+      mediaRecorderRef.current = null;
       setVoiceListening(false);
-      searchDb(transcript);
-      setIsOpen(true);
-    };
-    recognition.onerror = () => setVoiceListening(false);
-    recognition.onend = () => setVoiceListening(false);
-    recognition.start();
-  }, [searchDb]);
+      setVoiceError('Microphone access is blocked. Allow microphone access for DRIGHT and try again.');
+    }
+  }, [transcribeRecordedAudio]);
+
+  const handleVoiceSearch = useCallback(() => {
+    if (voiceListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // Ignore stop failures from browsers that already ended recognition.
+        }
+        return;
+      }
+
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    // Safari/iPhone and other browsers without Web Speech use DRIGHT's
+    // authenticated server-side Whisper fallback instead.
+    if (!SpeechRecognition) {
+      void startRecordedVoiceSearch();
+      return;
+    }
+
+    setVoiceError(null);
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.lang = navigator.language || 'en-US';
+
+      recognition.onstart = () => {
+        setVoiceListening(true);
+        setVoiceError(null);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = String(event?.results?.[0]?.[0]?.transcript || '');
+        applyVoiceTranscript(transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+        const errorCode = String(event?.error || '');
+        if (errorCode === 'not-allowed' || errorCode === 'service-not-allowed') {
+          setVoiceError('Microphone access is blocked. Allow microphone access for DRIGHT and try again.');
+        } else if (errorCode === 'no-speech') {
+          setVoiceError('No speech was detected. Tap the microphone and try again.');
+        } else if (errorCode !== 'aborted') {
+          setVoiceError('Voice search could not complete. Please try again or type your search.');
+        }
+        setVoiceListening(false);
+      };
+
+      recognition.onend = () => {
+        setVoiceListening(false);
+        recognitionRef.current = null;
+      };
+
+      recognition.start();
+    } catch (error) {
+      console.error('Voice search failed to start:', error);
+      recognitionRef.current = null;
+      setVoiceListening(false);
+      void startRecordedVoiceSearch();
+    }
+  }, [applyVoiceTranscript, startRecordedVoiceSearch, voiceListening]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const flatResults = results;
@@ -246,14 +449,27 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
             </button>
           )}
           <button
+            type="button"
             onClick={handleVoiceSearch}
-            className="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-primary-50 transition-colors"
-            title="Voice search"
+            className={`p-1.5 rounded-lg transition-colors ${
+              voiceListening
+                ? 'text-primary-600 bg-primary-50'
+                : 'text-gray-400 hover:text-primary-600 hover:bg-primary-50'
+            }`}
+            title={voiceListening ? 'Stop voice search' : 'Voice search'}
+            aria-label={voiceListening ? 'Stop voice search' : 'Start voice search'}
+            aria-pressed={voiceListening}
           >
             {voiceListening ? <Loader2 className="w-5 h-5 animate-spin text-primary-600" /> : <Mic className="w-5 h-5" />}
           </button>
         </div>
       </div>
+
+      {voiceError && (
+        <p className="mt-2 px-1 text-xs text-red-600 dark:text-red-400" role="status">
+          {voiceError}
+        </p>
+      )}
 
       <AnimatePresence>
         {isOpen && (
