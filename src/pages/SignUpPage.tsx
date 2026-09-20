@@ -24,6 +24,7 @@ import {
 } from '../lib/onboarding';
 import type { AgeRule, QuestionnaireDefinition, QuestionnaireQuestion, PublicKycRequirement, UsernameAvailability } from '../lib/onboarding';
 import { createKycProfile, createKycSubmission, uploadKycDocument } from '../lib/kycHooks';
+import { claimPendingDrightStarterPurchase, getPendingDrightStarterPurchase } from '../lib/drightStarter';
 import { KYC_DOC_TYPE_LABELS } from '../lib/kycTypes';
 
 type Answers = Record<string, Record<string, unknown>>;
@@ -79,6 +80,11 @@ export default function SignUpPage() {
 
   useEffect(() => {
     void Promise.all([loadAgeRules().then(setAgeRules), loadPublicKycRequirements().then(setKycRequirements)]).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const pendingStarter = getPendingDrightStarterPurchase();
+    if (pendingStarter?.email) setEmail(pendingStarter.email);
   }, []);
 
   useEffect(() => {
@@ -214,6 +220,8 @@ export default function SignUpPage() {
       }
 
       await claimPendingSignupOnboarding(onboardingToken);
+      const starterClaim = await claimPendingDrightStarterPurchase();
+      if (starterClaim.error) console.warn('Starter purchase claim pending:', starterClaim.error);
 
       for (const item of proDocs) {
         await uploadProfessionalDocument({ file: item.file, profileType: profiles[0], documentType: item.documentType, title: item.title });
