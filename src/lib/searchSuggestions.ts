@@ -203,3 +203,40 @@ export async function getTrendingSearchTerms(limit = 10): Promise<{ term: string
     return [];
   }
 }
+
+
+export interface MarketplaceSearchDiscoveryListing {
+  id: string;
+  name: string;
+  category: string | null;
+  product_type: string | null;
+}
+
+export interface MarketplaceSearchDiscovery {
+  trending: MarketplaceSearchDiscoveryListing[];
+  popular: MarketplaceSearchDiscoveryListing[];
+}
+
+/**
+ * Returns live marketplace listing names for the empty-state search dropdown.
+ * Trending prioritizes recent listing opens and freshness; popular prioritizes
+ * lifetime sales, views, ratings, and reviews. The database function only
+ * considers active, approved, non-hidden listings.
+ */
+export async function getMarketplaceSearchDiscovery(limit = 5): Promise<MarketplaceSearchDiscovery> {
+  const safeLimit = Math.max(1, Math.min(limit, 10));
+  const { data, error } = await supabase.rpc('get_marketplace_search_discovery', {
+    p_limit: safeLimit,
+  });
+
+  if (error) {
+    console.error('[marketplace-search-discovery] failed to load live rankings', error);
+    return { trending: [], popular: [] };
+  }
+
+  const payload = (data || {}) as Partial<MarketplaceSearchDiscovery>;
+  return {
+    trending: Array.isArray(payload.trending) ? payload.trending.slice(0, safeLimit) : [],
+    popular: Array.isArray(payload.popular) ? payload.popular.slice(0, safeLimit) : [],
+  };
+}

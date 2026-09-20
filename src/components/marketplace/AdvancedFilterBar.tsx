@@ -1,10 +1,19 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   SlidersHorizontal, X, MapPin, DollarSign, Star, Package,
-  Download, Shield, ChevronDown, Check,
+  Download, Shield, ChevronDown, Check, Save, FolderOpen,
+  RotateCcw, Eraser, Trash2, Loader2, Bookmark,
 } from 'lucide-react';
 import { SORT_OPTIONS } from '../../lib/marketplace';
+import {
+  fetchSavedConfigs,
+  saveConfig,
+  updateConfig,
+  deleteConfig,
+  type FilterState,
+  type SavedFilterConfig,
+} from '../../lib/filterConfigs';
 
 export interface AdvancedFilterState {
   category: string;
@@ -69,6 +78,9 @@ interface AdvancedFilterBarProps {
   onFilterChange: (filters: AdvancedFilterState) => void;
   resultCount: number;
   showResultCount?: boolean;
+  userId?: string;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }
 
 export default function AdvancedFilterBar({
@@ -76,9 +88,69 @@ export default function AdvancedFilterBar({
   onFilterChange,
   resultCount,
   showResultCount = true,
+  userId,
+  searchQuery = '',
+  onSearchQueryChange,
 }: AdvancedFilterBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [savedConfigs, setSavedConfigs] = useState<SavedFilterConfig[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [configName, setConfigName] = useState('');
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [activeConfigId, setActiveConfigId] = useState<string>('');
+  const [deletingConfig, setDeletingConfig] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const savedFilterState = useMemo<FilterState>(() => ({
+    searchQuery,
+    categoryFilter: filters.category,
+    sortBy: filters.sortBy,
+    locationFilter: filters.location,
+    priceMin: filters.priceMin,
+    priceMax: filters.priceMax,
+    dateFilter: 'all',
+  }), [searchQuery, filters.category, filters.sortBy, filters.location, filters.priceMin, filters.priceMax]);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast(null), 2500);
+  }, []);
+
+  const loadSavedConfigs = useCallback(async () => {
+    if (!userId) {
+      setSavedConfigs([]);
+      return;
+    }
+    setLoadingConfigs(true);
+    try {
+      setSavedConfigs(await fetchSavedConfigs(userId));
+    } catch (error) {
+      console.error('Failed to load saved marketplace filters:', error);
+      showToast('Could not load saved filters.');
+    } finally {
+      setLoadingConfigs(false);
+    }
+  }, [showToast, userId]);
+
+  useEffect(() => {
+    void loadSavedConfigs();
+  }, [loadSavedConfigs]);
+
+  useEffect(() => {
+    if (!activeConfigId) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = window.setTimeout(() => {
+      void updateConfig(activeConfigId, savedFilterState).catch(error => {
+        console.error('Failed to auto-save marketplace filter:', error);
+      });
+    }, 1000);
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [activeConfigId, savedFilterState]);
 
   const activeFilterCount = [
     filters.category !== 'All',
@@ -101,7 +173,69 @@ export default function AdvancedFilterBar({
   };
 
   const clearAll = () => {
-    onFilterChange({ ...DEFAULT_FILTER_STATE, sortBy: filters.sortBy });
+    onSearchQueryChange?.('');
+    onFilterChange({ ...DEFAULT_FILTER_STATE, sortBy: filters.sortBy || 'recommended' });
+    setActiveConfigId('');
+    showToast('Filters cleared.');
+  };
+
+  const resetAll = () => {
+    onSearchQueryChange?.('');
+    onFilterChange({ ...DEFAULT_FILTER_STATE, sortBy: 'recommended' });
+    setActiveConfigId('');
+    showToast('Filters reset to marketplace defaults.');
+  };
+
+  const handleSaveConfig = async () => {
+    if (!userId || !configName.trim()) return;
+    setSavingConfig(true);
+    try {
+      const saved = await saveConfig(userId, configName.trim(), savedFilterState);
+      setSavedConfigs(prev => [saved, ...prev]);
+      setActiveConfigId(saved.id);
+      setConfigName('');
+      setShowSaveModal(false);
+      showToast(`Saved "${saved.name}".`);
+    } catch (error) {
+      console.error('Failed to save marketplace filter:', error);
+      showToast('Could not save this filter.');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const handleLoadConfig = (configId: string) => {
+    const config = savedConfigs.find(item => item.id === configId);
+    if (!config) return;
+
+    onSearchQueryChange?.(config.searchQuery);
+    onFilterChange({
+      ...DEFAULT_FILTER_STATE,
+      category: config.categoryFilter || 'All',
+      sortBy: config.sortBy || 'recommended',
+      location: config.locationFilter || '',
+      priceMin: config.priceMin || '',
+      priceMax: config.priceMax || '',
+    });
+    setActiveConfigId(config.id);
+    showToast(`Loaded "${config.name}".`);
+  };
+
+  const handleDeleteActiveConfig = async () => {
+    if (!activeConfigId || deletingConfig) return;
+    const config = savedConfigs.find(item => item.id === activeConfigId);
+    setDeletingConfig(true);
+    try {
+      await deleteConfig(activeConfigId);
+      setSavedConfigs(prev => prev.filter(item => item.id !== activeConfigId));
+      setActiveConfigId('');
+      showToast(config ? `Deleted "${config.name}".` : 'Saved filter deleted.');
+    } catch (error) {
+      console.error('Failed to delete marketplace filter:', error);
+      showToast('Could not delete this saved filter.');
+    } finally {
+      setDeletingConfig(false);
+    }
   };
 
   const sortLabel = SORT_OPTIONS.find(o => o.value === filters.sortBy)?.label ?? 'Sort';
@@ -198,6 +332,77 @@ export default function AdvancedFilterBar({
           </span>
         )}
       </div>
+
+      {/* Saved filter controls merged into this filter bar */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-t border-gray-100 overflow-x-auto">
+        {userId && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowSaveModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium shrink-0 transition-colors"
+            >
+              <Save className="w-4 h-4" /> Save As
+            </button>
+
+            <div className="relative shrink-0">
+              <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <select
+                value={activeConfigId}
+                onChange={event => handleLoadConfig(event.target.value)}
+                disabled={loadingConfigs}
+                className="appearance-none pl-9 pr-8 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium outline-none disabled:opacity-50"
+                aria-label="Load saved filter"
+              >
+                <option value="">{loadingConfigs ? 'Loading…' : 'Load'}</option>
+                {savedConfigs.map(config => (
+                  <option key={config.id} value={config.id}>{config.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+
+            {activeConfigId && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-primary-50 text-primary-700 text-xs font-medium shrink-0">
+                <Bookmark className="w-3.5 h-3.5" />
+                <span className="max-w-[130px] truncate">
+                  {savedConfigs.find(item => item.id === activeConfigId)?.name || 'Saved filter'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteActiveConfig()}
+                  disabled={deletingConfig}
+                  className="p-0.5 text-primary-400 hover:text-error disabled:opacity-50"
+                  aria-label="Delete active saved filter"
+                >
+                  {deletingConfig ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        <button
+          type="button"
+          onClick={clearAll}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-300 hover:bg-gray-50 text-gray-600 text-sm font-medium shrink-0 transition-colors"
+        >
+          <Eraser className="w-4 h-4" /> Clear
+        </button>
+        <button
+          type="button"
+          onClick={resetAll}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 text-sm font-medium shrink-0 transition-colors"
+        >
+          <RotateCcw className="w-4 h-4" /> Reset
+        </button>
+      </div>
+
+      {toast && (
+        <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-600" role="status">
+          {toast}
+        </div>
+      )}
 
       {/* Expanded filters */}
       <AnimatePresence>
@@ -332,18 +537,70 @@ export default function AdvancedFilterBar({
                 </button>
               </div>
 
-              {/* Clear */}
-              {activeFilterCount > 0 && (
-                <div className="flex items-end">
-                  <button
-                    onClick={clearAll}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium text-error bg-error-muted hover:bg-red-100 transition-colors"
-                  >
-                    <X className="w-4 h-4" /> Clear All ({activeFilterCount})
-                  </button>
-                </div>
-              )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSaveModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] bg-black/45 flex items-center justify-center p-4"
+            onClick={() => setShowSaveModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
+              onClick={event => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Save className="w-5 h-5 text-primary-600" /> Save Filter
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowSaveModal(false)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  aria-label="Close save filter"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <input
+                type="text"
+                value={configName}
+                onChange={event => setConfigName(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') void handleSaveConfig();
+                }}
+                placeholder="e.g. Verified digital products"
+                autoFocus
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowSaveModal(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveConfig()}
+                  disabled={!configName.trim() || savingConfig}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {savingConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

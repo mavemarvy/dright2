@@ -5,10 +5,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { smartSearch as groqSmartSearch } from '../../lib/groqService';
-import { getSmartSuggestions, type SearchSuggestion } from '../../lib/searchSuggestions';
 import {
-  getTrendingSearches,
-  getPopularSearches,
+  getSmartSuggestions,
+  getMarketplaceSearchDiscovery,
+  type MarketplaceSearchDiscoveryListing,
+  type SearchSuggestion,
+} from '../../lib/searchSuggestions';
+import {
   getRecentSearches,
   addRecentSearch,
   clearRecentSearches,
@@ -28,9 +31,14 @@ interface SearchResult {
 interface SmartSearchProps {
   onSearch: (query: string) => void;
   placeholder?: string;
+  showMarketplaceDiscovery?: boolean;
 }
 
-export default function SmartSearch({ onSearch, placeholder = 'Search products, services, jobs, stores...' }: SmartSearchProps) {
+export default function SmartSearch({
+  onSearch,
+  placeholder = 'Search products, services, jobs, stores...',
+  showMarketplaceDiscovery = true,
+}: SmartSearchProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -42,6 +50,8 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
   const [aiIntent, setAiIntent] = useState<string | null>(null);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [trendingListings, setTrendingListings] = useState<MarketplaceSearchDiscoveryListing[]>([]);
+  const [popularListings, setPopularListings] = useState<MarketplaceSearchDiscoveryListing[]>([]);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -50,9 +60,22 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggestionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const discoveryLoadedAtRef = useRef(0);
 
-  const trendingSearches = getTrendingSearches();
-  const popularSearches = getPopularSearches();
+  const loadMarketplaceDiscovery = useCallback(async (force = false) => {
+    if (!showMarketplaceDiscovery) return;
+    const now = Date.now();
+    if (!force && now - discoveryLoadedAtRef.current < 60_000) return;
+
+    const discovery = await getMarketplaceSearchDiscovery(5);
+    setTrendingListings(discovery.trending);
+    setPopularListings(discovery.popular);
+    discoveryLoadedAtRef.current = Date.now();
+  }, [showMarketplaceDiscovery]);
+
+  useEffect(() => {
+    if (showMarketplaceDiscovery) void loadMarketplaceDiscovery(true);
+  }, [loadMarketplaceDiscovery, showMarketplaceDiscovery]);
 
   useEffect(() => {
     setRecentSearches(getRecentSearches());
@@ -434,7 +457,10 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
           type="text"
           value={query}
           onChange={(e) => handleInputChange(e.target.value)}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => {
+            setIsOpen(true);
+            if (showMarketplaceDiscovery) void loadMarketplaceDiscovery();
+          }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className="w-full pl-12 pr-24 py-4 rounded-2xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all bg-white text-gray-900 text-base shadow-sm"
@@ -599,39 +625,45 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
               </div>
             )}
 
-            {/* Trending + Popular */}
-            {!loading && query.trim().length < 2 && (
+            {/* Live marketplace Trending + Popular */}
+            {!loading && query.trim().length < 2 && showMarketplaceDiscovery && (
               <>
-                <div className="p-2 border-t border-gray-50">
-                  <p className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
-                    <TrendingUp className="w-3.5 h-3.5" /> Trending
-                  </p>
-                  <div className="flex flex-wrap gap-2 px-3 pb-2">
-                    {trendingSearches.map((s: string) => (
-                      <button
-                        key={s}
-                        onClick={() => { setQuery(s); handleSearch(s); }}
-                        className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                      >
-                        {s}
-                      </button>
-                    ))}
+                {trendingListings.length > 0 && (
+                  <div className="p-2 border-t border-gray-50">
+                    <p className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5" /> Trending on DRIGHT
+                    </p>
+                    <div className="flex flex-wrap gap-2 px-3 pb-2">
+                      {trendingListings.map((listing) => (
+                        <button
+                          key={listing.id}
+                          onClick={() => { setQuery(listing.name); handleSearch(listing.name); }}
+                          className="max-w-full px-3 py-1.5 rounded-full text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors truncate"
+                          title={listing.name}
+                        >
+                          {listing.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="p-2 border-t border-gray-50">
-                  <p className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Popular</p>
-                  <div className="flex flex-wrap gap-2 px-3 pb-3">
-                    {popularSearches.map((s: string) => (
-                      <button
-                        key={s}
-                        onClick={() => { setQuery(s); handleSearch(s); }}
-                        className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-                      >
-                        {s}
-                      </button>
-                    ))}
+                )}
+                {popularListings.length > 0 && (
+                  <div className="p-2 border-t border-gray-50">
+                    <p className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Popular on DRIGHT</p>
+                    <div className="flex flex-wrap gap-2 px-3 pb-3">
+                      {popularListings.map((listing) => (
+                        <button
+                          key={listing.id}
+                          onClick={() => { setQuery(listing.name); handleSearch(listing.name); }}
+                          className="max-w-full px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors truncate"
+                          title={listing.name}
+                        >
+                          {listing.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             )}
           </motion.div>

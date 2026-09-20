@@ -19,10 +19,26 @@ export interface SavedFilterConfig extends FilterState {
   updated_at: string;
 }
 
+interface SavedFilterRow {
+  id: string;
+  user_id: string;
+  name: string;
+  search_query: string | null;
+  category_filter: string | null;
+  sort_by: string | null;
+  location_filter: string | null;
+  price_min: string | null;
+  price_max: string | null;
+  date_filter: string | null;
+  is_default: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const DEFAULT_FILTER_STATE: FilterState = {
   searchQuery: '',
   categoryFilter: 'All',
-  sortBy: 'newest',
+  sortBy: 'recommended',
   locationFilter: '',
   priceMin: '',
   priceMax: '',
@@ -31,13 +47,31 @@ export const DEFAULT_FILTER_STATE: FilterState = {
 
 export const EMPTY_FILTER_STATE: FilterState = {
   searchQuery: '',
-  categoryFilter: '',
-  sortBy: '',
+  categoryFilter: 'All',
+  sortBy: 'recommended',
   locationFilter: '',
   priceMin: '',
   priceMax: '',
-  dateFilter: '',
+  dateFilter: 'all',
 };
+
+function mapSavedFilter(row: SavedFilterRow): SavedFilterConfig {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    name: row.name,
+    searchQuery: row.search_query || '',
+    categoryFilter: row.category_filter || 'All',
+    sortBy: row.sort_by || 'recommended',
+    locationFilter: row.location_filter || '',
+    priceMin: row.price_min || '',
+    priceMax: row.price_max || '',
+    dateFilter: row.date_filter || 'all',
+    is_default: row.is_default === true,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
 
 export async function fetchSavedConfigs(userId: string): Promise<SavedFilterConfig[]> {
   const { data, error } = await supabase
@@ -47,13 +81,13 @@ export async function fetchSavedConfigs(userId: string): Promise<SavedFilterConf
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return (data || []) as SavedFilterConfig[];
+  return ((data || []) as SavedFilterRow[]).map(mapSavedFilter);
 }
 
 export async function saveConfig(
   userId: string,
   name: string,
-  state: FilterState
+  state: FilterState,
 ): Promise<SavedFilterConfig> {
   const { data, error } = await supabase
     .from('saved_filters')
@@ -72,12 +106,12 @@ export async function saveConfig(
     .single();
 
   if (error) throw error;
-  return data as SavedFilterConfig;
+  return mapSavedFilter(data as SavedFilterRow);
 }
 
 export async function updateConfig(
   configId: string,
-  state: FilterState
+  state: FilterState,
 ): Promise<void> {
   const { error } = await supabase
     .from('saved_filters')
