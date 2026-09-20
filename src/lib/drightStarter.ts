@@ -188,6 +188,31 @@ export async function startDrightStarterCheckout(input: {
   return payload;
 }
 
+
+export async function getDrightStarterSignupEligibility(
+  reference: string,
+  email: string,
+): Promise<{ eligible: boolean; reason: string; message: string; includedTrialDays?: number }> {
+  const { data, error } = await supabase.rpc('get_dright_starter_signup_eligibility', {
+    p_reference: reference.trim(),
+    p_email: email.trim().toLowerCase(),
+  });
+  if (error) {
+    return {
+      eligible: false,
+      reason: 'verification_error',
+      message: error.message || 'Unable to verify DRIGHT Starter payment eligibility.',
+    };
+  }
+  const payload = (data || {}) as Record<string, unknown>;
+  return {
+    eligible: payload.eligible === true,
+    reason: String(payload.reason || (payload.eligible ? 'verified' : 'not_verified')),
+    message: String(payload.message || (payload.eligible ? 'Payment verified.' : 'Payment verification is required.')),
+    includedTrialDays: payload.included_trial_days == null ? undefined : Number(payload.included_trial_days),
+  };
+}
+
 export function setPendingDrightStarterPurchase(reference: string, email?: string): void {
   try {
     const existing = getPendingDrightStarterPurchase();
