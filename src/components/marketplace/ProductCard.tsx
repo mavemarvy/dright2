@@ -12,6 +12,10 @@ import { ProfileLink } from '../Social';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/currency';
 import { getBuyerFacingPrice } from '../../lib/pricing';
+import {
+  MARKETPLACE_IMAGE_HEIGHT_CLASSES,
+  type MarketplaceCardSize,
+} from '../../lib/marketplaceLayout';
 
 export interface MarketplaceProduct {
   id: string;
@@ -57,6 +61,7 @@ interface ProductCardProps {
   copiedId?: string | null;
   affiliateCode?: string | null;
   variant?: 'default' | 'compact';
+  cardSize?: MarketplaceCardSize;
 }
 
 const BADGE_STYLES: Record<string, string> = {
@@ -93,7 +98,7 @@ function StockBadge({ stock }: { stock: number | null | undefined }) {
 
 export default function ProductCard({
   product, index, inWishlist, onToggleWishlist, onQuickView, onShare,
-  onCopyAffiliate, copiedId, affiliateCode, variant = 'default',
+  onCopyAffiliate, copiedId, affiliateCode, variant = 'default', cardSize = 'medium',
 }: ProductCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const isJob = isJobCategory(product.category, product.product_type);
@@ -129,7 +134,7 @@ export default function ProductCard({
       className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-xl hover:border-gray-200 dark:hover:border-gray-600 card-hover transition-all duration-300 group flex flex-col"
     >
       {/* Image area */}
-      <div className="relative h-48 bg-gray-50 dark:bg-gray-700 overflow-hidden">
+      <div className={`relative ${MARKETPLACE_IMAGE_HEIGHT_CLASSES[cardSize]} bg-gray-50 dark:bg-gray-700 overflow-hidden transition-[height] duration-200`}>
         <Link to={`/product/${product.id}`}>
           {!imgLoaded && (
             <div className="absolute inset-0 skeleton" />
