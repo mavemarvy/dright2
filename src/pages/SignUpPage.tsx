@@ -24,7 +24,13 @@ import {
 } from '../lib/onboarding';
 import type { AgeRule, QuestionnaireDefinition, QuestionnaireQuestion, PublicKycRequirement, UsernameAvailability } from '../lib/onboarding';
 import { createKycProfile, createKycSubmission, uploadKycDocument } from '../lib/kycHooks';
-import { claimPendingDrightStarterPurchase, getDrightStarterSignupEligibility, getPendingDrightStarterPurchase, setPendingDrightStarterPurchase } from '../lib/drightStarter';
+import {
+  claimPendingDrightStarterPurchase,
+  getDrightStarterSignupEligibility,
+  getPendingDrightStarterPurchase,
+  isDrightStarterSignupFunnelRequired,
+  setPendingDrightStarterPurchase,
+} from '../lib/drightStarter';
 import { KYC_DOC_TYPE_LABELS } from '../lib/kycTypes';
 
 type Answers = Record<string, Record<string, unknown>>;
@@ -39,7 +45,8 @@ export default function SignUpPage() {
   const [searchParams] = useSearchParams();
   const pendingStarterPurchase = getPendingDrightStarterPurchase();
   const starterReference = (searchParams.get('starter_reference') || pendingStarterPurchase?.reference || '').trim();
-  const starterFlow = Boolean(starterReference);
+  const starterFunnelRequired = isDrightStarterSignupFunnelRequired();
+  const starterFlow = Boolean(starterReference) || starterFunnelRequired;
 
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState('');
@@ -306,6 +313,57 @@ export default function SignUpPage() {
       setLoading(false);
     }
   };
+
+  if (starterFlow && !starterGateVerified) {
+    const verifying = starterGateChecking && Boolean(starterReference);
+    return (
+      <main className="min-h-screen bg-slate-950 px-4 py-10 flex items-center justify-center">
+        <section className="w-full max-w-md rounded-3xl bg-white dark:bg-gray-900 shadow-2xl p-6 sm:p-8 text-center">
+          <DrightMark size={64} className="mx-auto" />
+          <div className={`w-14 h-14 mx-auto mt-6 rounded-full flex items-center justify-center ${verifying ? 'bg-primary-50 dark:bg-primary-950/40' : 'bg-amber-50 dark:bg-amber-950/40'}`}>
+            {verifying
+              ? <Loader2 className="w-7 h-7 animate-spin text-primary-600" />
+              : <ShieldCheck className="w-7 h-7 text-amber-600" />}
+          </div>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100 mt-4">
+            {verifying ? 'Verifying Starter payment' : 'Payment required before signup'}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-6">
+            {verifying
+              ? 'DRIGHT is checking the payment with the server. The account form will unlock only after the payment is verified.'
+              : starterReference
+                ? (starterGateMessage || 'This Starter payment is not verified yet.')
+                : 'You entered signup from DRIGHT Starter Access. Complete the Starter purchase first; signup remains locked until DRIGHT verifies the payment.'}
+          </p>
+
+          <div className="mt-6 grid gap-3">
+            {starterReference ? (
+              <Link
+                to={`/dright/starter/payment?reference=${encodeURIComponent(starterReference)}`}
+                className="min-h-[50px] rounded-xl bg-primary-600 text-white font-black flex items-center justify-center"
+              >
+                Verify payment
+              </Link>
+            ) : (
+              <Link
+                to="/dright/starter"
+                className="min-h-[50px] rounded-xl bg-primary-600 text-white font-black flex items-center justify-center"
+              >
+                Return to Starter checkout
+              </Link>
+            )}
+            <Link to="/sign-in" className="text-sm font-semibold text-gray-600 dark:text-gray-300">
+              Already have an account? Sign in
+            </Link>
+          </div>
+
+          <p className="mt-5 text-xs text-gray-400">
+            The signup form is intentionally unavailable until Supabase confirms a successful DRIGHT Starter payment for the purchase reference and email.
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   if (success) {
     return <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400"><motion.div initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 sm:p-10 text-center max-w-md w-full"><div className="w-16 h-16 bg-success rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 className="w-9 h-9 text-white" /></div><h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{awaitingEmail ? 'Verify your email' : 'Account created'}</h2><p className="text-gray-500 dark:text-gray-400 mt-2">{awaitingEmail ? 'Your private onboarding draft is securely saved for 24 hours. Verify your email with the Supabase confirmation email or the 6-digit code option. Incomplete questionnaires and KYC can then be finished in Settings → Verification.' : deferredQuestionnaires > 0 || (kycRequired && Object.keys(kycFiles).length === 0) ? 'Your account is ready. Any questionnaire or KYC item you skipped is saved for later in Settings → Verification.' : 'Your onboarding information is linked to your DRIGHT identity. You can review it later in Settings → Verification.'}</p>{awaitingEmail && <Link to={`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`} className="inline-flex mt-6 px-5 py-3 bg-primary-600 text-white rounded-xl font-semibold">Enter verification code</Link>}</motion.div></div>;
