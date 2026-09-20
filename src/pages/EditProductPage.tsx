@@ -9,6 +9,17 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { ProductEditChanges, ProductEditLog } from '../lib/types';
 import AIGenerateButton from '../components/ai/AIGenerateButton';
+import DynamicListingFields from '../components/listing/DynamicListingFields';
+import TaxonomyCategoryPicker from '../components/listing/TaxonomyCategoryPicker';
+import {
+  fetchMarketplaceEngineSettings,
+  fetchMarketplaceAttributes,
+  fetchMyMarketplaceListingExtension,
+  validateMarketplaceAttributes,
+  type MarketplaceAttributeDefinition,
+  type MarketplaceEngineSettings,
+  type MarketplaceListingTypeCode,
+} from '../lib/listingEngine';
 
 interface Product {
   id: string;
@@ -19,6 +30,7 @@ interface Product {
   image_url: string | null;
   stock_quantity: number | null;
   uploaded_by: string;
+  product_type: string;
 }
 
 export default function EditProductPage() {
@@ -41,8 +53,20 @@ export default function EditProductPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
+  const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
+  const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<Array<{ id: string; name: string }>>([]);
+  const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
+  const [attributeDefinitions, setAttributeDefinitions] = useState<MarketplaceAttributeDefinition[]>([]);
+  const [originalExtensionCategoryId, setOriginalExtensionCategoryId] = useState<string | null>(null);
+  const [originalExtensionAttributes, setOriginalExtensionAttributes] = useState<Record<string, unknown>>({});
+
   const [editHistory, setEditHistory] = useState<ProductEditLog[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    fetchMarketplaceEngineSettings().then(setEngineSettings);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -54,7 +78,7 @@ export default function EditProductPage() {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, category, image_url, stock_quantity, uploaded_by')
+        .select('id, name, description, price, category, image_url, stock_quantity, uploaded_by, product_type')
         .eq('id', id!)
         .maybeSingle();
       if (error || !data) { setError('Product not found'); return; }
@@ -70,11 +94,66 @@ export default function EditProductPage() {
       setStockQuantity(p.stock_quantity !== null ? String(p.stock_quantity) : '');
       setCategory(p.category);
       setImagePreview(p.image_url);
+
+      try {
+        const extension = await fetchMyMarketplaceListingExtension('product', p.id);
+        if (extension) {
+          setSelectedTaxonomyCategoryId(extension.category_id);
+          setOriginalExtensionCategoryId(extension.category_id);
+          setDynamicAttributes(extension.attributes);
+          setOriginalExtensionAttributes(extension.attributes);
+
+          const pathIds = Array.isArray(extension.metadata.taxonomy_path_ids)
+            ? extension.metadata.taxonomy_path_ids.map(String)
+            : [];
+          const pathNames = Array.isArray(extension.metadata.taxonomy_path)
+            ? extension.metadata.taxonomy_path.map(String)
+            : [];
+          setSelectedTaxonomyPath(pathIds.map((pathId, index) => ({
+            id: pathId,
+            name: pathNames[index] ?? pathId,
+          })));
+        }
+      } catch {
+        // Additive metadata is best-effort; legacy editing remains available.
+      }
     } catch {
       setError('Failed to load product');
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const supported = product
+      && ['PHYSICAL', 'DIGITAL', 'SERVICE', 'COURSE'].includes(product.product_type);
+
+    if (!engineSettings?.dynamic_forms_enabled || !supported) {
+      setAttributeDefinitions([]);
+      return;
+    }
+
+    fetchMarketplaceAttributes(
+      product.product_type as MarketplaceListingTypeCode,
+      selectedTaxonomyCategoryId,
+    ).then(setAttributeDefinitions);
+  }, [
+    engineSettings?.dynamic_forms_enabled,
+    product?.product_type,
+    selectedTaxonomyCategoryId,
+  ]);
+
+  const editableAttributes = (source: Record<string, unknown>) => {
+    const result: Record<string, unknown> = {};
+    for (const definition of attributeDefinitions) {
+      const value = source[definition.attribute_key];
+      const empty = value === null
+        || value === undefined
+        || value === ''
+        || (Array.isArray(value) && value.length === 0);
+      if (!empty) result[definition.attribute_key] = value;
+    }
+    return result;
   };
 
   const fetchEditHistory = async () => {
@@ -106,6 +185,14 @@ export default function EditProductPage() {
     if (!product || !user) return;
     setError(null);
 
+    if (engineSettings?.dynamic_forms_enabled) {
+      const dynamicError = validateMarketplaceAttributes(attributeDefinitions, dynamicAttributes);
+      if (dynamicError) {
+        setError(dynamicError);
+        return;
+      }
+    }
+
     const changes: ProductEditChanges = {};
     if (name.trim() !== product.name) changes.name = name.trim();
     if (description.trim() !== (product.description || '')) changes.description = description.trim();
@@ -115,6 +202,21 @@ export default function EditProductPage() {
     if (category !== product.category) changes.category = category;
     const tagsArr = tags.split(',').map(t => t.trim()).filter(Boolean);
     if (tagsArr.length > 0) changes.tags = tagsArr;
+
+
+    const nextEditableAttributes = editableAttributes(dynamicAttributes);
+    const originalEditableAttributes = editableAttributes(originalExtensionAttributes);
+    const extensionChanged =
+      selectedTaxonomyCategoryId !== originalExtensionCategoryId
+      || JSON.stringify(nextEditableAttributes) !== JSON.stringify(originalEditableAttributes);
+
+    if (extensionChanged) {
+      changes.listing_extension = {
+        category_id: selectedTaxonomyCategoryId,
+        taxonomy_path: selectedTaxonomyPath.map(node => ({ id: node.id, name: node.name })),
+        dynamic_attributes: nextEditableAttributes,
+      };
+    }
 
     if (imageFile) {
       const ext = imageFile.name.split('.').pop();
@@ -139,6 +241,11 @@ export default function EditProductPage() {
         stock_quantity: product.stock_quantity ?? undefined,
         category: product.category,
         image_url: product.image_url ?? undefined,
+        listing_extension: {
+          category_id: originalExtensionCategoryId,
+          taxonomy_path: selectedTaxonomyPath.map(node => ({ id: node.id, name: node.name })),
+          dynamic_attributes: editableAttributes(originalExtensionAttributes),
+        },
       };
 
       const { error: insertErr } = await supabase.from('product_edits').insert({
@@ -308,15 +415,38 @@ export default function EditProductPage() {
           </div>
 
           {/* Category + Tags */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-              <select value={category} onChange={e => setCategory(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none text-gray-900">
-                {['General', 'Electronics', 'Software', 'Courses', 'Writing', 'Design', 'Marketing', 'Music', 'Photography'].map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              {engineSettings?.taxonomy_enabled
+                && product
+                && ['PHYSICAL', 'DIGITAL', 'SERVICE', 'COURSE'].includes(product.product_type) ? (
+                <>
+                  <TaxonomyCategoryPicker
+                    listingTypeCode={product.product_type as MarketplaceListingTypeCode}
+                    selectedCategoryId={selectedTaxonomyCategoryId}
+                    onChange={(categoryId, path) => {
+                      setSelectedTaxonomyCategoryId(categoryId);
+                      setSelectedTaxonomyPath(path.map(node => ({ id: node.id, name: node.name })));
+                      const root = path[0]?.name;
+                      if (root) setCategory(root);
+                      setDynamicAttributes({});
+                    }}
+                  />
+                  <p className="text-xs text-amber-600 mt-2">
+                    Detailed taxonomy changes remain pending until an admin approves this product edit.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <select value={category} onChange={e => setCategory(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none text-gray-900">
+                    {['General', 'Electronics', 'Software', 'Courses', 'Writing', 'Design', 'Marketing', 'Music', 'Photography'].map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Tags (comma-separated)</label>
@@ -325,6 +455,14 @@ export default function EditProductPage() {
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none text-gray-900" />
             </div>
           </div>
+
+          {engineSettings?.dynamic_forms_enabled && attributeDefinitions.length > 0 && (
+            <DynamicListingFields
+              definitions={attributeDefinitions}
+              values={dynamicAttributes}
+              onChange={(key, value) => setDynamicAttributes(current => ({ ...current, [key]: value }))}
+            />
+          )}
 
           <button type="submit" disabled={submitting}
             className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 min-h-[56px]">
