@@ -30,6 +30,7 @@ import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../lib/currency';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import { DiscoveryPromoGallery } from '../components/promotion/PromotionSurfaces';
+import DrightStarterProductCard from '../components/DrightStarterProductCard';
 
 interface Announcement {
   id: string;
@@ -233,6 +234,8 @@ export default function DashboardPage() {
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <div className="mb-6"><h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Welcome back, {profile?.full_name?.split(' ')[0] || 'Promoter'}!</h1><p className="text-gray-500 dark:text-gray-400 mt-1">Here's your earnings overview</p></div>
+
+      <DrightStarterProductCard className="mb-6" />
 
       <div className="mb-6"><DiscoveryPromoGallery placement="login_gallery" /></div>
       <div className="mb-6"><DailySummaryWidget /></div>
