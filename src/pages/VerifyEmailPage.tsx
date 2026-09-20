@@ -4,6 +4,7 @@ import { Mail, CheckCircle, XCircle, RefreshCw, ArrowLeft, Loader2, ShieldCheck 
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import TurnstileWidget from '../components/TurnstileWidget';
+import { claimPendingDrightStarterPurchase } from '../lib/drightStarter';
 
 export default function VerifyEmailPage() {
   const { user, isEmailVerified, loading } = useAuth();
@@ -25,7 +26,9 @@ export default function VerifyEmailPage() {
   }, [email, user?.email]);
 
   useEffect(() => {
-    if (!loading && isEmailVerified) navigate('/dashboard', { replace: true });
+    if (!loading && isEmailVerified) {
+      void claimPendingDrightStarterPurchase().finally(() => navigate('/dashboard', { replace: true }));
+    }
   }, [isEmailVerified, loading, navigate]);
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -76,6 +79,8 @@ export default function VerifyEmailPage() {
       return;
     }
 
+    const starterClaim = await claimPendingDrightStarterPurchase();
+    if (starterClaim.error) console.warn('Starter purchase claim pending:', starterClaim.error);
     setMessage('Email verified successfully. Opening your DRIGHT dashboard…');
     window.setTimeout(() => navigate('/dashboard', { replace: true }), 600);
   };
