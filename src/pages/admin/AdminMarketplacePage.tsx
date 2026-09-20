@@ -171,6 +171,18 @@ export default function AdminMarketplacePage() {
     if (wRes.data) setWeights(wRes.data as RankingWeights);
     if (catRes.data) setCategories(catRes.data as MarketplaceCategoryAdmin[]);
     if (categorySettingsRes.data) setCategorySettings(categorySettingsRes.data as MarketplaceUiSettings);
+    if (engineSettingsRes.data) setEngineSettings(engineSettingsRes.data as ListingEngineSettings);
+    if (commissionPoliciesRes.data) {
+      setCommissionPolicies(
+        commissionPoliciesRes.data.map(policy => ({
+          ...policy,
+          default_percentage: Number(policy.default_percentage),
+          min_percentage: Number(policy.min_percentage),
+          max_percentage: Number(policy.max_percentage),
+          priority: Number(policy.priority),
+        })) as SellerCommissionPolicyAdmin[]
+      );
+    }
     setCanManageCategories(categoryPermissionRes.data === true);
     setLoading(false);
   }, []);
