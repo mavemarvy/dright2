@@ -41,6 +41,8 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
   const [smartSuggestions, setSmartSuggestions] = useState<SearchSuggestion[]>([]);
   const [aiIntent, setAiIntent] = useState<string | null>(null);
   const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,6 +63,17 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.abort?.();
+      } catch {
+        // Recognition cleanup is best-effort.
+      }
+      recognitionRef.current = null;
+    };
   }, []);
 
   const searchDb = useCallback(async (q: string) => {
@@ -167,28 +180,79 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
   };
 
   const handleVoiceSearch = useCallback(() => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Voice search is not supported on this browser. Please use Chrome or Edge.');
+    if (voiceListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // Ignore stop failures from browsers that already ended recognition.
+      }
       return;
     }
-    setVoiceListening(true);
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
 
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setQuery(transcript);
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setVoiceError('Voice search is not supported by this browser. You can still type your search.');
+      return;
+    }
+
+    setVoiceError(null);
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.lang = navigator.language || 'en-US';
+
+      recognition.onstart = () => {
+        setVoiceListening(true);
+        setVoiceError(null);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = String(event?.results?.[0]?.[0]?.transcript || '').trim();
+        if (!transcript) return;
+
+        setQuery(transcript);
+        addRecentSearch(transcript);
+        setRecentSearches(getRecentSearches());
+
+        // Voice search must behave like pressing Enter: update the marketplace
+        // result feed immediately, while also loading rich dropdown results.
+        onSearch(transcript);
+        void searchDb(transcript);
+        setIsOpen(true);
+      };
+
+      recognition.onerror = (event: any) => {
+        const errorCode = String(event?.error || '');
+        if (errorCode === 'not-allowed' || errorCode === 'service-not-allowed') {
+          setVoiceError('Microphone access is blocked. Allow microphone access for DRIGHT and try again.');
+        } else if (errorCode === 'no-speech') {
+          setVoiceError('No speech was detected. Tap the microphone and try again.');
+        } else if (errorCode !== 'aborted') {
+          setVoiceError('Voice search could not complete. Please try again or type your search.');
+        }
+        setVoiceListening(false);
+      };
+
+      recognition.onend = () => {
+        setVoiceListening(false);
+        recognitionRef.current = null;
+      };
+
+      recognition.start();
+    } catch (error) {
+      console.error('Voice search failed to start:', error);
+      recognitionRef.current = null;
       setVoiceListening(false);
-      searchDb(transcript);
-      setIsOpen(true);
-    };
-    recognition.onerror = () => setVoiceListening(false);
-    recognition.onend = () => setVoiceListening(false);
-    recognition.start();
-  }, [searchDb]);
+      setVoiceError('Voice search could not start. Please check microphone permission and try again.');
+    }
+  }, [onSearch, searchDb, voiceListening]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const flatResults = results;
@@ -246,14 +310,27 @@ export default function SmartSearch({ onSearch, placeholder = 'Search products, 
             </button>
           )}
           <button
+            type="button"
             onClick={handleVoiceSearch}
-            className="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-primary-50 transition-colors"
-            title="Voice search"
+            className={`p-1.5 rounded-lg transition-colors ${
+              voiceListening
+                ? 'text-primary-600 bg-primary-50'
+                : 'text-gray-400 hover:text-primary-600 hover:bg-primary-50'
+            }`}
+            title={voiceListening ? 'Stop voice search' : 'Voice search'}
+            aria-label={voiceListening ? 'Stop voice search' : 'Start voice search'}
+            aria-pressed={voiceListening}
           >
             {voiceListening ? <Loader2 className="w-5 h-5 animate-spin text-primary-600" /> : <Mic className="w-5 h-5" />}
           </button>
         </div>
       </div>
+
+      {voiceError && (
+        <p className="mt-2 px-1 text-xs text-red-600 dark:text-red-400" role="status">
+          {voiceError}
+        </p>
+      )}
 
       <AnimatePresence>
         {isOpen && (
