@@ -70,6 +70,38 @@ export interface DrightStarterAdminSettings {
 }
 
 const PENDING_KEY = 'dright_starter_pending_purchase';
+const STARTER_FUNNEL_KEY = 'dright_starter_paid_signup_funnel_v1';
+
+export function markDrightStarterSignupFunnel(): void {
+  try {
+    sessionStorage.setItem(STARTER_FUNNEL_KEY, JSON.stringify({
+      required: true,
+      entered_at: new Date().toISOString(),
+    }));
+  } catch { /* storage unavailable */ }
+}
+
+export function isDrightStarterSignupFunnelRequired(): boolean {
+  try {
+    const raw = sessionStorage.getItem(STARTER_FUNNEL_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (parsed?.required !== true) return false;
+    const enteredAt = Date.parse(String(parsed.entered_at || ''));
+    // Keep the gate for the active purchase journey, but do not trap a browser forever.
+    if (!Number.isFinite(enteredAt) || Date.now() - enteredAt > 6 * 60 * 60 * 1000) {
+      sessionStorage.removeItem(STARTER_FUNNEL_KEY);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearDrightStarterSignupFunnel(): void {
+  try { sessionStorage.removeItem(STARTER_FUNNEL_KEY); } catch { /* ignore */ }
+}
 
 export async function fetchDrightStarterProduct(): Promise<DrightStarterPublicSettings> {
   const { data, error } = await supabase.rpc('get_public_dright_starter_product');
