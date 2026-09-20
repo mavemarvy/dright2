@@ -329,6 +329,11 @@ export default function SignUpPage() {
                     <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                       {starterGateChecking ? 'Checking the payment with DRIGHT…' : starterGateMessage}
                     </p>
+                    {starterGateVerified && (
+                      <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                        DRIGHT will recheck this verified payment again immediately before account creation.
+                      </p>
+                    )}
                     {!starterGateVerified && !starterGateChecking && (
                       <Link to="/dright/starter" className="inline-flex mt-2 text-sm font-bold text-primary-600 dark:text-primary-300">
                         Return to Starter checkout
