@@ -290,10 +290,14 @@ export async function claimPendingDrightStarterPurchase(): Promise<{
   });
   if (error) return { claimed: false, error: error.message };
 
-  clearPendingDrightStarterPurchase();
   const payload = (data || {}) as Record<string, unknown>;
+  const claimed = Boolean(payload.success);
+  if (claimed) {
+    clearPendingDrightStarterPurchase();
+    clearDrightStarterSignupFunnel();
+  }
   return {
-    claimed: Boolean(payload.success),
+    claimed,
     trialEndsAt: payload.trial_ends_at ? String(payload.trial_ends_at) : null,
   };
 }
