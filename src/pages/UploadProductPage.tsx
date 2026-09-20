@@ -67,7 +67,6 @@ import {
   validateSellerCommission,
   upsertMarketplaceListingExtension,
   type MarketplaceEngineSettings,
-  type MarketplaceCategoryTreeNode,
   type SellerCommissionPolicy,
 } from '../lib/listingEngine';
 
@@ -174,7 +173,7 @@ export default function UploadProductPage() {
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
   const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
-  const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<MarketplaceCategoryTreeNode[]>([]);
+  const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<Array<{ id: string; name: string }>>([]);
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
   const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
   const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
@@ -218,6 +217,7 @@ export default function UploadProductPage() {
   const [draftSyncStatus, setDraftSyncStatus] = useState<'idle' | 'synced' | 'offline' | 'syncing'>('idle');
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const autoPublishRef = useRef(false);
+  const restoringDraftRef = useRef(false);
 
   useEffect(() => {
     fetchSystemConfig().then(setSystemConfig);
@@ -235,6 +235,10 @@ export default function UploadProductPage() {
   }, [engineSettings?.taxonomy_enabled]);
 
   useEffect(() => {
+    if (restoringDraftRef.current) {
+      restoringDraftRef.current = false;
+      return;
+    }
     setSelectedTaxonomyCategoryId(null);
     setSelectedTaxonomyPath([]);
     setDynamicAttributes({});
@@ -286,6 +290,7 @@ export default function UploadProductPage() {
       if (draft) {
         setDraftId(draft.id);
         const d = draft.draft_data;
+        restoringDraftRef.current = true;
         setForm({ name: d.name, description: d.description, price: d.price, category: d.category, stock: d.stock });
         if (d.affiliateCommission) setAffiliateCommission(d.affiliateCommission);
         setProductType(d.productType as ProductType);
@@ -307,6 +312,9 @@ export default function UploadProductPage() {
         setRequiresConsultation(d.requiresConsultation);
         setHasDrightSalesTeam(d.hasDrightSalesTeam);
         setPortfolioLinks(d.portfolioLinks);
+        setSelectedTaxonomyCategoryId(d.taxonomyCategoryId ?? null);
+        setSelectedTaxonomyPath(d.taxonomyPath ?? []);
+        setDynamicAttributes(d.dynamicAttributes ?? {});
         if (d.imagePreviews && d.imagePreviews.length > 0) {
           setImagePreviews(d.imagePreviews);
         }
@@ -471,6 +479,9 @@ export default function UploadProductPage() {
       deliveryType, downloadFileUrl, accessLink, fileFormat, downloadLimit, expiryDays,
       includesBonus, demoVideoUrl, serviceCategory, serviceDeliveryDays, requiresConsultation,
       hasDrightSalesTeam, tiers: tiers as unknown as Record<string, unknown>[], customizations: customizations as unknown as Record<string, unknown>[], portfolioLinks, imagePreviews,
+      taxonomyCategoryId: selectedTaxonomyCategoryId,
+      taxonomyPath: selectedTaxonomyPath.map(node => ({ id: node.id, name: node.name })),
+      dynamicAttributes,
     };
 
     const draftName = form.name || `Draft ${new Date().toLocaleDateString()}`;
