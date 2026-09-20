@@ -14,16 +14,16 @@ import type { JobType, WorkSetup, CareerLevel } from '../lib/types';
 import PostUploadConfirmation from '../components/PostUploadConfirmation';
 import AIGenerateButton from '../components/ai/AIGenerateButton';
 import DynamicListingFields from '../components/listing/DynamicListingFields';
+import TaxonomyCategoryPicker from '../components/listing/TaxonomyCategoryPicker';
 import {
   fetchMarketplaceEngineSettings,
-  fetchMarketplaceCategories,
   fetchMarketplaceAttributes,
   validateMarketplaceAttributes,
   resolveSellerCommissionPolicy,
   validateSellerCommission,
   upsertMarketplaceListingExtension,
   type MarketplaceEngineSettings,
-  type MarketplaceCategory,
+  type MarketplaceCategoryTreeNode,
   type SellerCommissionPolicy,
 } from '../lib/listingEngine';
 
@@ -242,8 +242,8 @@ export default function JobPostingPage() {
   const [draftSaved, setDraftSaved] = useState(false);
   const [uploadedJobId, setUploadedJobId] = useState<string | null>(null);
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
-  const [taxonomyCategories, setTaxonomyCategories] = useState<MarketplaceCategory[]>([]);
   const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
+  const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<MarketplaceCategoryTreeNode[]>([]);
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
   const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
   const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
@@ -286,12 +286,10 @@ export default function JobPostingPage() {
 
   useEffect(() => {
     if (!engineSettings?.taxonomy_enabled) {
-      setTaxonomyCategories([]);
       setSelectedTaxonomyCategoryId(null);
-      return;
+      setSelectedTaxonomyPath([]);
+      setDynamicAttributes({});
     }
-
-    fetchMarketplaceCategories('JOB').then(setTaxonomyCategories);
   }, [engineSettings?.taxonomy_enabled]);
 
   useEffect(() => {
@@ -330,9 +328,6 @@ export default function JobPostingPage() {
     selectedTaxonomyCategoryId,
   ]);
 
-  const jobCategoryOptions = engineSettings?.taxonomy_enabled && taxonomyCategories.length > 0
-    ? taxonomyCategories.map(category => ({ id: category.id, label: category.name }))
-    : JOB_CATEGORIES.map(category => ({ id: null, label: category }));
   const jobCommissionMin = sellerCommissionPolicy?.min_percentage ?? 0;
   const jobCommissionMax = sellerCommissionPolicy?.max_percentage ?? 100;
   const jobCommissionLocked = sellerCommissionPolicy
@@ -437,6 +432,8 @@ export default function JobPostingPage() {
           metadata: {
             source: 'job_posting_page',
             legacy_category: form.category,
+            taxonomy_path: selectedTaxonomyPath.map(node => node.name),
+            taxonomy_path_ids: selectedTaxonomyPath.map(node => node.id),
           },
           sellerAffiliateCommission: engineSettings.seller_commission_policy_enabled
             ? Number(form.affiliateCommission)
@@ -553,15 +550,31 @@ export default function JobPostingPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
-                        <select value={form.category} onChange={e => {
-                          const option = jobCategoryOptions.find(category => category.label === e.target.value);
-                          update('category', e.target.value);
-                          setSelectedTaxonomyCategoryId(option?.id ?? null);
-                        }}
-                          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all bg-white">
-                          {jobCategoryOptions.map(category => <option key={category.id || category.label} value={category.label}>{category.label}</option>)}
-                        </select>
+                        {engineSettings?.taxonomy_enabled ? (
+                          <TaxonomyCategoryPicker
+                            listingTypeCode="JOB"
+                            selectedCategoryId={selectedTaxonomyCategoryId}
+                            compact
+                            onChange={(categoryId, path) => {
+                              setSelectedTaxonomyCategoryId(categoryId);
+                              setSelectedTaxonomyPath(path);
+                              const legacyRoot = path[0]?.name;
+                              if (legacyRoot) update('category', legacyRoot);
+                              setDynamicAttributes({});
+                            }}
+                          />
+                        ) : (
+                          <>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
+                            <select
+                              value={form.category}
+                              onChange={e => update('category', e.target.value)}
+                              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all bg-white"
+                            >
+                              {JOB_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}
+                            </select>
+                          </>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Type</label>
