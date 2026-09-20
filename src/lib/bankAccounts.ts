@@ -91,12 +91,19 @@ export async function updateBankAccount(
 }
 
 export async function deleteBankAccount(accountId: string): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase
-    .from('bank_accounts')
-    .delete()
-    .eq('id', accountId);
+  const { data, error } = await supabase.functions.invoke('bank-account-delete', {
+    body: { account_id: accountId },
+  });
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return { success: false, error: error.message || 'Unable to delete bank account' };
+  }
+
+  const result = data as { success?: boolean; error?: string } | null;
+  if (!result?.success) {
+    return { success: false, error: result?.error || 'Unable to delete bank account' };
+  }
+
   return { success: true };
 }
 
