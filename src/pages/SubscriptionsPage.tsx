@@ -145,7 +145,7 @@ export default function SubscriptionsPage() {
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">{plan.name}</h3>
                     <p className="text-sm text-gray-500 mt-0.5">{plan.description}</p>
                     <div className="flex items-baseline gap-1 mt-3">
-                      <span className="text-2xl font-bold text-gray-900 dark:text-white">{cSym}{plan.amount.toLocaleString()}</span>
+                      <span className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(plan.amount, plan.currency || 'NGN')}</span>
                       <span className="text-sm text-gray-400">/{plan.interval}</span>
                     </div>
                     {plan.trial_days > 0 && <p className="text-xs text-emerald-600 mt-1">{plan.trial_days} days free trial</p>}
@@ -158,7 +158,7 @@ export default function SubscriptionsPage() {
                     </ul>
                     <button onClick={() => handleSubscribe(plan)} disabled={isActive || subscribing === plan.id}
                       className={`w-full mt-4 py-2.5 rounded-xl font-semibold text-sm transition-colors ${isActive ? 'bg-gray-100 text-gray-400' : `bg-gradient-to-r ${color} text-white hover:opacity-90`}`}>
-                      {subscribing === plan.id ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : isActive ? 'Current Plan' : `Subscribe for ${cSym}${plan.amount.toLocaleString()}`}
+                      {subscribing === plan.id ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : isActive ? 'Current Plan' : `Subscribe for ${formatCurrency(plan.amount, plan.currency || 'NGN')}`}
                     </button>
                   </div>
                 );
