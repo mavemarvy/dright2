@@ -32,6 +32,7 @@ import {
   getOrCreateWallet,
   type WalletSummary as TWalletSummary,
 } from '../lib/walletEngine';
+import { fetchBankAccounts, type BankAccount } from '../lib/bankAccounts';
 
 interface WithdrawalRequest {
   id: string;
@@ -48,12 +49,12 @@ export default function ProfilePage() {
   const { format: formatWithCurrency } = useCurrency();
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [walletSummary, setWalletSummary] = useState<TWalletSummary | null>(null);
+  const [payoutAccount, setPayoutAccount] = useState<BankAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
-    account_number: '',
     location: '',
     preferred_currency: 'USD',
   });
@@ -93,7 +94,6 @@ export default function ProfilePage() {
       setFormData({
         full_name: profile.full_name || '',
         phone: profile.phone || '',
-        account_number: profile.account_number || '',
         location: profile.location || '',
         preferred_currency: profile.preferred_currency || 'USD',
       });
@@ -105,7 +105,7 @@ export default function ProfilePage() {
     try {
       await getOrCreateWallet(user.id);
 
-      const [{ data: withdrawalData }, summary] = await Promise.all([
+      const [{ data: withdrawalData }, summary, bankAccounts] = await Promise.all([
         supabase
           .from('withdrawal_requests')
           .select('*')
@@ -113,12 +113,22 @@ export default function ProfilePage() {
           .order('created_at', { ascending: false })
           .limit(10),
         getWalletSummary(user.id),
+        fetchBankAccounts(user.id),
       ]);
 
       if (withdrawalData) {
         setWithdrawals(withdrawalData as WithdrawalRequest[]);
       }
       setWalletSummary(summary);
+
+      const verifiedAccounts = bankAccounts.filter(
+        (account) => account.is_verified && account.verification_status === 'verified'
+      );
+      setPayoutAccount(
+        verifiedAccounts.find((account) => account.is_default) ||
+        verifiedAccounts[0] ||
+        null
+      );
     } catch (error) {
       console.error('Error fetching profile wallet data:', error);
     } finally {
@@ -134,7 +144,6 @@ export default function ProfilePage() {
         .update({
           full_name: formData.full_name,
           phone: formData.phone || null,
-          account_number: formData.account_number || null,
           location: formData.location || null,
         })
         .eq('id', user?.id);
@@ -510,19 +519,6 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <CreditCard className="w-4 h-4 inline mr-2" />
-                  Account/Payout Number
-                </label>
-                <input
-                  type="text"
-                  value={formData.account_number}
-                  onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 dark:text-gray-100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   <MapPin className="w-4 h-4 inline mr-2" />
                   Location
                 </label>
@@ -556,9 +552,8 @@ export default function ProfilePage() {
                     setFormData({
                       full_name: profile?.full_name || '',
                       phone: profile?.phone || '',
-                      account_number: profile?.account_number || '',
-                  location: profile?.location || '',
-                  preferred_currency: profile?.preferred_currency || 'USD',
+                      location: profile?.location || '',
+                      preferred_currency: profile?.preferred_currency || 'USD',
                     });
                   }}
                   className="px-6 py-3 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:bg-gray-900/50 rounded-xl font-medium transition-colors min-h-[48px]"
@@ -587,24 +582,46 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                <CreditCard className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Payout Account</p>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">
-                    {profile?.account_number || 'Not set'}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4" /> Location
-                    </span>
-                    <span className={`font-medium ${profile?.location_verified ? 'text-success' : 'text-gray-900 dark:text-gray-100'}`}>
-                      {profile?.location || 'Not set'}
-                      {profile?.location_verified && (
-                        <span className="ml-1.5 text-xs text-success bg-success-muted px-2 py-0.5 rounded-full">Verified</span>
-                      )}
-                    </span>
+              <div className="flex items-start gap-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                <CreditCard className="w-5 h-5 text-gray-400 dark:text-gray-500 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Verified Payout Account</p>
+                    {payoutAccount && (
+                      <span className="text-[10px] font-semibold text-success bg-success-muted px-2 py-0.5 rounded-full">Verified</span>
+                    )}
                   </div>
+                  {payoutAccount ? (
+                    <>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100 mt-1 truncate">{payoutAccount.bank_name}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{payoutAccount.account_name}</p>
+                      <p className="text-xs font-mono text-gray-500 dark:text-gray-400 mt-0.5">
+                        ••••••{payoutAccount.account_number.slice(-4)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="font-medium text-gray-900 dark:text-gray-100 mt-1">Not set</p>
+                  )}
+                  <Link
+                    to="/wallet/withdraw"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700 mt-2"
+                  >
+                    {payoutAccount ? 'Manage payout accounts' : 'Add verified payout account'}
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                <MapPin className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                <div className="flex-1 flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Location</span>
+                  <span className={`font-medium text-right ${profile?.location_verified ? 'text-success' : 'text-gray-900 dark:text-gray-100'}`}>
+                    {profile?.location || 'Not set'}
+                    {profile?.location_verified && (
+                      <span className="ml-1.5 text-xs text-success bg-success-muted px-2 py-0.5 rounded-full">Verified</span>
+                    )}
+                  </span>
                 </div>
               </div>
 
