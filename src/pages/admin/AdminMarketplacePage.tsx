@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Store, Star, Flag, Package, TrendingUp, Save,
-  Loader2, Check, X, Trash2, Plus, Eye, EyeOff,
+  Loader2, Check, X, Trash2, Plus, Eye, EyeOff, Settings2, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -58,7 +58,26 @@ interface MarketplaceUiSettings {
   categories_default_collapsed: boolean;
 }
 
-type Tab = 'featured' | 'moderation' | 'ranking' | 'categories' | 'collections';
+interface ListingEngineSettings {
+  id: boolean;
+  taxonomy_enabled: boolean;
+  dynamic_forms_enabled: boolean;
+  seller_commission_policy_enabled: boolean;
+  legacy_fallback_enabled: boolean;
+  engine_version: number;
+}
+
+interface SellerCommissionPolicyAdmin {
+  id: string;
+  listing_type_code: string;
+  default_percentage: number;
+  min_percentage: number;
+  max_percentage: number;
+  allow_seller_override: boolean;
+  priority: number;
+}
+
+type Tab = 'featured' | 'moderation' | 'ranking' | 'categories' | 'engine' | 'collections';
 
 const PROMOTION_TYPES = [
   { value: 'featured', label: 'Featured', color: 'bg-purple-500' },
@@ -94,9 +113,31 @@ export default function AdminMarketplacePage() {
   const [canManageCategories, setCanManageCategories] = useState(false);
   const [categorySavingId, setCategorySavingId] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [engineSettings, setEngineSettings] = useState<ListingEngineSettings>({
+    id: true,
+    taxonomy_enabled: false,
+    dynamic_forms_enabled: false,
+    seller_commission_policy_enabled: false,
+    legacy_fallback_enabled: true,
+    engine_version: 1,
+  });
+  const [commissionPolicies, setCommissionPolicies] = useState<SellerCommissionPolicyAdmin[]>([]);
+  const [engineSaving, setEngineSaving] = useState(false);
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const [engineSaved, setEngineSaved] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [featRes, repRes, colRes, wRes, catRes, categorySettingsRes, categoryPermissionRes] = await Promise.all([
+    const [
+      featRes,
+      repRes,
+      colRes,
+      wRes,
+      catRes,
+      categorySettingsRes,
+      categoryPermissionRes,
+      engineSettingsRes,
+      commissionPoliciesRes,
+    ] = await Promise.all([
       supabase.from('featured_products').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(20),
       supabase.from('moderation_reports').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.from('marketplace_collections').select('*').order('display_order', { ascending: true }),
@@ -104,6 +145,15 @@ export default function AdminMarketplacePage() {
       supabase.from('marketplace_categories').select('*').order('sort_order', { ascending: true }),
       supabase.from('marketplace_ui_settings').select('*').eq('key', 'default').maybeSingle(),
       supabase.rpc('has_dright_permission', { p_module: 'marketplace', p_action: 'manage_categories' }),
+      supabase.from('marketplace_engine_settings').select('*').eq('id', true).maybeSingle(),
+      supabase
+        .from('marketplace_seller_commission_policies')
+        .select('id,listing_type_code,default_percentage,min_percentage,max_percentage,allow_seller_override,priority')
+        .is('category_id', null)
+        .eq('commission_kind', 'affiliate')
+        .eq('priority', 100)
+        .eq('is_active', true)
+        .order('listing_type_code', { ascending: true }),
     ]);
 
     if (featRes.data) {
@@ -257,11 +307,84 @@ export default function AdminMarketplacePage() {
     setCategorySavingId(null);
   };
 
+  const handleEngineToggle = async (
+    key: 'taxonomy_enabled' | 'dynamic_forms_enabled' | 'seller_commission_policy_enabled',
+  ) => {
+    if (!canManageCategories) return;
+    const next = { ...engineSettings, [key]: !engineSettings[key] };
+    if (next[key] && !window.confirm(
+      'Enable this listing-engine capability? Legacy fallback remains ON and existing DRIGHT2 financial systems stay authoritative.'
+    )) return;
+
+    setEngineSaving(true);
+    setEngineError(null);
+    const { error } = await supabase.rpc('admin_update_marketplace_engine_settings', {
+      p_taxonomy_enabled: next.taxonomy_enabled,
+      p_dynamic_forms_enabled: next.dynamic_forms_enabled,
+      p_seller_commission_policy_enabled: next.seller_commission_policy_enabled,
+    });
+
+    if (error) {
+      setEngineError(error.message);
+    } else {
+      setEngineSettings({ ...next, legacy_fallback_enabled: true });
+      setEngineSaved(true);
+      setTimeout(() => setEngineSaved(false), 2000);
+    }
+    setEngineSaving(false);
+  };
+
+  const updateCommissionPolicy = (
+    id: string,
+    key: 'default_percentage' | 'min_percentage' | 'max_percentage' | 'allow_seller_override',
+    value: number | boolean,
+  ) => {
+    setCommissionPolicies(current => current.map(policy =>
+      policy.id === id ? { ...policy, [key]: value } : policy
+    ));
+  };
+
+  const handleSaveCommissionPolicies = async () => {
+    if (!canManageCategories) return;
+    for (const policy of commissionPolicies) {
+      if (
+        policy.min_percentage < 0
+        || policy.max_percentage > 100
+        || policy.min_percentage > policy.default_percentage
+        || policy.default_percentage > policy.max_percentage
+      ) {
+        setEngineError(`${policy.listing_type_code}: require 0 ≤ min ≤ default ≤ max ≤ 100.`);
+        return;
+      }
+    }
+
+    setEngineSaving(true);
+    setEngineError(null);
+    const results = await Promise.all(commissionPolicies.map(policy =>
+      supabase.rpc('admin_upsert_marketplace_seller_commission_policy', {
+        p_listing_type_code: policy.listing_type_code,
+        p_default_percentage: policy.default_percentage,
+        p_min_percentage: policy.min_percentage,
+        p_max_percentage: policy.max_percentage,
+        p_allow_seller_override: policy.allow_seller_override,
+      })
+    ));
+    const failed = results.find(result => result.error);
+    if (failed?.error) {
+      setEngineError(failed.error.message);
+    } else {
+      setEngineSaved(true);
+      setTimeout(() => setEngineSaved(false), 2000);
+    }
+    setEngineSaving(false);
+  };
+
   const tabs: Array<{ id: Tab; label: string; icon: React.ElementType }> = [
     { id: 'featured', label: 'Featured & Sponsored', icon: Star },
     { id: 'moderation', label: 'Moderation Queue', icon: Flag },
     { id: 'ranking', label: 'Ranking Weights', icon: TrendingUp },
     ...(canManageCategories ? [{ id: 'categories' as const, label: 'Categories', icon: Package }] : []),
+    ...(canManageCategories ? [{ id: 'engine' as const, label: 'Listing Engine', icon: Settings2 }] : []),
     { id: 'collections', label: 'Collections', icon: Package },
   ];
 
@@ -573,6 +696,166 @@ export default function AdminMarketplacePage() {
                         : <EyeOff className="w-3.5 h-3.5" />}
                     {category.is_visible ? 'Visible' : 'Hidden'}
                   </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Listing Engine Tab */}
+      {activeTab === 'engine' && canManageCategories && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-amber-700 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-amber-900">Protected compatibility mode</p>
+              <p className="text-sm text-amber-800 mt-1">
+                Legacy fallback is locked ON. These switches do not replace Sales Team attribution,
+                Admin Task, promotions, platform accounting, commission distribution, orders, payouts, or refunds.
+              </p>
+            </div>
+          </div>
+
+          {engineError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {engineError}
+            </div>
+          )}
+          {engineSaved && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700 flex items-center gap-2">
+              <Check className="w-4 h-4" /> Listing engine settings saved.
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-gray-900">Engine Capabilities</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Enable each capability independently after preview testing.
+                </p>
+              </div>
+              <span className="text-xs font-semibold rounded-full bg-gray-100 text-gray-600 px-2.5 py-1">
+                v{engineSettings.engine_version}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {([
+                ['taxonomy_enabled', 'Dynamic Taxonomy', 'Use the new listing-type/category tree in create-listing forms.'],
+                ['dynamic_forms_enabled', 'Dynamic Context Fields', 'Render schema-driven fields based on listing type and category.'],
+                ['seller_commission_policy_enabled', 'Seller Commission Policy', 'Apply configurable seller-facing affiliate commission limits/defaults.'],
+              ] as const).map(([key, label, description]) => (
+                <div key={key} className="rounded-xl border border-gray-200 p-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{label}</p>
+                    <p className="text-xs text-gray-500 mt-1">{description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={engineSaving}
+                    onClick={() => void handleEngineToggle(key)}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold min-w-[82px] disabled:opacity-50 ${
+                      engineSettings[key]
+                        ? 'bg-success text-white'
+                        : 'bg-gray-200 text-gray-600'
+                    }`}
+                  >
+                    {engineSettings[key] ? 'Enabled' : 'Disabled'}
+                  </button>
+                </div>
+              ))}
+
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-sm text-green-900">Legacy Fallback</p>
+                  <p className="text-xs text-green-700 mt-1">
+                    Existing listings remain valid even without taxonomy or extension metadata.
+                  </p>
+                </div>
+                <span className="px-3 py-2 rounded-lg text-xs font-semibold bg-green-600 text-white">
+                  Locked ON
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-gray-900">Seller Affiliate Commission Policies</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  These are listing-form defaults and bounds. They do not replace authoritative payout rules.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={engineSaving}
+                onClick={() => void handleSaveCommissionPolicies()}
+                className="px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold disabled:opacity-50 flex items-center gap-2"
+              >
+                {engineSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Save Policies
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {commissionPolicies.map(policy => (
+                <div key={policy.id} className="rounded-xl border border-gray-200 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <p className="font-semibold text-sm text-gray-900">{policy.listing_type_code}</p>
+                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={policy.allow_seller_override}
+                        onChange={event => updateCommissionPolicy(
+                          policy.id,
+                          'allow_seller_override',
+                          event.target.checked
+                        )}
+                      />
+                      Seller configurable
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <label className="block">
+                      <span className="block text-xs text-gray-500 mb-1">Minimum %</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.5"
+                        value={policy.min_percentage}
+                        onChange={event => updateCommissionPolicy(policy.id, 'min_percentage', Number(event.target.value))}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs text-gray-500 mb-1">Default %</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.5"
+                        value={policy.default_percentage}
+                        onChange={event => updateCommissionPolicy(policy.id, 'default_percentage', Number(event.target.value))}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs text-gray-500 mb-1">Maximum %</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.5"
+                        value={policy.max_percentage}
+                        onChange={event => updateCommissionPolicy(policy.id, 'max_percentage', Number(event.target.value))}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      />
+                    </label>
+                  </div>
                 </div>
               ))}
             </div>
