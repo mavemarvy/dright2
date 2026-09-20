@@ -3,6 +3,7 @@ import { ChevronRight, Loader2, Search, X, CornerDownRight } from 'lucide-react'
 import {
   fetchMarketplaceCategoryTree,
   getCategoryPath,
+  marketplaceTaxonomyLevelLabel,
   type MarketplaceCategoryTreeNode,
   type MarketplaceListingTypeCode,
 } from '../../lib/listingEngine';
@@ -160,12 +161,14 @@ export default function TaxonomyCategoryPicker({
       .map(node => {
         const name = normalizeSearch(node.name);
         const pathText = normalizeSearch(node.path_names.join(' '));
+        const aliasText = normalizeSearch((node.synonyms ?? []).join(' '));
         let score = Number.POSITIVE_INFINITY;
 
         for (const term of terms) {
           if (name === term) score = Math.min(score, 0);
           else if (name.startsWith(term)) score = Math.min(score, 1);
           else if (name.includes(term)) score = Math.min(score, 2);
+          else if (aliasText.includes(term)) score = Math.min(score, 2.25);
           else if (pathText.includes(term)) score = Math.min(score, 3);
         }
 
@@ -292,7 +295,7 @@ export default function TaxonomyCategoryPicker({
         {levels.map((level, depth) => (
           <div key={`${level.parentId ?? 'root'}-${depth}`}>
             <label className="block text-xs text-gray-500 mb-1">
-              {depth === 0 ? 'Main category' : `Level ${depth + 1}`}
+              {marketplaceTaxonomyLevelLabel(depth)}
             </label>
             <select
               value={level.selectedId}
@@ -319,7 +322,7 @@ export default function TaxonomyCategoryPicker({
 
       {selected?.has_children && (
         <p className="text-xs text-amber-600">
-          A more specific category is available. Choosing the closest match improves search and filtering.
+          A more specific category is available. Continue toward the most specific Leaf Category when possible.
         </p>
       )}
 
