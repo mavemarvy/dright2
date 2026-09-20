@@ -172,6 +172,7 @@ const AdminCommissionRulesPage = lazy(() => import('./pages/admin/AdminCommissio
 const AIAssistant = lazy(() => import('./components/AIAssistant'));
 function PageLoader(){return <div className="flex items-center justify-center min-h-[60vh]"><Spinner size="lg"/></div>}
 function AdminRoute({children}:{children:React.ReactNode}){const {isAdmin,adminRole,loading}=useAuth();const location=useLocation();if(loading)return <div className="min-h-screen flex items-center justify-center bg-surface-muted"><Spinner size="lg"/></div>;if(!isAdmin)return <Navigate to="/" replace/>;if(!canAccessPath(adminRole,location.pathname))return <Navigate to="/admin" replace/>;return <>{children}</>}
+// DRIGHT Starter owns its payment-gated guest UI outside the public shell.
 function App(){return <ErrorBoundary><AuthProvider><NavigationVisibilityProvider><BrowserRouter><a href="#main-content" className="skip-link">Skip to content</a><Suspense fallback={<PageLoader/>}><Routes>
 <Route path="/guest-payment/callback" element={<GuestPaymentCallbackPage/>}/>
 <Route path="/dright/starter/payment" element={<DrightStarterPaymentPage/>}/><Route path="/dright/starter" element={<DrightStarterProductPage/>}/>
