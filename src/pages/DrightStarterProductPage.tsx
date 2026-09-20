@@ -12,6 +12,7 @@ import {
   buildDrightStarterAffiliateLink,
   fetchDrightStarterProduct,
   getPendingDrightStarterPurchase,
+  markDrightStarterSignupFunnel,
   setPendingDrightStarterPurchase,
   startDrightStarterCheckout,
   type DrightStarterPublicSettings,
@@ -35,6 +36,7 @@ export default function DrightStarterProductPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    markDrightStarterSignupFunnel();
     void fetchDrightStarterProduct().then((value) => {
       setSettings(value);
       setLoading(false);
