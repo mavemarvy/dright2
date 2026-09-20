@@ -11,6 +11,7 @@ import { canUsePlatformFeature } from '../lib/platformAccess';
 import {
   buildDrightStarterAffiliateLink,
   fetchDrightStarterProduct,
+  getPendingDrightStarterPurchase,
   setPendingDrightStarterPurchase,
   startDrightStarterCheckout,
   type DrightStarterPublicSettings,
@@ -55,6 +56,7 @@ export default function DrightStarterProductPage() {
     () => product ? product.price * product.affiliate_commission_percent / 100 : 0,
     [product],
   );
+  const pendingStarterPurchase = useMemo(() => getPendingDrightStarterPurchase(), []);
 
   const copyAffiliateLink = async () => {
     if (!profile?.referral_code) return;
@@ -310,10 +312,25 @@ export default function DrightStarterProductPage() {
                   )}
 
                   <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-                    <p className="text-xs text-slate-500">Already completed a Starter purchase?</p>
-                    <div className="mt-2 flex justify-center gap-3 text-sm font-bold">
-                      <Link to="/sign-up" className="text-primary-600 inline-flex items-center gap-1"><UserPlus className="w-4 h-4" /> Sign up</Link>
-                      <Link to="/sign-in" className="text-slate-700 inline-flex items-center gap-1">Sign in <ArrowRight className="w-4 h-4" /></Link>
+                    <p className="text-xs text-slate-500">
+                      Starter signup unlocks only after DRIGHT verifies the payment.
+                    </p>
+                    <div className="mt-2 flex flex-wrap justify-center gap-3 text-sm font-bold">
+                      {pendingStarterPurchase?.reference ? (
+                        <Link
+                          to={`/dright/starter/payment?reference=${encodeURIComponent(pendingStarterPurchase.reference)}`}
+                          className="text-primary-600 inline-flex items-center gap-1"
+                        >
+                          <UserPlus className="w-4 h-4" /> Verify payment & unlock signup
+                        </Link>
+                      ) : (
+                        <span className="text-slate-500 inline-flex items-center gap-1">
+                          <LockKeyhole className="w-4 h-4" /> Pay first to unlock signup
+                        </span>
+                      )}
+                      <Link to="/sign-in" className="text-slate-700 inline-flex items-center gap-1">
+                        Existing user sign in <ArrowRight className="w-4 h-4" />
+                      </Link>
                     </div>
                   </div>
                 </div>
