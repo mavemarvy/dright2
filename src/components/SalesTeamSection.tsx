@@ -6,6 +6,7 @@ import { formatDisplayCurrency } from '../lib/currency';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
 import { MARKETER_WEEKLY_TARGETS, ADVERTISER_REQUIREMENTS } from '../lib/pricing';
+import DrightStarterProductCard from './DrightStarterProductCard';
 
 type ProgressionRule={stage_key:string;stage_label:string;weekly_target:number;required_success_streak:number;next_stage_key:string|null};
 interface Profile { id:string; marketer_level:number; advertiser_grade:string|null; weekly_sales_count:number; total_sales_count:number; consecutive_weeks_streak:number; social_media_links:string[]|null; marketer_status:string; advertiser_status:string; locked_balance:number; available_balance:number; downgraded_at:string|null; }
@@ -62,7 +63,9 @@ export default function SalesTeamSection({profile,socialLinks,setSocialLinks,sho
   const removeLinkField=(idx:number,e?:React.MouseEvent<HTMLButtonElement>)=>{e?.preventDefault();e?.stopPropagation();setSocialLinks(socialLinks.filter((_,i)=>i!==idx));};
   const updateLink=(idx:number,value:string)=>setSocialLinks(socialLinks.map((l,i)=>i===idx?value:l));
 
-  return <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+  return <div className="space-y-4">
+    <DrightStarterProductCard />
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
     <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-primary-600"/>Sales Team Status</h3>
     <div className="flex flex-wrap gap-2"><StatusBadge label="Affiliate" active icon={Star} color="primary"/><StatusBadge label={marketerRestricted?`Marketer L${profile.marketer_level} Restricted`:marketerSuspended?`Marketer L${profile.marketer_level} Suspended`:`Marketer L${profile.marketer_level}`} active={isMarketer} pending={marketerPending} icon={TrendingUp} color="success"/><StatusBadge label={isAdvertiser?`Advertiser ${profile.advertiser_grade}`:'Advertiser'} active={isAdvertiser} pending={advertiserPending} icon={Award} color="warning"/></div>
     {(hasMarketerAccount||isAdvertiser)&&<div className="grid grid-cols-3 gap-3"><StatCard label="Weekly Sales" value={profile.weekly_sales_count} icon={Target}/><StatCard label="Total Sales" value={profile.total_sales_count} icon={TrendingUp}/><StatCard label="Streak" value={`${profile.consecutive_weeks_streak}w`} icon={Zap}/></div>}
