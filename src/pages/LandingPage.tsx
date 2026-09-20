@@ -22,8 +22,17 @@ interface FeaturedProduct {
 }
 
 interface TrustStats {
-  verified_sellers: number; active_users: number;
-  products_available: number; successful_transactions: number;
+  active_users: number;
+  verified_sellers: number;
+  affiliates: number;
+  sales: number;
+}
+
+interface TrustStatsResponse {
+  success?: boolean;
+  mode?: 'live' | 'gamified';
+  stats?: TrustStats;
+  error?: string;
 }
 
 // ─── Search Placeholders (rotating) ───────────────────────────────────────────
@@ -548,39 +557,47 @@ function MarketplaceHighlights() {
 
 function TrustSection() {
   const [stats, setStats] = useState<TrustStats | null>(null);
+  const [displayMode, setDisplayMode] = useState<'live' | 'gamified'>('live');
   const statsRef = useRef<HTMLDivElement>(null);
   const inView = useInView(statsRef, { once: true, margin: '-100px' });
 
   useEffect(() => {
     (async () => {
       try {
-        const [usersRes, productsRes, salesRes] = await Promise.all([
-          supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_verified', true),
-          supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('approval_status', 'approved'),
-          supabase.from('sales_records').select('id', { count: 'exact', head: true }),
-        ]);
-        setStats({
-          verified_sellers: usersRes.count || 0,
-          active_users: Math.floor((usersRes.count || 0) * 3.5),
-          products_available: productsRes.count || 0,
-          successful_transactions: salesRes.count || 0,
+        const { data, error } = await supabase.functions.invoke('community-stats', {
+          body: { action: 'public' },
         });
-      } catch {
-        setStats({ verified_sellers: 0, active_users: 0, products_available: 0, successful_transactions: 0 });
+        if (error) throw error;
+
+        const result = data as TrustStatsResponse | null;
+        if (!result?.success || !result.stats) {
+          throw new Error(result?.error || 'Unable to load community statistics');
+        }
+
+        setDisplayMode(result.mode === 'gamified' ? 'gamified' : 'live');
+        setStats({
+          active_users: Number(result.stats.active_users || 0),
+          verified_sellers: Number(result.stats.verified_sellers || 0),
+          affiliates: Number(result.stats.affiliates || 0),
+          sales: Number(result.stats.sales || 0),
+        });
+      } catch (error) {
+        console.error('Failed to load community statistics:', error);
+        setStats({ active_users: 0, verified_sellers: 0, affiliates: 0, sales: 0 });
       }
     })();
   }, []);
 
-  const sellersCount = useCountUp(stats?.verified_sellers ?? 0, inView);
   const usersCount = useCountUp(stats?.active_users ?? 0, inView);
-  const productsCount = useCountUp(stats?.products_available ?? 0, inView);
-  const transactionsCount = useCountUp(stats?.successful_transactions ?? 0, inView);
+  const sellersCount = useCountUp(stats?.verified_sellers ?? 0, inView);
+  const affiliatesCount = useCountUp(stats?.affiliates ?? 0, inView);
+  const salesCount = useCountUp(stats?.sales ?? 0, inView);
 
   const items = [
-    { icon: Shield, label: 'Verified Sellers', value: sellersCount },
     { icon: Users, label: 'Active Users', value: usersCount },
-    { icon: Package, label: 'Products Available', value: productsCount },
-    { icon: CheckCircle2, label: 'Successful Transactions', value: transactionsCount },
+    { icon: Shield, label: 'Verified Sellers', value: sellersCount },
+    { icon: Megaphone, label: 'Affiliates', value: affiliatesCount },
+    { icon: CheckCircle2, label: 'Successful Sales', value: salesCount },
   ];
 
   return (
@@ -594,7 +611,11 @@ function TrustSection() {
             className="text-center mb-10"
           >
             <h2 className="text-2xl sm:text-3xl font-bold text-white">A marketplace you can trust</h2>
-            <p className="mt-2 text-gray-400">Real numbers from our growing community</p>
+            <p className="mt-2 text-gray-400">
+              {displayMode === 'live'
+                ? 'Live numbers from our growing community'
+                : 'Configured community highlights — promotional display, not live analytics'}
+            </p>
           </motion.div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
             {items.map((item, i) => (

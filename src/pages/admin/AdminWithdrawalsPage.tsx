@@ -5,7 +5,6 @@ import {
   Loader2, CreditCard, AlertTriangle, X, Copy, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { emitEvent } from '../../lib/notificationEvents';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency } from '../../lib/currency';
 
@@ -126,27 +125,12 @@ export default function AdminWithdrawalsPage() {
       if (error) throw error;
 
       const result = (data || {}) as WithdrawalRpcResult;
-      if (!result.already_processed) {
-        const eventType = action === 'approve'
-          ? 'withdrawal_approved'
-          : action === 'reject'
-            ? 'withdrawal_rejected'
-            : 'withdrawal_completed';
-
-        await emitEvent({
-          module: 'wallet',
-          eventType,
-          recipientIds: withdrawal.user_id,
-          actorId: user.id,
-          metadata: {
-            amount: Number(withdrawal.amount),
-            currency: 'NGN',
-            reference: withdrawal.reference || withdrawal.id,
-            reason: reason?.trim() || undefined,
-          },
-        });
+      if (result.success === false) {
+        throw new Error('Withdrawal action was not completed');
       }
 
+      // withdrawal_requests status changes are the canonical notification source.
+      // The database trigger creates the in-app notification and queues its email.
       await fetchWithdrawals();
       return true;
     } catch (error) {
@@ -184,19 +168,8 @@ export default function AdminWithdrawalsPage() {
       const result = data as { success?: boolean; error?: string; status?: string } | null;
       if (!result?.success) throw new Error(result?.error || 'Unable to mark manual withdrawal as paid');
 
-      await emitEvent({
-        module: 'wallet',
-        eventType: 'withdrawal_completed',
-        recipientIds: withdrawal.user_id,
-        actorId: user.id,
-        metadata: {
-          amount: Number(withdrawal.amount),
-          currency: 'NGN',
-          reference: withdrawal.reference || withdrawal.id,
-          method: 'manual_bank_transfer',
-        },
-      });
-
+      // The server-side withdrawal status trigger creates the canonical
+      // "Withdrawal successful" in-app notification and email outbox entry.
       await fetchWithdrawals();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to mark manual withdrawal as paid';

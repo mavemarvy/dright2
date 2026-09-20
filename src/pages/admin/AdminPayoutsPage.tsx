@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   DollarSign, Search, CheckCircle, Clock, Loader2,
   Percent, Save, AlertTriangle, X, Power, ShieldCheck, RefreshCw,
+  Trash2, CalendarClock,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { emitEvent } from '../../lib/notificationEvents';
@@ -49,6 +50,19 @@ type AutomationResponse = {
   error?: string;
 };
 
+interface BankDeletionPolicy {
+  key: string;
+  enabled: boolean;
+  cooldown_days: number;
+  updated_at: string;
+}
+
+type BankDeletionPolicyResponse = {
+  success?: boolean;
+  settings?: BankDeletionPolicy;
+  error?: string;
+};
+
 export default function AdminPayoutsPage() {
   const { user, adminRole } = useAuth();
   const isSuperAdmin = adminRole === 'super_admin';
@@ -68,14 +82,84 @@ export default function AdminPayoutsPage() {
   const [automationSaving, setAutomationSaving] = useState(false);
   const [automationError, setAutomationError] = useState<string | null>(null);
   const [automationSuccess, setAutomationSuccess] = useState<string | null>(null);
+  const [deletionPolicy, setDeletionPolicy] = useState<BankDeletionPolicy | null>(null);
+  const [deletionPolicyLoading, setDeletionPolicyLoading] = useState(false);
+  const [deletionPolicySaving, setDeletionPolicySaving] = useState(false);
+  const [deletionPolicyMessage, setDeletionPolicyMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayouts();
   }, [statusFilter]);
 
   useEffect(() => {
-    if (isSuperAdmin) void loadAutomationSettings();
+    if (isSuperAdmin) {
+      void loadAutomationSettings();
+      void loadDeletionPolicy();
+    }
   }, [isSuperAdmin]);
+
+  const loadDeletionPolicy = async () => {
+    if (!isSuperAdmin) return;
+    setDeletionPolicyLoading(true);
+    setDeletionPolicyMessage(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-bank-account-deletion-policy', {
+        body: { action: 'get' },
+      });
+      if (error) throw error;
+      const result = (data || {}) as BankDeletionPolicyResponse;
+      if (!result.success || !result.settings) {
+        throw new Error(result.error || 'Unable to load bank-account deletion policy');
+      }
+      setDeletionPolicy({
+        ...result.settings,
+        cooldown_days: Number(result.settings.cooldown_days),
+      });
+    } catch (error) {
+      setDeletionPolicyMessage(error instanceof Error ? error.message : 'Unable to load bank-account deletion policy');
+    } finally {
+      setDeletionPolicyLoading(false);
+    }
+  };
+
+  const saveDeletionPolicy = async () => {
+    if (!isSuperAdmin || !deletionPolicy) return;
+    const days = Math.trunc(Number(deletionPolicy.cooldown_days));
+    if (!Number.isFinite(days) || days < 0 || days > 3650) {
+      setDeletionPolicyMessage('Deletion cooldown must be a whole number from 0 to 3650 days.');
+      return;
+    }
+
+    setDeletionPolicySaving(true);
+    setDeletionPolicyMessage(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-bank-account-deletion-policy', {
+        body: {
+          action: 'update',
+          enabled: deletionPolicy.enabled,
+          cooldown_days: days,
+        },
+      });
+      if (error) throw error;
+      const result = (data || {}) as BankDeletionPolicyResponse;
+      if (!result.success || !result.settings) {
+        throw new Error(result.error || 'Unable to save bank-account deletion policy');
+      }
+      setDeletionPolicy({
+        ...result.settings,
+        cooldown_days: Number(result.settings.cooldown_days),
+      });
+      setDeletionPolicyMessage(
+        result.settings.enabled
+          ? `Users can now delete one saved payment account every ${result.settings.cooldown_days} day${result.settings.cooldown_days === 1 ? '' : 's'}.`
+          : 'The deletion cooldown is disabled.'
+      );
+    } catch (error) {
+      setDeletionPolicyMessage(error instanceof Error ? error.message : 'Unable to save bank-account deletion policy');
+    } finally {
+      setDeletionPolicySaving(false);
+    }
+  };
 
   const loadAutomationSettings = async () => {
     if (!isSuperAdmin) return;
@@ -462,6 +546,130 @@ export default function AdminPayoutsPage() {
           ) : (
             <div className="p-5 text-sm text-red-600">
               {automationError || 'Withdrawal automation settings could not be loaded.'}
+            </div>
+          )}
+        </section>
+      )}
+
+      {isSuperAdmin && (
+        <section className="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="p-5 md:p-6 border-b border-gray-100 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg font-bold text-gray-900">Payment Account Deletion Limit</h2>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">Super Admin only</span>
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  Limit how often each user may delete a saved bank/payment account. The default is once every year.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadDeletionPolicy()}
+              disabled={deletionPolicyLoading || deletionPolicySaving}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${deletionPolicyLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          {deletionPolicyLoading && !deletionPolicy ? (
+            <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary-600" /></div>
+          ) : deletionPolicy ? (
+            <div className="p-5 md:p-6 space-y-5">
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 p-4">
+                <div>
+                  <p className="font-semibold text-gray-900">Enforce deletion cooldown</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    The cooldown is per user. Active withdrawals always block deletion regardless of this setting.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={deletionPolicy.enabled}
+                  onClick={() => setDeletionPolicy({ ...deletionPolicy, enabled: !deletionPolicy.enabled })}
+                  className={`relative w-14 h-8 rounded-full transition-colors shrink-0 ${deletionPolicy.enabled ? 'bg-primary-600' : 'bg-gray-300'}`}
+                >
+                  <span className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${deletionPolicy.enabled ? 'left-7' : 'left-1'}`} />
+                </button>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <CalendarClock className="w-4 h-4 text-gray-500" />
+                  <p className="text-sm font-medium text-gray-700">Deletion interval</p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                  {[
+                    { label: '3 days', days: 3 },
+                    { label: 'Monthly', days: 30 },
+                    { label: 'Quarterly', days: 90 },
+                    { label: 'Yearly', days: 365 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      onClick={() => setDeletionPolicy({ ...deletionPolicy, cooldown_days: preset.days })}
+                      className={`px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                        deletionPolicy.cooldown_days === preset.days
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="block max-w-xs">
+                  <span className="text-xs font-medium text-gray-500">Custom interval in days</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="3650"
+                    step="1"
+                    disabled={!deletionPolicy.enabled}
+                    value={deletionPolicy.cooldown_days}
+                    onChange={(event) => setDeletionPolicy({
+                      ...deletionPolicy,
+                      cooldown_days: Math.max(0, Math.trunc(Number(event.target.value) || 0)),
+                    })}
+                    className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 disabled:bg-gray-100"
+                  />
+                </label>
+                <p className="text-[11px] text-gray-400 mt-2">
+                  A successful deletion starts the cooldown immediately. Deleting another saved account before the interval ends is rejected server-side.
+                </p>
+              </div>
+
+              {deletionPolicyMessage && (
+                <div className="rounded-xl bg-blue-50 text-blue-700 p-3 text-sm">{deletionPolicyMessage}</div>
+              )}
+
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-gray-400">
+                  Last updated: {deletionPolicy.updated_at ? new Date(deletionPolicy.updated_at).toLocaleString() : 'Unknown'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void saveDeletionPolicy()}
+                  disabled={deletionPolicySaving || deletionPolicyLoading}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-primary-600 text-white font-semibold hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {deletionPolicySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save deletion policy
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-5 text-sm text-red-600">
+              {deletionPolicyMessage || 'Deletion policy could not be loaded.'}
             </div>
           )}
         </section>
