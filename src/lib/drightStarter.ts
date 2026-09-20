@@ -70,6 +70,7 @@ export interface DrightStarterAdminSettings {
 }
 
 const PENDING_KEY = 'dright_starter_pending_purchase';
+// Starter funnel state is session-scoped; payment authority remains server-side.
 const STARTER_FUNNEL_KEY = 'dright_starter_paid_signup_funnel_v1';
 
 export function markDrightStarterSignupFunnel(): void {
