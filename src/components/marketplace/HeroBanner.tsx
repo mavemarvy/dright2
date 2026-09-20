@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Search, Tag, Plus, Flame, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Tag, Plus, Flame, ArrowRight } from 'lucide-react';
 import { useActiveBanners, useTrackBannerEvent } from '../../lib/bannerHooks';
 import { resolveBannerUrl } from '../../lib/bannerTypes';
 import type { MarketplaceBanner } from '../../lib/bannerTypes';
 
 interface HeroBannerProps {
-  onSearch: (query: string) => void;
   onBrowseCategories: () => void;
 }
 
@@ -120,10 +119,9 @@ function BannerSlide({ banner }: { banner: MarketplaceBanner }) {
   );
 }
 
-export default function HeroBanner({ onSearch, onBrowseCategories }: HeroBannerProps) {
+export default function HeroBanner({ onBrowseCategories }: HeroBannerProps) {
   const { banners, loading } = useActiveBanners();
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartX, setDragStartX] = useState(0);
   const [dragDelta, setDragDelta] = useState(0);
@@ -172,11 +170,6 @@ export default function HeroBanner({ onSearch, onBrowseCategories }: HeroBannerP
     setDragDelta(0);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) onSearch(searchQuery.trim());
-  };
-
   // Empty state: no banners at all — render fallback hero
   if (!loading && banners.length === 0) {
     return (
@@ -189,14 +182,6 @@ export default function HeroBanner({ onSearch, onBrowseCategories }: HeroBannerP
               Discover digital products, courses, services, and jobs from creators worldwide.
             </p>
           </div>
-          <form onSubmit={handleSearch} className="w-full max-w-2xl mt-2">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for anything..."
-                className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/95 backdrop-blur text-gray-900 placeholder-gray-400 outline-none focus:ring-4 focus:ring-white/30 transition-all shadow-lg" />
-            </div>
-          </form>
           <div className="flex flex-wrap items-center gap-3">
             <button onClick={onBrowseCategories}
               className="inline-flex items-center gap-2 px-5 py-3 bg-white/15 backdrop-blur border border-white/20 text-white rounded-xl font-semibold text-sm hover:bg-white/25 transition-colors">
@@ -245,16 +230,8 @@ export default function HeroBanner({ onSearch, onBrowseCategories }: HeroBannerP
         ))}
       </div>
 
-      {/* Search bar overlay (shared across all slides) */}
+      {/* Shared marketplace actions */}
       <div className="relative px-6 md:px-12 pb-6 md:pb-8 -mt-2">
-        <form onSubmit={handleSearch} className="w-full max-w-2xl">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search for anything..."
-              className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/95 backdrop-blur text-gray-900 placeholder-gray-400 outline-none focus:ring-4 focus:ring-white/30 transition-all shadow-lg" />
-          </div>
-        </form>
         <div className="flex flex-wrap items-center gap-3 mt-4">
           <button onClick={onBrowseCategories}
             className="inline-flex items-center gap-2 px-5 py-3 bg-white/15 backdrop-blur border border-white/20 text-white rounded-xl font-semibold text-sm hover:bg-white/25 transition-colors">
