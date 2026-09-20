@@ -21,7 +21,7 @@ export default function PublicAppShell() {
     return <AppShell />;
   }
 
-  // Guest users get a minimal header plus a dismissible DRIGHT discovery strip.
+  // Guest users get a minimal header plus a dismissible DRIGHT discovery strip. Starter checkout is routed outside this shell.
   // It never blocks login/navigation and falls back to real admin banners because
   // guest paid-impression billing remains intentionally disabled.
   return (
