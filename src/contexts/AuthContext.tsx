@@ -7,6 +7,7 @@ import type { StoreTheme } from '../lib/storeThemes';
 import { logger, ErrorCategory } from '../lib/logger';
 import { getDeviceFingerprint, getBrowserName, getRedirectPath } from '../lib/authSecurity';
 import { resumePendingSignupOnboarding } from '../lib/onboarding';
+import { getDrightStarterSignupEligibility } from '../lib/drightStarter';
 
 export type AdminRole =
   | 'super_admin' | 'platform_admin' | 'user_management_admin' | 'marketplace_admin' | 'marketplace_moderator'
@@ -41,7 +42,7 @@ interface AuthContextType {
   user: User | null; session: Session | null; loading: boolean; profile: Profile | null;
   isAdmin: boolean; adminRole: AdminRole | null; isAccountLocked: boolean; isAccountBanned: boolean;
   isEmailVerified: boolean; sessionExpired: boolean; clearSessionExpired: () => void;
-  signUp: (email: string, password: string, fullName: string, phone?: string, asAdmin?: boolean, location?: string, preferredCurrency?: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, fullName: string, phone?: string, asAdmin?: boolean, location?: string, preferredCurrency?: string, starterReference?: string) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null; locked?: boolean; lockoutRemaining?: number }>;
   signInWithPhone: (phone: string) => Promise<{ error: AuthError | null; mockOtp?: string }>;
   verifyOtp: (phone: string, token: string) => Promise<{ error: AuthError | null }>;
@@ -222,8 +223,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null, isAdminPending: adminStatus === 'pending', isFirstAdmin: shouldBeAdmin && adminStatus === 'active' };
   };
 
-  const signUp = async (email: string, password: string, fullName: string, phone?: string, asAdmin?: boolean, location?: string, preferredCurrency?: string) => {
+  const signUp = async (email: string, password: string, fullName: string, phone?: string, asAdmin?: boolean, location?: string, preferredCurrency?: string, starterReference?: string) => {
     const normalizedEmail = email.trim().toLowerCase();
+    const normalizedStarterReference = starterReference?.trim() || '';
+    if (normalizedStarterReference) {
+      const eligibility = await getDrightStarterSignupEligibility(normalizedStarterReference, normalizedEmail);
+      if (!eligibility.eligible) {
+        return {
+          error: {
+            message: eligibility.message,
+            name: 'StarterPaymentRequired',
+            status: 403,
+          } as AuthError,
+        };
+      }
+    }
     const refCode = getAffiliateCookie();
     const { data, error } = await supabase.auth.signUp({
       email: normalizedEmail,
