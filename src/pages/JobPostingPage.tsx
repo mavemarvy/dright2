@@ -23,7 +23,6 @@ import {
   validateSellerCommission,
   upsertMarketplaceListingExtension,
   type MarketplaceEngineSettings,
-  type MarketplaceCategoryTreeNode,
   type SellerCommissionPolicy,
 } from '../lib/listingEngine';
 
@@ -77,6 +76,21 @@ interface FormState {
   description: string;
   applicationInstructions: string;
   affiliateCommission: string;
+}
+
+interface JobDraftStorage extends Partial<FormState> {
+  __taxonomyCategoryId?: string | null;
+  __taxonomyPath?: Array<{ id: string; name: string }>;
+  __dynamicAttributes?: Record<string, unknown>;
+}
+
+function readJobDraftStorage(): JobDraftStorage {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) as JobDraftStorage : {};
+  } catch {
+    return {};
+  }
 }
 
 const INITIAL_FORM: FormState = {
@@ -228,12 +242,14 @@ export default function JobPostingPage() {
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(() => {
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      return saved ? { ...INITIAL_FORM, ...JSON.parse(saved) } : INITIAL_FORM;
-    } catch {
-      return INITIAL_FORM;
-    }
+    const saved = readJobDraftStorage();
+    const {
+      __taxonomyCategoryId: _taxonomyCategoryId,
+      __taxonomyPath: _taxonomyPath,
+      __dynamicAttributes: _dynamicAttributes,
+      ...savedForm
+    } = saved;
+    return { ...INITIAL_FORM, ...savedForm };
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -242,11 +258,17 @@ export default function JobPostingPage() {
   const [draftSaved, setDraftSaved] = useState(false);
   const [uploadedJobId, setUploadedJobId] = useState<string | null>(null);
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
-  const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
-  const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<MarketplaceCategoryTreeNode[]>([]);
+  const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(
+    () => readJobDraftStorage().__taxonomyCategoryId ?? null
+  );
+  const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<Array<{ id: string; name: string }>>(
+    () => readJobDraftStorage().__taxonomyPath ?? []
+  );
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
   const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
-  const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
+  const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>(
+    () => readJobDraftStorage().__dynamicAttributes ?? {}
+  );
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -266,31 +288,38 @@ export default function JobPostingPage() {
     update(key, form[key].filter((_, i) => i !== index));
   };
 
+  const buildDraftPayload = (): JobDraftStorage => ({
+    ...form,
+    __taxonomyCategoryId: selectedTaxonomyCategoryId,
+    __taxonomyPath: selectedTaxonomyPath.map(node => ({ id: node.id, name: node.name })),
+    __dynamicAttributes: dynamicAttributes,
+  });
+
   const saveDraft = () => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(buildDraftPayload()));
     setDraftSaved(true);
     setTimeout(() => setDraftSaved(false), 2000);
   };
 
-  // Auto-save draft as user types
+  // Auto-save draft as user types, including additive taxonomy metadata.
   useEffect(() => {
     const timer = setTimeout(() => {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(buildDraftPayload()));
     }, 1000);
     return () => clearTimeout(timer);
-  }, [form]);
+  }, [form, selectedTaxonomyCategoryId, selectedTaxonomyPath, dynamicAttributes]);
 
   useEffect(() => {
     fetchMarketplaceEngineSettings().then(setEngineSettings);
   }, []);
 
   useEffect(() => {
-    if (!engineSettings?.taxonomy_enabled) {
+    if (engineSettings && !engineSettings.taxonomy_enabled) {
       setSelectedTaxonomyCategoryId(null);
       setSelectedTaxonomyPath([]);
       setDynamicAttributes({});
     }
-  }, [engineSettings?.taxonomy_enabled]);
+  }, [engineSettings]);
 
   useEffect(() => {
     if (!engineSettings?.seller_commission_policy_enabled) {
