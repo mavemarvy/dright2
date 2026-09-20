@@ -116,7 +116,7 @@ export async function getAdminDrightStarterSettings(): Promise<DrightStarterAdmi
 export async function updateAdminDrightStarterSettings(
   settings: DrightStarterAdminSettings,
 ): Promise<DrightStarterAdminSettings> {
-  const { data, error } = await supabase.rpc('admin_update_dright_starter_settings', {
+  const { error } = await supabase.rpc('admin_update_dright_starter_settings', {
     p_store: {
       name: settings.store.name,
       tagline: settings.store.tagline,
