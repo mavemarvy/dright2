@@ -12,6 +12,7 @@ import {
   Award,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import AdminDrightStarterProductSettings from '../../components/admin/AdminDrightStarterProductSettings';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   getAdminPlatformAccessPolicy,
@@ -451,6 +452,8 @@ export default function AdminSystemSettingsPage() {
           </>
         )}
       </div>
+
+      <AdminDrightStarterProductSettings />
 
       {/* Global settings */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
