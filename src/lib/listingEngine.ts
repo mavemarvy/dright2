@@ -137,18 +137,81 @@ export async function fetchMarketplaceAttributes(
   listingTypeCode: MarketplaceListingTypeCode,
   categoryId: string | null
 ): Promise<MarketplaceAttributeDefinition[]> {
-  let query = supabase
+  const baseSelect = 'id,listing_type_code,category_id,attribute_key,label,input_type,is_required,is_searchable,is_filterable,is_sortable,is_comparable,show_on_card,show_on_details,options,validation,sort_order,schema_version';
+
+  const globalQuery = supabase
     .from('marketplace_attribute_definitions')
-    .select('id,listing_type_code,category_id,attribute_key,label,input_type,is_required,is_searchable,is_filterable,is_sortable,is_comparable,show_on_card,show_on_details,options,validation,sort_order,schema_version')
+    .select(baseSelect)
     .eq('listing_type_code', listingTypeCode)
     .eq('is_active', true)
+    .is('category_id', null)
     .order('sort_order', { ascending: true });
 
-  query = categoryId ? query.eq('category_id', categoryId) : query.is('category_id', null);
+  const categoryQuery = categoryId
+    ? supabase
+        .from('marketplace_attribute_definitions')
+        .select(baseSelect)
+        .eq('listing_type_code', listingTypeCode)
+        .eq('is_active', true)
+        .eq('category_id', categoryId)
+        .order('sort_order', { ascending: true })
+    : null;
 
-  const { data, error } = await query;
-  if (error) return [];
-  return (data ?? []) as MarketplaceAttributeDefinition[];
+  const [globalResult, categoryResult] = await Promise.all([
+    globalQuery,
+    categoryQuery ?? Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (globalResult.error || categoryResult.error) return [];
+
+  const merged = new Map<string, MarketplaceAttributeDefinition>();
+  for (const row of (globalResult.data ?? []) as MarketplaceAttributeDefinition[]) {
+    merged.set(row.attribute_key, row);
+  }
+  for (const row of (categoryResult.data ?? []) as MarketplaceAttributeDefinition[]) {
+    merged.set(row.attribute_key, row);
+  }
+
+  return [...merged.values()].sort((a, b) => a.sort_order - b.sort_order);
+}
+
+export function validateMarketplaceAttributes(
+  definitions: MarketplaceAttributeDefinition[],
+  values: Record<string, unknown>
+): string | null {
+  for (const definition of definitions) {
+    const value = values[definition.attribute_key];
+    const empty = value === null
+      || value === undefined
+      || value === ''
+      || (Array.isArray(value) && value.length === 0);
+
+    if (definition.is_required && empty) {
+      return `${definition.label} is required.`;
+    }
+    if (empty) continue;
+
+    const validation = definition.validation ?? {};
+    if (typeof value === 'number') {
+      const min = Number(validation.min);
+      const max = Number(validation.max);
+      if (Number.isFinite(min) && value < min) return `${definition.label} must be at least ${min}.`;
+      if (Number.isFinite(max) && value > max) return `${definition.label} must be no more than ${max}.`;
+    }
+
+    if (typeof value === 'string') {
+      const minLength = Number(validation.minLength);
+      const maxLength = Number(validation.maxLength);
+      if (Number.isFinite(minLength) && value.length < minLength) {
+        return `${definition.label} must contain at least ${minLength} characters.`;
+      }
+      if (Number.isFinite(maxLength) && value.length > maxLength) {
+        return `${definition.label} must contain no more than ${maxLength} characters.`;
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function resolveSellerCommissionPolicy(

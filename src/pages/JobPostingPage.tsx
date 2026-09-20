@@ -13,9 +13,12 @@ import { SUPPORTED_CURRENCIES, formatSalaryRange } from '../lib/currency';
 import type { JobType, WorkSetup, CareerLevel } from '../lib/types';
 import PostUploadConfirmation from '../components/PostUploadConfirmation';
 import AIGenerateButton from '../components/ai/AIGenerateButton';
+import DynamicListingFields from '../components/listing/DynamicListingFields';
 import {
   fetchMarketplaceEngineSettings,
   fetchMarketplaceCategories,
+  fetchMarketplaceAttributes,
+  validateMarketplaceAttributes,
   resolveSellerCommissionPolicy,
   validateSellerCommission,
   upsertMarketplaceListingExtension,
@@ -242,6 +245,8 @@ export default function JobPostingPage() {
   const [taxonomyCategories, setTaxonomyCategories] = useState<MarketplaceCategory[]>([]);
   const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
+  const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
+  const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -312,6 +317,19 @@ export default function JobPostingPage() {
     selectedTaxonomyCategoryId,
   ]);
 
+  useEffect(() => {
+    if (!engineSettings?.dynamic_forms_enabled) {
+      setAttributeDefinitions([]);
+      return;
+    }
+
+    fetchMarketplaceAttributes('JOB', selectedTaxonomyCategoryId)
+      .then(setAttributeDefinitions);
+  }, [
+    engineSettings?.dynamic_forms_enabled,
+    selectedTaxonomyCategoryId,
+  ]);
+
   const jobCategoryOptions = engineSettings?.taxonomy_enabled && taxonomyCategories.length > 0
     ? taxonomyCategories.map(category => ({ id: category.id, label: category.name }))
     : JOB_CATEGORIES.map(category => ({ id: null, label: category }));
@@ -335,6 +353,10 @@ export default function JobPostingPage() {
         sellerCommissionPolicy
       );
       if (!validation.valid) return validation.message || 'Enter a valid affiliate commission.';
+    }
+    if (step === 3 && engineSettings?.dynamic_forms_enabled) {
+      const dynamicError = validateMarketplaceAttributes(attributeDefinitions, dynamicAttributes);
+      if (dynamicError) return dynamicError;
     }
     if (step === 4) {
       const filled = form.responsibilities.filter(r => r.trim());
@@ -410,6 +432,7 @@ export default function JobPostingPage() {
           categoryId: selectedTaxonomyCategoryId,
           attributes: {
             legacy_category: form.category,
+            ...dynamicAttributes,
           },
           metadata: {
             source: 'job_posting_page',
@@ -707,6 +730,13 @@ export default function JobPostingPage() {
                           This does not change DRIGHT Admin Task, Sales Team, promotion, or platform-fee rules.
                         </p>
                       </div>
+                    )}
+                    {engineSettings?.dynamic_forms_enabled && attributeDefinitions.length > 0 && (
+                      <DynamicListingFields
+                        definitions={attributeDefinitions}
+                        values={dynamicAttributes}
+                        onChange={(key, value) => setDynamicAttributes(current => ({ ...current, [key]: value }))}
+                      />
                     )}
                   </div>
                 )}

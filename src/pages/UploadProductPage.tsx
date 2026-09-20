@@ -52,6 +52,7 @@ import PostUploadConfirmation, { type UploadType } from '../components/PostUploa
 import ProductOptimizationCard from '../components/ProductOptimizationCard';
 import AIGenerateButton from '../components/ai/AIGenerateButton';
 import AIImageAnalyzer from '../components/ai/AIImageAnalyzer';
+import DynamicListingFields from '../components/listing/DynamicListingFields';
 import {
   saveDraft, generateDraftId,
   getLocalDrafts, markDraftPublished, removeLocalDraft,
@@ -60,6 +61,8 @@ import {
 import {
   fetchMarketplaceEngineSettings,
   fetchMarketplaceCategories,
+  fetchMarketplaceAttributes,
+  validateMarketplaceAttributes,
   resolveSellerCommissionPolicy,
   validateSellerCommission,
   upsertMarketplaceListingExtension,
@@ -173,6 +176,8 @@ export default function UploadProductPage() {
   const [taxonomyCategories, setTaxonomyCategories] = useState<MarketplaceCategory[]>([]);
   const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
+  const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
+  const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
 
   // Digital/Course state
   const [deliveryType, setDeliveryType] = useState('INSTANT_DOWNLOAD');
@@ -251,6 +256,20 @@ export default function UploadProductPage() {
     });
   }, [
     engineSettings?.seller_commission_policy_enabled,
+    productType,
+    selectedTaxonomyCategoryId,
+  ]);
+
+  useEffect(() => {
+    if (!engineSettings?.dynamic_forms_enabled) {
+      setAttributeDefinitions([]);
+      return;
+    }
+
+    fetchMarketplaceAttributes(productType, selectedTaxonomyCategoryId)
+      .then(setAttributeDefinitions);
+  }, [
+    engineSettings?.dynamic_forms_enabled,
     productType,
     selectedTaxonomyCategoryId,
   ]);
@@ -415,6 +434,10 @@ export default function UploadProductPage() {
         const price = parseFloat(form.price);
         if (isNaN(price) || price <= 0) { setError('Enter a valid price'); return false; }
       }
+      if (engineSettings?.dynamic_forms_enabled) {
+        const dynamicError = validateMarketplaceAttributes(attributeDefinitions, dynamicAttributes);
+        if (dynamicError) { setError(dynamicError); return false; }
+      }
     }
     if (step === 2 && isServiceType) {
       for (const tier of tiers) {
@@ -540,6 +563,7 @@ export default function UploadProductPage() {
           categoryId: selectedTaxonomyCategoryId,
           attributes: {
             legacy_category: form.category,
+            ...dynamicAttributes,
           },
           metadata: {
             source: 'upload_product_page',
@@ -867,6 +891,14 @@ export default function UploadProductPage() {
                 </div>
               )}
             </div>
+
+            {engineSettings?.dynamic_forms_enabled && attributeDefinitions.length > 0 && (
+              <DynamicListingFields
+                definitions={attributeDefinitions}
+                values={dynamicAttributes}
+                onChange={(key, value) => setDynamicAttributes(current => ({ ...current, [key]: value }))}
+              />
+            )}
 
             {/* Free Product Toggle */}
             <div className="flex items-center justify-between p-4 bg-gradient-to-r from-success-muted to-green-50 rounded-xl border border-success/20">
