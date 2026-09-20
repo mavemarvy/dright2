@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Check, Crown, Sparkles, Zap, TrendingUp, CreditCard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getCurrencySymbol, formatCurrency } from '../lib/currency';
+import { formatCurrency } from '../lib/currency';
 import { useSubscriptionPlans, useUserSubscriptions, cancelSubscription, type SubscriptionPlan } from '../lib/paystackService';
 import { getMyPlatformAccess, type PlatformAccessStatus } from '../lib/platformAccess';
 
@@ -18,7 +18,6 @@ const PLAN_COLORS: Record<string, string> = {
 
 export default function SubscriptionsPage() {
   const { user } = useAuth();
-  const cSym = getCurrencySymbol('NGN');
   const navigate = useNavigate();
   const { plans, loading } = useSubscriptionPlans();
   const { subscriptions, reload } = useUserSubscriptions(user?.id);
