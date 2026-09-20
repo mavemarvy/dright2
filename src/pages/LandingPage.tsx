@@ -888,14 +888,18 @@ export default function LandingPage() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('logo_url')
-        .limit(1)
-        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke('public-branding', {
+        body: {},
+      });
+      if (error || !mounted) return;
 
-      if (mounted && data?.logo_url) {
-        setBrandLogoUrl(data.logo_url);
+      const result = data as {
+        success?: boolean;
+        branding?: { logo_url?: string | null };
+      } | null;
+
+      if (result?.success && result.branding?.logo_url) {
+        setBrandLogoUrl(result.branding.logo_url);
       }
     })();
     return () => { mounted = false; };
