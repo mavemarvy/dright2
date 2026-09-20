@@ -318,7 +318,7 @@ function HeroSection({ user, firstName, logoUrl }: { user: any; firstName: strin
             {user && firstName ? (
               <>Welcome back, {firstName}</>
             ) : (
-              <>Welcome to Dright</>
+              <>Welcome to DRIGHT</>
             )}
           </motion.h1>
           <motion.p
@@ -588,7 +588,7 @@ function MarketplaceHighlights() {
           transition={{ type: 'spring', stiffness: 95, damping: 18 }}
           className="mb-8"
         >
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">What's new on Dright</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">What's new on DRIGHT</h2>
           <p className="mt-2 text-gray-500 dark:text-gray-400">Platform updates and announcements</p>
         </motion.div>
         <div className="grid md:grid-cols-3 gap-5">
@@ -792,7 +792,7 @@ function WelcomeFooter({ logoUrl }: { logoUrl: string }) {
           ))}
         </div>
         <div className="pt-6 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-400 dark:text-gray-500">© 2026 Dright. All rights reserved.</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">© 2026 DRIGHT. All rights reserved.</p>
           <div className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
             <Sparkles className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" /> Built for creators, by creators.
           </div>
@@ -908,12 +908,12 @@ export default function LandingPage() {
   return (
     <CmsPageRenderer
       slug="welcome"
-      fallbackSeoDescription="Dright is the AI-powered digital marketplace for creators, sellers, and marketers. Discover products, services, jobs, and opportunities."
+      fallbackSeoDescription="DRIGHT is the AI-powered digital marketplace for creators, sellers, and marketers. Discover products, services, jobs, and opportunities."
       fallback={
         <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased">
           <SeoHead
             title={null}
-            description="Dright is the AI-powered digital marketplace for creators, sellers, and marketers. Discover products, services, jobs, and opportunities."
+            description="DRIGHT is the AI-powered digital marketplace for creators, sellers, and marketers. Discover products, services, jobs, and opportunities."
             canonical="/welcome"
             keywords={['digital products marketplace', 'sell digital products', 'AI marketplace', 'freelance services', 'creator platform', 'digital downloads']}
             breadcrumbs={[{ name: 'Home', url: '/welcome' }]}
