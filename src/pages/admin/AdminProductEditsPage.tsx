@@ -82,8 +82,25 @@ export default function AdminProductEditsPage() {
       if (changes.category) updateData.category = changes.category;
       if (changes.image_url !== undefined) updateData.image_url = changes.image_url;
 
-      const { error: prodErr } = await supabase.from('products').update(updateData).eq('id', edit.product_id);
-      if (prodErr) throw prodErr;
+      if (Object.keys(updateData).length > 0) {
+        const { error: prodErr } = await supabase.from('products').update(updateData).eq('id', edit.product_id);
+        if (prodErr) throw prodErr;
+      }
+
+      if (changes.listing_extension) {
+        const { error: extensionErr } = await supabase.rpc('admin_apply_product_listing_extension_edit', {
+          p_product_id: edit.product_id,
+          p_category_id: changes.listing_extension.category_id ?? null,
+          p_attributes: changes.listing_extension.dynamic_attributes ?? {},
+          p_metadata: {
+            source: 'approved_product_edit',
+            taxonomy_path: (changes.listing_extension.taxonomy_path ?? []).map(node => node.name),
+            taxonomy_path_ids: (changes.listing_extension.taxonomy_path ?? []).map(node => node.id),
+            product_edit_id: edit.id,
+          },
+        });
+        if (extensionErr) throw extensionErr;
+      }
 
       await supabase.from('product_edits').update({
         status: 'approved',
@@ -170,12 +187,27 @@ export default function AdminProductEditsPage() {
   const fieldLabels: Record<string, string> = {
     name: 'Title', description: 'Description', price: 'Price', stock_quantity: 'Stock',
     category: 'Category', tags: 'Tags', image_url: 'Image',
+    listing_extension: 'Detailed Category & Attributes',
   };
 
   const formatValue = (key: string, value: unknown): string => {
     if (value === null || value === undefined) return '—';
     if (key === 'price') return `${formatDisplayCurrency(Number(Number(value).toFixed(2)))}`;
+    if (key === 'listing_extension' && typeof value === 'object') {
+      const extension = value as ProductEditChanges['listing_extension'];
+      if (!extension) return '—';
+      const path = extension.taxonomy_path?.map(node => node.name).join(' › ');
+      const attributes = extension.dynamic_attributes
+        ? Object.entries(extension.dynamic_attributes)
+            .map(([attribute, attributeValue]) => `${attribute.replace(/_/g, ' ')}: ${
+              Array.isArray(attributeValue) ? attributeValue.join(', ') : String(attributeValue)
+            }`)
+            .join(' · ')
+        : '';
+      return [path, attributes].filter(Boolean).join(' · ') || 'No detailed category';
+    }
     if (Array.isArray(value)) return value.join(', ');
+    if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
   };
 
