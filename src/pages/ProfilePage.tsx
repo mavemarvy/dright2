@@ -41,6 +41,8 @@ interface WithdrawalRequest {
   status: string;
   created_at: string;
   admin_notes: string | null;
+  reference?: string | null;
+  bank_account_id?: string | null;
 }
 
 export default function ProfilePage() {
@@ -230,7 +232,16 @@ export default function ProfilePage() {
   const walletCurrency = walletSummary?.currency || 'NGN';
   const availableBalance = Number(walletSummary?.balance || 0);
   const formatWalletAmount = (amount: number) => formatWithCurrency(amount, walletCurrency);
-  const formatWithdrawalAmount = (amount: number) => formatWithCurrency(amount, 'NGN');
+  const formatWithdrawalAmount = (withdrawal: WithdrawalRequest) => {
+    const isSecureWalletWithdrawal = Boolean(
+      withdrawal.bank_account_id ||
+      withdrawal.reference?.startsWith('WDL-')
+    );
+    return formatWithCurrency(
+      withdrawal.amount,
+      isSecureWalletWithdrawal ? 'NGN' : 'USD'
+    );
+  };
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', {
@@ -322,7 +333,7 @@ export default function ProfilePage() {
             {withdrawals.map((w) => (
               <div key={w.id} className="flex items-center justify-between p-4">
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatWithdrawalAmount(w.amount)}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatWithdrawalAmount(w)}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(w.created_at)}</p>
                 </div>
                 <div className="text-right flex items-center gap-2">
