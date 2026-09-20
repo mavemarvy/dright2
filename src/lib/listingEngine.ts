@@ -40,6 +40,21 @@ export interface MarketplaceCategory {
   is_leaf: boolean;
 }
 
+export interface MarketplaceCategoryTreeNode extends MarketplaceCategory {
+  depth: number;
+  path_ids: string[];
+  path_names: string[];
+  has_children: boolean;
+}
+
+export interface PublicMarketplaceListingExtension {
+  entity_id: string;
+  listing_type_code: MarketplaceListingTypeCode;
+  category_id: string | null;
+  schema_version: number;
+  attributes: Record<string, unknown>;
+}
+
 export interface MarketplaceAttributeDefinition {
   id: string;
   listing_type_code: MarketplaceListingTypeCode;
@@ -114,6 +129,61 @@ export async function fetchMarketplaceListingTypes(): Promise<MarketplaceListing
   return (data ?? []) as MarketplaceListingType[];
 }
 
+export async function fetchMarketplaceCategoryTree(
+  listingTypeCode: MarketplaceListingTypeCode
+): Promise<MarketplaceCategoryTreeNode[]> {
+  const { data, error } = await supabase.rpc('get_marketplace_category_tree', {
+    p_listing_type_code: listingTypeCode,
+  });
+
+  if (error || !Array.isArray(data)) return [];
+
+  return data.map(row => ({
+    id: String(row.id),
+    listing_type_code: row.listing_type_code as MarketplaceListingTypeCode,
+    parent_id: row.parent_id ? String(row.parent_id) : null,
+    name: String(row.name),
+    slug: String(row.slug),
+    description: row.description ?? null,
+    icon: row.icon ?? null,
+    image_url: row.image_url ?? null,
+    sort_order: Number(row.sort_order ?? 100),
+    is_leaf: Boolean(row.is_leaf),
+    depth: Number(row.depth ?? 0),
+    path_ids: Array.isArray(row.path_ids) ? row.path_ids.map(String) : [],
+    path_names: Array.isArray(row.path_names) ? row.path_names.map(String) : [],
+    has_children: Boolean(row.has_children),
+  }));
+}
+
+export function getCategoryPath(
+  tree: MarketplaceCategoryTreeNode[],
+  categoryId: string | null
+): MarketplaceCategoryTreeNode[] {
+  if (!categoryId) return [];
+  const selected = tree.find(node => node.id === categoryId);
+  if (!selected) return [];
+  const byId = new Map(tree.map(node => [node.id, node]));
+  return selected.path_ids
+    .map(id => byId.get(id))
+    .filter((node): node is MarketplaceCategoryTreeNode => Boolean(node));
+}
+
+export function getCategoryDescendantIds(
+  tree: MarketplaceCategoryTreeNode[],
+  categoryId: string | null
+): Set<string> {
+  const ids = new Set<string>();
+  if (!categoryId) return ids;
+
+  for (const node of tree) {
+    if (node.id === categoryId || node.path_ids.includes(categoryId)) {
+      ids.add(node.id);
+    }
+  }
+  return ids;
+}
+
 export async function fetchMarketplaceCategories(
   listingTypeCode: MarketplaceListingTypeCode,
   parentId: string | null = null
@@ -137,42 +207,79 @@ export async function fetchMarketplaceAttributes(
   listingTypeCode: MarketplaceListingTypeCode,
   categoryId: string | null
 ): Promise<MarketplaceAttributeDefinition[]> {
-  const baseSelect = 'id,listing_type_code,category_id,attribute_key,label,input_type,is_required,is_searchable,is_filterable,is_sortable,is_comparable,show_on_card,show_on_details,options,validation,sort_order,schema_version';
+  const { data, error } = await supabase.rpc('resolve_marketplace_attribute_definitions', {
+    p_listing_type_code: listingTypeCode,
+    p_category_id: categoryId,
+  });
 
-  const globalQuery = supabase
+  if (!error && Array.isArray(data)) {
+    return data.map(row => ({
+      id: String(row.id),
+      listing_type_code: row.listing_type_code as MarketplaceListingTypeCode,
+      category_id: row.category_id ? String(row.category_id) : null,
+      attribute_key: String(row.attribute_key),
+      label: String(row.label),
+      input_type: String(row.input_type),
+      is_required: Boolean(row.is_required),
+      is_searchable: Boolean(row.is_searchable),
+      is_filterable: Boolean(row.is_filterable),
+      is_sortable: Boolean(row.is_sortable),
+      is_comparable: Boolean(row.is_comparable),
+      show_on_card: Boolean(row.show_on_card),
+      show_on_details: Boolean(row.show_on_details),
+      options: Array.isArray(row.options) ? row.options : [],
+      validation: row.validation && typeof row.validation === 'object'
+        ? row.validation as Record<string, unknown>
+        : {},
+      sort_order: Number(row.sort_order ?? 100),
+      schema_version: Number(row.schema_version ?? 1),
+    }));
+  }
+
+  // Backward-compatible fallback if the resolver RPC is temporarily unavailable.
+  const baseSelect = 'id,listing_type_code,category_id,attribute_key,label,input_type,is_required,is_searchable,is_filterable,is_sortable,is_comparable,show_on_card,show_on_details,options,validation,sort_order,schema_version';
+  let query = supabase
     .from('marketplace_attribute_definitions')
     .select(baseSelect)
     .eq('listing_type_code', listingTypeCode)
     .eq('is_active', true)
-    .is('category_id', null)
     .order('sort_order', { ascending: true });
 
-  const categoryQuery = categoryId
-    ? supabase
-        .from('marketplace_attribute_definitions')
-        .select(baseSelect)
-        .eq('listing_type_code', listingTypeCode)
-        .eq('is_active', true)
-        .eq('category_id', categoryId)
-        .order('sort_order', { ascending: true })
-    : null;
+  query = categoryId ? query.or(`category_id.is.null,category_id.eq.${categoryId}`) : query.is('category_id', null);
+  const fallback = await query;
+  if (fallback.error) return [];
+  return (fallback.data ?? []) as MarketplaceAttributeDefinition[];
+}
 
-  const [globalResult, categoryResult] = await Promise.all([
-    globalQuery,
-    categoryQuery ?? Promise.resolve({ data: [], error: null }),
-  ]);
+export async function fetchPublicMarketplaceListingExtensions(
+  entityType: 'product' | 'job',
+  entityIds: string[]
+): Promise<Map<string, PublicMarketplaceListingExtension>> {
+  if (entityIds.length === 0) return new Map();
 
-  if (globalResult.error || categoryResult.error) return [];
+  const result = new Map<string, PublicMarketplaceListingExtension>();
+  for (let index = 0; index < entityIds.length; index += 500) {
+    const batch = entityIds.slice(index, index + 500);
+    const { data, error } = await supabase.rpc('get_public_marketplace_listing_extensions', {
+      p_entity_type: entityType,
+      p_entity_ids: batch,
+    });
+    if (error || !Array.isArray(data)) continue;
 
-  const merged = new Map<string, MarketplaceAttributeDefinition>();
-  for (const row of (globalResult.data ?? []) as MarketplaceAttributeDefinition[]) {
-    merged.set(row.attribute_key, row);
+    for (const row of data) {
+      result.set(String(row.entity_id), {
+        entity_id: String(row.entity_id),
+        listing_type_code: row.listing_type_code as MarketplaceListingTypeCode,
+        category_id: row.category_id ? String(row.category_id) : null,
+        schema_version: Number(row.schema_version ?? 1),
+        attributes: row.attributes && typeof row.attributes === 'object'
+          ? row.attributes as Record<string, unknown>
+          : {},
+      });
+    }
   }
-  for (const row of (categoryResult.data ?? []) as MarketplaceAttributeDefinition[]) {
-    merged.set(row.attribute_key, row);
-  }
 
-  return [...merged.values()].sort((a, b) => a.sort_order - b.sort_order);
+  return result;
 }
 
 export function validateMarketplaceAttributes(
