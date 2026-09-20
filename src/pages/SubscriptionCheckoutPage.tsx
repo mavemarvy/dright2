@@ -159,6 +159,7 @@ export default function SubscriptionCheckoutPage() {
         premium: 'subscription',
         ai: 'subscription',
         advertising: 'subscription',
+        platform_access: 'subscription',
       };
 
       const result = await initializePayment({
