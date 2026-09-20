@@ -26,8 +26,6 @@ import { dedupeMarketplaceItems, fetchMarketplaceFeedV2 } from '../lib/marketpla
 import SeoHead from '../components/SeoHead';
 import NapFooter from '../components/NapFooter';
 import UniversalAIAssistant from '../components/UniversalAIAssistant';
-import FilterSettingsBar from '../components/FilterSettingsBar';
-import type { FilterState } from '../lib/filterConfigs';
 
 import HeroBanner from '../components/marketplace/HeroBanner';
 import SmartSearch from '../components/marketplace/SmartSearch';
@@ -51,6 +49,7 @@ export default function MarketPage() {
   const { isVisible: isFeatureVisible } = useNavigationVisibility();
   const showFeaturedSellers = isFeatureVisible('marketplace_featured_sellers', isAdmin);
   const showListingCount = isFeatureVisible('marketplace_listing_count', isAdmin);
+  const showSearchDiscovery = isFeatureVisible('marketplace_search_discovery', isAdmin);
 
   // Marketplace V2 is canonical for the Recommended discovery surface.
   // The legacy catalog path remains a resilience/deterministic-sort fallback.
@@ -371,21 +370,6 @@ export default function MarketPage() {
     } finally { setTeamSubmitting(false); }
   };
 
-  const filterState: FilterState = {
-    searchQuery,
-    categoryFilter: filters.category,
-    sortBy: filters.sortBy,
-    locationFilter: filters.location,
-    priceMin: filters.priceMin,
-    priceMax: filters.priceMax,
-    dateFilter: 'all',
-  };
-
-  const handleFilterChange = (state: FilterState) => {
-    setSearchQuery(state.searchQuery);
-    setFilters(prev => ({ ...prev, category: state.categoryFilter || 'All', sortBy: state.sortBy || 'recommended', location: state.locationFilter, priceMin: state.priceMin, priceMax: state.priceMax }));
-  };
-
   const isBrowsing = !searchQuery && filters.category === 'All';
   const contextualPlacement = searchQuery.trim()
     ? 'search'
@@ -423,7 +407,7 @@ export default function MarketPage() {
 
       <HeroBanner onBrowseCategories={() => setShowCategorySection(s => !s)} />
       <div className="mt-6">
-        <SmartSearch onSearch={handleSearch} />
+        <SmartSearch onSearch={handleSearch} showMarketplaceDiscovery={showSearchDiscovery} />
       </div>
       <div className="mt-3">
         <AdvancedFilterBar
@@ -431,6 +415,9 @@ export default function MarketPage() {
           onFilterChange={setFilters}
           resultCount={displayProducts.length}
           showResultCount={showListingCount}
+          userId={user?.id}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
         />
       </div>
 
@@ -475,7 +462,6 @@ export default function MarketPage() {
           </div>
         </div>
 
-        <FilterSettingsBar userId={user?.id} filterState={filterState} onFilterChange={handleFilterChange} />
         {contextualPlacement && <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />}
 
         {loading && (
