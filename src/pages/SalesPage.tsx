@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import UniversalAIAssistant from '../components/UniversalAIAssistant';
 import { formatCurrency } from '../lib/currency';
+import DrightStarterProductCard from '../components/DrightStarterProductCard';
 
 interface SaleRecord {
   id: string;
@@ -89,6 +90,8 @@ export default function SalesPage() {
         <h1 className="text-2xl font-bold text-gray-900">Sales Records</h1>
         <p className="text-gray-500 mt-1">Track your earnings and commission</p>
       </div>
+
+      <DrightStarterProductCard className="mb-6" />
 
       {/* Stats Summary */}
       <div className="grid grid-cols-2 gap-4 mb-6">
