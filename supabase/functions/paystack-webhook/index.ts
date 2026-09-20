@@ -219,6 +219,71 @@ Deno.serve(async (req: Request) => {
       const ref = typeof d.reference === "string" ? d.reference.trim() : "";
       if (!ref) return json({ error: "Missing transaction reference" }, 400);
 
+      // First-party DRIGHT Starter purchases are guest-only and have their own
+      // canonical purchase table. Finalize them from the signed webhook so a
+      // successful payment does not depend on the browser returning to DRIGHT.
+      if (ref.startsWith("DRG_STARTER_")) {
+        const { data: starter, error: starterError } = await db
+          .from("dright_starter_purchases")
+          .select("id,amount,currency,payment_status,processed_at,included_trial_days")
+          .eq("payment_reference", ref)
+          .maybeSingle();
+
+        if (starterError) return json({ error: "Starter purchase lookup failed" }, 500);
+        if (!starter) return json({ error: "Starter purchase not found" }, 404);
+        if (starter.processed_at && starter.payment_status === "success") {
+          return json({ success: true, starter: true, idempotent: true });
+        }
+
+        const response = await fetch(`${BASE}/transaction/verify/${encodeURIComponent(ref)}`, {
+          headers: { Authorization: `Bearer ${SECRET}` },
+        });
+        const verified = await response.json().catch(() => ({}));
+        if (!response.ok || !verified.status || verified.data?.status !== "success") {
+          return json({ error: "Starter payment verification failed" }, 400);
+        }
+        if (String(verified.data?.reference || "") !== ref) {
+          return json({ error: "Starter gateway reference mismatch" }, 409);
+        }
+
+        const gatewayAmount = Number(verified.data.amount) / 100;
+        const gatewayCurrency = String(verified.data.currency || "").toUpperCase();
+        const expectedAmount = Number(starter.amount);
+        const expectedCurrency = String(starter.currency || "NGN").toUpperCase();
+
+        if (!Number.isFinite(gatewayAmount) || !Number.isFinite(expectedAmount) || Math.abs(gatewayAmount - expectedAmount) > 0.01) {
+          return json({ error: "Starter payment amount mismatch" }, 409);
+        }
+        if (gatewayCurrency !== expectedCurrency) {
+          return json({ error: "Starter payment currency mismatch" }, 409);
+        }
+
+        const { data: processed, error: processError } = await db.rpc("process_verified_dright_starter_purchase", {
+          p_reference: ref,
+          p_amount: expectedAmount,
+          p_currency: expectedCurrency,
+          p_gateway_response: verified.data.gateway_response || null,
+          p_paid_at: verified.data.paid_at || new Date().toISOString(),
+          p_channel: verified.data.channel || null,
+        });
+
+        if (processError) {
+          console.error("[paystack-webhook] Starter processing failed", processError.message);
+          return json({ error: "Starter payment processing failed" }, 500);
+        }
+        if (processed?.success === false) {
+          return json({ error: processed.error || "Starter payment processing failed" }, 500);
+        }
+
+        return json({
+          success: true,
+          starter: true,
+          starter_purchase_id: starter.id,
+          included_trial_days: starter.included_trial_days,
+          idempotent: processed?.idempotent === true,
+        });
+      }
+
       // Guest purchases have their own canonical order table and no authenticated
       // paystack_transactions owner. Finalize them directly from the signed webhook
       // so payment still completes even if the guest closes the browser callback.
