@@ -69,43 +69,31 @@ export default function AdminWithdrawalsPage() {
         const rows = data as WithdrawalRequest[];
         const userIds = [...new Set(rows.map((withdrawal) => withdrawal.user_id))];
         const withdrawalIds = rows.map((withdrawal) => withdrawal.id);
-        const bankAccountIds = [...new Set(rows.map((withdrawal) => withdrawal.bank_account_id).filter(Boolean))] as string[];
-
-        const [{ data: users, error: usersError }, { data: queues, error: queueError }, bankResult] = await Promise.all([
+        const [{ data: users, error: usersError }, { data: queues, error: queueError }] = await Promise.all([
           supabase.from('users').select('id, email, full_name').in('id', userIds),
           supabase
             .from('withdrawal_queue')
             .select('withdrawal_request_id, account_number, account_name, recipient_code, status')
             .in('withdrawal_request_id', withdrawalIds),
-          bankAccountIds.length > 0
-            ? supabase.from('bank_accounts').select('id, bank_name, is_verified, verification_status').in('id', bankAccountIds)
-            : Promise.resolve({ data: [], error: null }),
         ]);
 
         if (usersError) throw usersError;
         if (queueError) throw queueError;
-        if (bankResult.error) throw bankResult.error;
 
         const userMap = new Map((users || []).map((item) => [item.id, { email: item.email, name: item.full_name }]));
         const queueMap = new Map((queues || []).map((item) => [item.withdrawal_request_id, item]));
-        const bankMap = new Map((bankResult.data || []).map((item) => [item.id, item]));
 
         setWithdrawals(rows.map((withdrawal) => {
           const queue = queueMap.get(withdrawal.id);
-          const bank = withdrawal.bank_account_id ? bankMap.get(withdrawal.bank_account_id) : null;
           const fallbackBankName = withdrawal.account_details?.split(' - ')[0] || null;
           return {
             ...withdrawal,
             user_email: userMap.get(withdrawal.user_id)?.email || 'Unknown',
             user_name: userMap.get(withdrawal.user_id)?.name || 'Unknown',
-            bank_name: bank?.bank_name || fallbackBankName,
+            bank_name: fallbackBankName,
             verified_account_number: queue?.account_number || null,
             verified_account_name: queue?.account_name || null,
-            verified_account: Boolean(
-              queue?.recipient_code ||
-              bank?.is_verified ||
-              bank?.verification_status === 'verified'
-            ),
+            verified_account: Boolean(queue?.recipient_code),
             payout_queue_status: queue?.status || null,
           };
         }));
