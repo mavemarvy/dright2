@@ -279,7 +279,7 @@ export default function AdminTaxonomyManager() {
               checked={isLeaf}
               onChange={event => setIsLeaf(event.target.checked)}
             />
-            Leaf category (selectable end category)
+            Selectable endpoint (Leaf is normally selectable; Tiny is optional)
           </label>
           <button
             type="button"
@@ -326,7 +326,7 @@ export default function AdminTaxonomyManager() {
                   </span>
                   {node.is_leaf && (
                     <span className="text-[10px] rounded-full bg-primary-50 text-primary-700 px-1.5 py-0.5 shrink-0">
-                      Leaf
+                      Selectable
                     </span>
                   )}
                   {node.moderation_tier && node.moderation_tier !== 'standard' && (
