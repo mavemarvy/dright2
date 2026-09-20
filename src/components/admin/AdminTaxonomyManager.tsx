@@ -57,7 +57,7 @@ export default function AdminTaxonomyManager() {
       setError(rpcError.message);
       setNodes([]);
     } else {
-      setNodes((data ?? []).map(row => ({
+      setNodes((data ?? []).map((row: Record<string, unknown>) => ({
         id: String(row.id),
         listing_type_code: row.listing_type_code as MarketplaceListingTypeCode,
         parent_id: row.parent_id ? String(row.parent_id) : null,
