@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, Phone, User, ArrowRight, ArrowLeft, Loader2, AtSign, Calendar, Briefcase, FileText, CheckCircle2, XCircle, Search, Upload, ShieldCheck, Sparkles, Clock3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,7 +24,7 @@ import {
 } from '../lib/onboarding';
 import type { AgeRule, QuestionnaireDefinition, QuestionnaireQuestion, PublicKycRequirement, UsernameAvailability } from '../lib/onboarding';
 import { createKycProfile, createKycSubmission, uploadKycDocument } from '../lib/kycHooks';
-import { claimPendingDrightStarterPurchase, getPendingDrightStarterPurchase } from '../lib/drightStarter';
+import { claimPendingDrightStarterPurchase, getDrightStarterSignupEligibility, getPendingDrightStarterPurchase } from '../lib/drightStarter';
 import { KYC_DOC_TYPE_LABELS } from '../lib/kycTypes';
 
 type Answers = Record<string, Record<string, unknown>>;
@@ -36,6 +36,10 @@ const DISCOVERY_INTERESTS = ['Products', 'Services', 'Courses', 'Jobs', 'Tasks',
 export default function SignUpPage() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const pendingStarterPurchase = getPendingDrightStarterPurchase();
+  const starterReference = (searchParams.get('starter_reference') || pendingStarterPurchase?.reference || '').trim();
+  const starterFlow = Boolean(starterReference);
 
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState('');
@@ -65,6 +69,10 @@ export default function SignUpPage() {
   const [awaitingEmail, setAwaitingEmail] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const [starterGateChecking, setStarterGateChecking] = useState(false);
+  const [starterGateVerified, setStarterGateVerified] = useState(!starterFlow);
+  const [starterGateMessage, setStarterGateMessage] = useState<string | null>(starterFlow ? 'Verifying your DRIGHT Starter payment…' : null);
+  const [starterEmailLocked, setStarterEmailLocked] = useState(false);
 
   const country = findCountry(countryIso) ?? COUNTRIES.find((c) => c.iso2 === 'NG')!;
   const filteredCountries = useMemo(() => {
@@ -84,8 +92,40 @@ export default function SignUpPage() {
 
   useEffect(() => {
     const pendingStarter = getPendingDrightStarterPurchase();
-    if (pendingStarter?.email) setEmail(pendingStarter.email);
-  }, []);
+    if (pendingStarter?.email) {
+      setEmail(pendingStarter.email);
+      if (starterFlow && (!pendingStarter.reference || pendingStarter.reference === starterReference)) {
+        setStarterEmailLocked(true);
+      }
+    }
+  }, [starterFlow, starterReference]);
+
+  useEffect(() => {
+    if (!starterFlow) {
+      setStarterGateVerified(true);
+      setStarterGateMessage(null);
+      setStarterGateChecking(false);
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      setStarterGateVerified(false);
+      setStarterGateMessage('Enter the same email used for the DRIGHT Starter purchase.');
+      return;
+    }
+
+    setStarterGateChecking(true);
+    setStarterGateVerified(false);
+    const timer = window.setTimeout(async () => {
+      const eligibility = await getDrightStarterSignupEligibility(starterReference, normalizedEmail);
+      setStarterGateVerified(eligibility.eligible);
+      setStarterGateMessage(eligibility.message);
+      setStarterGateChecking(false);
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [starterFlow, starterReference, email]);
 
   useEffect(() => {
     void loadSignupQuestionnaires(profiles).then(setQuestionnaires).catch((e) => setError(e instanceof Error ? e.message : 'Could not load questionnaires'));
@@ -170,6 +210,7 @@ export default function SignUpPage() {
       if (!fullName.trim() || !email.trim() || password.length < 6) return setError('Enter your name, email and a password of at least 6 characters.'), false;
       if (password !== confirmPassword) return setError('Passwords do not match.'), false;
       if (!turnstileToken) return setError('Please complete the Cloudflare security verification before continuing.'), false;
+      if (starterFlow && !starterGateVerified) return setError(starterGateMessage || 'Verified DRIGHT Starter payment is required before you can continue signup.'), false;
     }
     if (step === 1) {
       if (!usernameStatus?.available) return setError('Choose a confirmed available username.'), false;
@@ -205,11 +246,22 @@ export default function SignUpPage() {
       const turnstile = await verifyTurnstileToken(turnstileToken, 'signup');
       if (!turnstile.success) throw new Error(turnstile.error || 'CAPTCHA verification failed');
 
+      if (starterFlow) {
+        const eligibility = await getDrightStarterSignupEligibility(starterReference, email);
+        if (!eligibility.eligible) {
+          setStarterGateVerified(false);
+          setStarterGateMessage(eligibility.message);
+          throw new Error(eligibility.message);
+        }
+        setStarterGateVerified(true);
+        setStarterGateMessage(eligibility.message);
+      }
+
       const onboardingToken = createPendingOnboardingToken();
       await saveSignupOnboardingDraft({ token: onboardingToken, email, username, countryIso2: country.iso2, callingCode: country.callingCode, dateOfBirth: dob, intendedProfiles: profiles, interests, answers });
 
       const phoneValue = normalizePhone(phone, country.callingCode);
-      const result = await signUp(email, password, fullName.trim(), phoneValue, false, country.name, 'USD');
+      const result = await signUp(email, password, fullName.trim(), phoneValue, false, country.name, 'USD', starterFlow ? starterReference : undefined);
       if (result.error) throw result.error;
 
       const { data: { user } } = await supabase.auth.getUser();
@@ -266,9 +318,28 @@ export default function SignUpPage() {
             <div className="mb-7"><div className="flex justify-between text-xs text-gray-400 mb-2"><span>{STEPS[step]}</span><span>{step + 1} / {STEPS.length}</span></div><div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden"><div className="h-full bg-primary-600 transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} /></div></div>
             {error && <div className="bg-error-muted text-error rounded-xl p-4 mb-5">{error}</div>}
 
+            {starterFlow && (
+              <div className={`mb-5 rounded-2xl border p-4 ${starterGateVerified ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30' : 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'}`}>
+                <div className="flex items-start gap-3">
+                  {starterGateChecking ? <Loader2 className="w-5 h-5 animate-spin text-amber-600 mt-0.5" /> : <ShieldCheck className={`w-5 h-5 mt-0.5 ${starterGateVerified ? 'text-emerald-600' : 'text-amber-600'}`} />}
+                  <div>
+                    <p className="font-bold text-gray-900 dark:text-gray-100">Paid DRIGHT Starter signup</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                      {starterGateChecking ? 'Checking the payment with DRIGHT…' : starterGateMessage}
+                    </p>
+                    {!starterGateVerified && !starterGateChecking && (
+                      <Link to="/dright/starter" className="inline-flex mt-2 text-sm font-bold text-primary-600 dark:text-primary-300">
+                        Return to Starter checkout
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {step === 0 && <div className="space-y-4">
               <Field label="Full Name" icon={<User />}><input value={fullName} onChange={(e) => setFullName(e.target.value)} className="field-input" placeholder="John Doe" autoComplete="name" /></Field>
-              <Field label="Email address" icon={<Mail />}><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="field-input" placeholder="you@example.com" autoComplete="email" /></Field>
+              <Field label="Email address" icon={<Mail />}><input type="email" value={email} readOnly={starterFlow && starterEmailLocked} onChange={(e) => setEmail(e.target.value)} className={`field-input ${starterFlow && starterEmailLocked ? 'opacity-80 cursor-not-allowed' : ''}`} placeholder="you@example.com" autoComplete="email" /></Field>{starterFlow && <p className="helper -mt-3">Starter signup must use the exact email address attached to the verified purchase.</p>}
               <div><label className="label">Country</label><div className="mb-2 px-3 py-3 rounded-xl border border-primary-200 bg-primary-50/60 dark:bg-primary-950/30 dark:border-primary-900 flex items-center gap-3"><span className="text-xl">{countryFlag(country.iso2)}</span><span className="flex-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{country.name}</span><span className="text-sm text-primary-700 dark:text-primary-300">{country.callingCode}</span></div><div className="relative mb-2"><Search className="icon" /><input value={countryQuery} onChange={(e) => setCountryQuery(e.target.value)} className="base-input pl-12" placeholder="Search all countries, ISO codes or calling codes" autoComplete="country-name" /></div><div className="max-h-52 overflow-auto border border-gray-100 dark:border-gray-700 rounded-xl" role="listbox" aria-label="Country selection">{filteredCountries.map((c) => <button key={c.iso2} type="button" onClick={() => { setCountryIso(c.iso2); setCountryQuery(''); }} className={`w-full px-3 py-2.5 flex items-center gap-3 text-left text-sm ${countryIso === c.iso2 ? 'bg-primary-50 dark:bg-primary-950' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}><span className="text-xl">{countryFlag(c.iso2)}</span><span className="flex-1 text-gray-900 dark:text-gray-100">{c.name}</span><span className="text-gray-500 dark:text-gray-400">{c.callingCode}</span></button>)}</div><p className="helper">The selected country controls your international phone prefix, age rules and regional verification requirements.</p></div>
               <Field label="Phone (optional)" icon={<Phone />}><div className="flex items-center"><span className="pl-12 pr-2 text-sm font-semibold text-primary-600 dark:text-primary-300">{country.callingCode}</span><input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="flex-1 py-4 pr-4 outline-none bg-transparent text-gray-900 dark:text-gray-100" placeholder="Phone number" autoComplete="tel-national" /></div></Field>
               <div className="grid sm:grid-cols-2 gap-4"><Field label="Password" icon={<Lock />}><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="field-input" placeholder="6+ characters" autoComplete="new-password" /></Field><Field label="Confirm password" icon={<Lock />}><input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="field-input" placeholder="Repeat password" autoComplete="new-password" /></Field></div>
@@ -287,7 +358,7 @@ export default function SignUpPage() {
 
             {step === 6 && <div className="space-y-4"><h2 className="font-bold text-xl text-gray-900 dark:text-gray-100">Review & create account</h2><ReviewRow label="Username" value={`@${usernameStatus?.normalized ?? username}`} /><ReviewRow label="Country" value={`${countryFlag(country.iso2)} ${country.name} ${country.callingCode}`} /><ReviewRow label="Intended profiles" value={profiles.map((p) => PROFILE_OPTIONS.find((o) => o.value === p)?.label ?? p).join(', ')} /><ReviewRow label="Questionnaires" value={questionnaires.length === 0 ? 'None required' : deferredQuestionnaires > 0 ? `${completeQuestionnaires} ready • ${deferredQuestionnaires} saved for later` : `${completeQuestionnaires} ready to submit`} /><ReviewRow label="Professional documents" value={proDocs.length ? `${proDocs.length} selected` : 'Skipped • optional'} /><ReviewRow label="KYC" value={kycRequired ? Object.keys(kycFiles).length ? `${Object.keys(kycFiles).length} document(s) selected • remaining items can be completed later` : 'Required for selected capability • complete later in Settings' : 'Not currently required'} /><div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-3"><div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-4 h-4 text-primary-600" /><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Final Cloudflare security check</span></div><TurnstileWidget action="signup" onVerified={handleTurnstileVerified} onError={handleTurnstileError} />{turnstileError && <p className="text-xs text-red-500 mt-1">{turnstileError}</p>}</div><p className="text-xs text-gray-500 dark:text-gray-400">DOB and questionnaire drafts are stored server-side. If email confirmation is required, an opaque one-time token on this device resumes onboarding after sign-in. Selected file contents are never saved in browser storage.</p></div>}
 
-            <div className="flex gap-3 mt-8">{step > 0 && <button type="button" onClick={back} disabled={loading} className="px-5 py-3 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>}<button type="button" onClick={step === STEPS.length - 1 ? () => void handleCreate() : next} disabled={loading} className="flex-1 py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{step === STEPS.length - 1 ? 'Create Account' : 'Continue'}<ArrowRight className="w-5 h-5" /></>}</button></div>
+            <div className="flex gap-3 mt-8">{step > 0 && <button type="button" onClick={back} disabled={loading} className="px-5 py-3 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>}<button type="button" onClick={step === STEPS.length - 1 ? () => void handleCreate() : next} disabled={loading || (starterFlow && starterGateChecking)} className="flex-1 py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{step === STEPS.length - 1 ? 'Create Account' : 'Continue'}<ArrowRight className="w-5 h-5" /></>}</button></div>
             <div className="mt-6 text-center"><p className="text-gray-500 dark:text-gray-400">Already have an account? <Link to="/sign-in" className="text-primary-600 dark:text-primary-300 font-semibold">Sign in</Link></p></div>
           </div>
         </motion.div>
