@@ -221,6 +221,27 @@ export async function startDrightStarterCheckout(input: {
 }
 
 
+export async function getDrightStarterSignupPolicy(): Promise<{
+  starterProductRequired: boolean;
+  requiredProfiles: string[];
+}> {
+  const { data, error } = await supabase.rpc('get_public_dright_starter_signup_policy');
+  if (error || !data || typeof data !== 'object') {
+    // Fail safe for the default professional roles if the public policy cannot be loaded.
+    return {
+      starterProductRequired: true,
+      requiredProfiles: ['service_provider', 'affiliate', 'marketer', 'employer', 'task_creator', 'task_worker'],
+    };
+  }
+  const payload = data as Record<string, unknown>;
+  return {
+    starterProductRequired: payload.starter_product_required !== false,
+    requiredProfiles: Array.isArray(payload.required_profiles)
+      ? payload.required_profiles.map(String)
+      : [],
+  };
+}
+
 export async function getDrightStarterSignupEligibility(
   reference: string,
   email: string,
