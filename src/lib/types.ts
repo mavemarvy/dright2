@@ -252,6 +252,12 @@ export interface ProductEdit {
   original_snapshot?: Record<string, unknown> | null;
 }
 
+export interface ProductListingExtensionEdit {
+  category_id?: string | null;
+  taxonomy_path?: Array<{ id: string; name: string }>;
+  dynamic_attributes?: Record<string, unknown>;
+}
+
 export interface ProductEditChanges {
   name?: string;
   description?: string;
@@ -260,6 +266,7 @@ export interface ProductEditChanges {
   image_url?: string;
   tags?: string[];
   stock_quantity?: number | null;
+  listing_extension?: ProductListingExtensionEdit;
 }
 
 export interface ProductEditLog {
