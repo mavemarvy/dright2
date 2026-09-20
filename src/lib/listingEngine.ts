@@ -222,3 +222,35 @@ export function validateSellerCommission(
 
   return { valid: true, normalized: value };
 }
+
+
+export interface UpsertMarketplaceListingExtensionInput {
+  entityType: 'product' | 'job';
+  entityId: string;
+  listingTypeCode: MarketplaceListingTypeCode;
+  categoryId?: string | null;
+  schemaVersion?: number;
+  attributes?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  sellerAffiliateCommission?: number | null;
+}
+
+export async function upsertMarketplaceListingExtension(
+  input: UpsertMarketplaceListingExtensionInput
+): Promise<{ id: string | null; error: Error | null }> {
+  const { data, error } = await supabase.rpc('upsert_marketplace_listing_extension', {
+    p_entity_type: input.entityType,
+    p_entity_id: input.entityId,
+    p_listing_type_code: input.listingTypeCode,
+    p_category_id: input.categoryId ?? null,
+    p_schema_version: input.schemaVersion ?? 1,
+    p_attributes: input.attributes ?? {},
+    p_metadata: input.metadata ?? {},
+    p_seller_affiliate_commission: input.sellerAffiliateCommission ?? null,
+  });
+
+  return {
+    id: typeof data === 'string' ? data : null,
+    error: error ? new Error(error.message) : null,
+  };
+}

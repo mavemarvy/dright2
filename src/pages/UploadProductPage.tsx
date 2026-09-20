@@ -57,6 +57,16 @@ import {
   getLocalDrafts, markDraftPublished, removeLocalDraft,
   type DraftData,
 } from '../lib/drafts';
+import {
+  fetchMarketplaceEngineSettings,
+  fetchMarketplaceCategories,
+  resolveSellerCommissionPolicy,
+  validateSellerCommission,
+  upsertMarketplaceListingExtension,
+  type MarketplaceEngineSettings,
+  type MarketplaceCategory,
+  type SellerCommissionPolicy,
+} from '../lib/listingEngine';
 
 type ProductType = 'PHYSICAL' | 'DIGITAL' | 'SERVICE' | 'COURSE';
 
@@ -159,6 +169,10 @@ export default function UploadProductPage() {
   const [selectedTier, setSelectedTier] = useState<SalesTeamTier | null>(null);
   const [affiliateCommission, setAffiliateCommission] = useState('10');
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
+  const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
+  const [taxonomyCategories, setTaxonomyCategories] = useState<MarketplaceCategory[]>([]);
+  const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
+  const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
 
   // Digital/Course state
   const [deliveryType, setDeliveryType] = useState('INSTANT_DOWNLOAD');
@@ -203,6 +217,43 @@ export default function UploadProductPage() {
   useEffect(() => {
     fetchSystemConfig().then(setSystemConfig);
   }, []);
+
+  useEffect(() => {
+    fetchMarketplaceEngineSettings().then(setEngineSettings);
+  }, []);
+
+  useEffect(() => {
+    if (!engineSettings?.taxonomy_enabled) {
+      setTaxonomyCategories([]);
+      setSelectedTaxonomyCategoryId(null);
+      return;
+    }
+
+    fetchMarketplaceCategories(productType).then(setTaxonomyCategories);
+  }, [engineSettings?.taxonomy_enabled, productType]);
+
+  useEffect(() => {
+    if (!engineSettings?.seller_commission_policy_enabled) {
+      setSellerCommissionPolicy(null);
+      return;
+    }
+
+    resolveSellerCommissionPolicy(productType, selectedTaxonomyCategoryId).then(policy => {
+      setSellerCommissionPolicy(policy);
+      setAffiliateCommission(current => {
+        const value = Number(current);
+        return Number.isFinite(value)
+          && value >= policy.min_percentage
+          && value <= policy.max_percentage
+          ? current
+          : String(policy.default_percentage);
+      });
+    });
+  }, [
+    engineSettings?.seller_commission_policy_enabled,
+    productType,
+    selectedTaxonomyCategoryId,
+  ]);
 
   // Load draft on mount if draftId passed via navigation state
   useEffect(() => {
@@ -255,6 +306,14 @@ export default function UploadProductPage() {
   const isDigitalType = productType === 'DIGITAL' || productType === 'COURSE';
   const isServiceType = productType === 'SERVICE';
   const totalSteps = isDigitalType ? 3 : isServiceType ? 3 : 2;
+  const categoryOptions = engineSettings?.taxonomy_enabled && taxonomyCategories.length > 0
+    ? taxonomyCategories.map(category => ({ id: category.id, label: category.name }))
+    : CATEGORIES.map(category => ({ id: null, label: category }));
+  const commissionMin = sellerCommissionPolicy?.min_percentage ?? 0;
+  const commissionMax = sellerCommissionPolicy?.max_percentage ?? 100;
+  const commissionLocked = sellerCommissionPolicy
+    ? !sellerCommissionPolicy.allow_seller_override
+    : false;
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -406,6 +465,14 @@ export default function UploadProductPage() {
     const price = parseFloat(form.price);
     const commissionRate = parseFloat(affiliateCommission);
 
+    if (!isFree && engineSettings?.seller_commission_policy_enabled && sellerCommissionPolicy) {
+      const validation = validateSellerCommission(commissionRate, sellerCommissionPolicy);
+      if (!validation.valid) {
+        setError(validation.message || 'Enter a valid affiliate commission.');
+        return;
+      }
+    }
+
     if (!adminTaskAgreed && !isFree) {
       setError('You must agree to the Admin Task to upload a product'); return;
     }
@@ -457,6 +524,36 @@ export default function UploadProductPage() {
 
       if (insertErr) throw insertErr;
       const productId = productData.id;
+
+      if (
+        engineSettings
+        && (
+          engineSettings.taxonomy_enabled
+          || engineSettings.dynamic_forms_enabled
+          || engineSettings.seller_commission_policy_enabled
+        )
+      ) {
+        const extension = await upsertMarketplaceListingExtension({
+          entityType: 'product',
+          entityId: productId,
+          listingTypeCode: productType,
+          categoryId: selectedTaxonomyCategoryId,
+          attributes: {
+            legacy_category: form.category,
+          },
+          metadata: {
+            source: 'upload_product_page',
+            legacy_category: form.category,
+          },
+          sellerAffiliateCommission:
+            !isFree && engineSettings.seller_commission_policy_enabled
+              ? commissionRate
+              : null,
+        });
+        if (extension.error) {
+          console.error('Listing extension sync failed:', extension.error);
+        }
+      }
 
       // Insert all product images into product_images table
       if (imageUrls.length > 0) {
@@ -718,8 +815,8 @@ export default function UploadProductPage() {
                 <div className="flex flex-wrap items-center gap-3 mt-1.5">
                   <AIGenerateButton type="description" productName={form.name} category={form.category} description={form.description} onApply={(v) => setForm({ ...form, description: v })} />
                   <AIGenerateButton type="title" productName={form.name} category={form.category} onApply={(v) => setForm({ ...form, name: v })} />
-                  <AIGenerateButton type="category" productName={form.name} description={form.description} onApply={(v) => setForm({ ...form, category: v })} />
-                  <AIImageAnalyzer userId={user!.id} onApplyTitle={(v: string) => setForm({ ...form, name: v })} onApplyDescription={(v: string) => setForm({ ...form, description: v })} onApplyCategory={(v: string) => setForm({ ...form, category: v })} />
+                  <AIGenerateButton type="category" productName={form.name} description={form.description} onApply={(v) => { setForm({ ...form, category: v }); setSelectedTaxonomyCategoryId(null); }} />
+                  <AIImageAnalyzer userId={user!.id} onApplyTitle={(v: string) => setForm({ ...form, name: v })} onApplyDescription={(v: string) => setForm({ ...form, description: v })} onApplyCategory={(v: string) => { setForm({ ...form, category: v }); setSelectedTaxonomyCategoryId(null); }} />
                 </div>
               </div>
               <div>
@@ -734,9 +831,13 @@ export default function UploadProductPage() {
                     {showCategories && (
                       <motion.div initial={{ opacity: 0, y: -8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.97 }}
                         className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 z-20 overflow-hidden max-h-60 overflow-y-auto">
-                        {CATEGORIES.map((cat) => (
-                          <button key={cat} type="button" onClick={() => { setForm({ ...form, category: cat }); setShowCategories(false); }}
-                            className={`w-full text-left px-4 py-3 hover:bg-primary-50 transition-colors text-sm ${form.category === cat ? 'text-primary-600 font-semibold bg-primary-50' : 'text-gray-700'}`}>{cat}</button>
+                        {categoryOptions.map((category) => (
+                          <button key={category.id || category.label} type="button" onClick={() => {
+                            setForm({ ...form, category: category.label });
+                            setSelectedTaxonomyCategoryId(category.id);
+                            setShowCategories(false);
+                          }}
+                            className={`w-full text-left px-4 py-3 hover:bg-primary-50 transition-colors text-sm ${form.category === category.label ? 'text-primary-600 font-semibold bg-primary-50' : 'text-gray-700'}`}>{category.label}</button>
                         ))}
                       </motion.div>
                     )}
@@ -1183,10 +1284,16 @@ export default function UploadProductPage() {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2"><Percent className="w-4 h-4 text-gray-400" />Affiliate Commission (%) <span className="text-error">*</span></label>
-                    <input type="number" min="0" max="100" step="0.5" value={affiliateCommission}
-                      onChange={(e) => setAffiliateCommission(e.target.value)} placeholder="10" required
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900" />
-                    <p className="text-xs text-gray-500 mt-1.5">Affiliate commission is calculated on the base price, not the added task amounts.</p>
+                    <input type="number" min={commissionMin} max={commissionMax} step="0.5" value={affiliateCommission}
+                      onChange={(e) => setAffiliateCommission(e.target.value)} placeholder={String(sellerCommissionPolicy?.default_percentage ?? 10)} required
+                      disabled={commissionLocked}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 disabled:bg-gray-100 disabled:text-gray-500" />
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      Affiliate commission is calculated on the base price, not the added task amounts.
+                      {engineSettings?.seller_commission_policy_enabled && sellerCommissionPolicy
+                        ? ` Allowed range: ${commissionMin}%–${commissionMax}%.`
+                        : ''}
+                    </p>
                   </div>
 
                   {/* Admin Task Agreement */}

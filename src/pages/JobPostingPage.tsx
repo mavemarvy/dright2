@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, ArrowRight, Plus, X, Loader2, CheckCircle, AlertCircle,
   Briefcase, Building2, MapPin, Calendar, DollarSign, Save,
-  Eye, EyeOff, FileText, ListChecks, Users,
+  Eye, EyeOff, FileText, ListChecks, Users, Percent,
   ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,6 +13,16 @@ import { SUPPORTED_CURRENCIES, formatSalaryRange } from '../lib/currency';
 import type { JobType, WorkSetup, CareerLevel } from '../lib/types';
 import PostUploadConfirmation from '../components/PostUploadConfirmation';
 import AIGenerateButton from '../components/ai/AIGenerateButton';
+import {
+  fetchMarketplaceEngineSettings,
+  fetchMarketplaceCategories,
+  resolveSellerCommissionPolicy,
+  validateSellerCommission,
+  upsertMarketplaceListingExtension,
+  type MarketplaceEngineSettings,
+  type MarketplaceCategory,
+  type SellerCommissionPolicy,
+} from '../lib/listingEngine';
 
 const JOB_CATEGORIES = [
   'Advertising & Marketing',
@@ -63,6 +73,7 @@ interface FormState {
   minQualification: string;
   description: string;
   applicationInstructions: string;
+  affiliateCommission: string;
 }
 
 const INITIAL_FORM: FormState = {
@@ -84,6 +95,7 @@ const INITIAL_FORM: FormState = {
   minQualification: '',
   description: '',
   applicationInstructions: '',
+  affiliateCommission: '10',
 };
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
@@ -215,7 +227,7 @@ export default function JobPostingPage() {
   const [form, setForm] = useState<FormState>(() => {
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_FORM;
+      return saved ? { ...INITIAL_FORM, ...JSON.parse(saved) } : INITIAL_FORM;
     } catch {
       return INITIAL_FORM;
     }
@@ -226,6 +238,10 @@ export default function JobPostingPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
   const [uploadedJobId, setUploadedJobId] = useState<string | null>(null);
+  const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
+  const [taxonomyCategories, setTaxonomyCategories] = useState<MarketplaceCategory[]>([]);
+  const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
+  const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -259,6 +275,52 @@ export default function JobPostingPage() {
     return () => clearTimeout(timer);
   }, [form]);
 
+  useEffect(() => {
+    fetchMarketplaceEngineSettings().then(setEngineSettings);
+  }, []);
+
+  useEffect(() => {
+    if (!engineSettings?.taxonomy_enabled) {
+      setTaxonomyCategories([]);
+      setSelectedTaxonomyCategoryId(null);
+      return;
+    }
+
+    fetchMarketplaceCategories('JOB').then(setTaxonomyCategories);
+  }, [engineSettings?.taxonomy_enabled]);
+
+  useEffect(() => {
+    if (!engineSettings?.seller_commission_policy_enabled) {
+      setSellerCommissionPolicy(null);
+      return;
+    }
+
+    resolveSellerCommissionPolicy('JOB', selectedTaxonomyCategoryId).then(policy => {
+      setSellerCommissionPolicy(policy);
+      setForm(current => {
+        const value = Number(current.affiliateCommission);
+        if (
+          Number.isFinite(value)
+          && value >= policy.min_percentage
+          && value <= policy.max_percentage
+        ) return current;
+        return { ...current, affiliateCommission: String(policy.default_percentage) };
+      });
+    });
+  }, [
+    engineSettings?.seller_commission_policy_enabled,
+    selectedTaxonomyCategoryId,
+  ]);
+
+  const jobCategoryOptions = engineSettings?.taxonomy_enabled && taxonomyCategories.length > 0
+    ? taxonomyCategories.map(category => ({ id: category.id, label: category.name }))
+    : JOB_CATEGORIES.map(category => ({ id: null, label: category }));
+  const jobCommissionMin = sellerCommissionPolicy?.min_percentage ?? 0;
+  const jobCommissionMax = sellerCommissionPolicy?.max_percentage ?? 100;
+  const jobCommissionLocked = sellerCommissionPolicy
+    ? !sellerCommissionPolicy.allow_seller_override
+    : false;
+
   const validateStep = (): string | null => {
     if (step === 1) {
       if (form.title.trim().length < 10) return 'Job title must be at least 10 characters';
@@ -266,6 +328,13 @@ export default function JobPostingPage() {
     }
     if (step === 2) {
       if (!form.companyName.trim()) return 'Company name is required';
+    }
+    if (step === 3 && engineSettings?.seller_commission_policy_enabled && sellerCommissionPolicy) {
+      const validation = validateSellerCommission(
+        Number(form.affiliateCommission),
+        sellerCommissionPolicy
+      );
+      if (!validation.valid) return validation.message || 'Enter a valid affiliate commission.';
     }
     if (step === 4) {
       const filled = form.responsibilities.filter(r => r.trim());
@@ -325,6 +394,36 @@ export default function JobPostingPage() {
         approval_status: 'pending',
       }).select('id').single();
       if (insertError) throw insertError;
+
+      if (
+        engineSettings
+        && (
+          engineSettings.taxonomy_enabled
+          || engineSettings.dynamic_forms_enabled
+          || engineSettings.seller_commission_policy_enabled
+        )
+      ) {
+        const extension = await upsertMarketplaceListingExtension({
+          entityType: 'job',
+          entityId: jobData.id,
+          listingTypeCode: 'JOB',
+          categoryId: selectedTaxonomyCategoryId,
+          attributes: {
+            legacy_category: form.category,
+          },
+          metadata: {
+            source: 'job_posting_page',
+            legacy_category: form.category,
+          },
+          sellerAffiliateCommission: engineSettings.seller_commission_policy_enabled
+            ? Number(form.affiliateCommission)
+            : null,
+        });
+        if (extension.error) {
+          console.error('Job listing extension sync failed:', extension.error);
+        }
+      }
+
       localStorage.removeItem(DRAFT_KEY);
       setSuccess(true);
       setUploadedJobId(jobData.id);
@@ -432,9 +531,13 @@ export default function JobPostingPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
-                        <select value={form.category} onChange={e => update('category', e.target.value)}
+                        <select value={form.category} onChange={e => {
+                          const option = jobCategoryOptions.find(category => category.label === e.target.value);
+                          update('category', e.target.value);
+                          setSelectedTaxonomyCategoryId(option?.id ?? null);
+                        }}
                           className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all bg-white">
-                          {JOB_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
+                          {jobCategoryOptions.map(category => <option key={category.id || category.label} value={category.label}>{category.label}</option>)}
                         </select>
                       </div>
                       <div>
@@ -582,6 +685,29 @@ export default function JobPostingPage() {
                         Preview: {formatSalaryRange(Number(form.salaryMin) || 0, Number(form.salaryMax) || 0, form.salaryCurrency)}
                       </p>
                     </div>
+
+                    {engineSettings?.seller_commission_policy_enabled && sellerCommissionPolicy && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          <Percent className="w-4 h-4 inline mr-1" />
+                          Affiliate Commission (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={jobCommissionMin}
+                          max={jobCommissionMax}
+                          step="0.5"
+                          value={form.affiliateCommission}
+                          disabled={jobCommissionLocked}
+                          onChange={e => update('affiliateCommission', e.target.value)}
+                          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1.5">
+                          Configure the listing's affiliate commission between {jobCommissionMin}% and {jobCommissionMax}%.
+                          This does not change DRIGHT Admin Task, Sales Team, promotion, or platform-fee rules.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
