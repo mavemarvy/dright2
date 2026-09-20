@@ -424,3 +424,33 @@ export async function upsertMarketplaceListingExtension(
     error: error ? new Error(error.message) : null,
   };
 }
+
+
+export interface OwnedMarketplaceListingExtension extends PublicMarketplaceListingExtension {
+  metadata: Record<string, unknown>;
+}
+
+export async function fetchMyMarketplaceListingExtension(
+  entityType: 'product' | 'job',
+  entityId: string
+): Promise<OwnedMarketplaceListingExtension | null> {
+  const { data, error } = await supabase.rpc('get_my_marketplace_listing_extension', {
+    p_entity_type: entityType,
+    p_entity_id: entityId,
+  });
+
+  if (error || !Array.isArray(data) || data.length === 0) return null;
+  const row = data[0];
+  return {
+    entity_id: String(row.entity_id),
+    listing_type_code: row.listing_type_code as MarketplaceListingTypeCode,
+    category_id: row.category_id ? String(row.category_id) : null,
+    schema_version: Number(row.schema_version ?? 1),
+    attributes: row.attributes && typeof row.attributes === 'object'
+      ? row.attributes as Record<string, unknown>
+      : {},
+    metadata: row.metadata && typeof row.metadata === 'object'
+      ? row.metadata as Record<string, unknown>
+      : {},
+  };
+}
