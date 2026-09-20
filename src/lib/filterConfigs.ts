@@ -8,6 +8,7 @@ export interface FilterState {
   priceMin: string;
   priceMax: string;
   dateFilter: string;
+  extendedFilters?: Record<string, unknown>;
 }
 
 export interface SavedFilterConfig extends FilterState {
@@ -30,6 +31,7 @@ interface SavedFilterRow {
   price_min: string | null;
   price_max: string | null;
   date_filter: string | null;
+  extended_filters: Record<string, unknown> | null;
   is_default: boolean | null;
   created_at: string;
   updated_at: string;
@@ -43,6 +45,7 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   priceMin: '',
   priceMax: '',
   dateFilter: 'all',
+  extendedFilters: {},
 };
 
 export const EMPTY_FILTER_STATE: FilterState = {
@@ -53,6 +56,7 @@ export const EMPTY_FILTER_STATE: FilterState = {
   priceMin: '',
   priceMax: '',
   dateFilter: 'all',
+  extendedFilters: {},
 };
 
 function mapSavedFilter(row: SavedFilterRow): SavedFilterConfig {
@@ -67,6 +71,9 @@ function mapSavedFilter(row: SavedFilterRow): SavedFilterConfig {
     priceMin: row.price_min || '',
     priceMax: row.price_max || '',
     dateFilter: row.date_filter || 'all',
+    extendedFilters: row.extended_filters && typeof row.extended_filters === 'object'
+      ? row.extended_filters
+      : {},
     is_default: row.is_default === true,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -101,6 +108,7 @@ export async function saveConfig(
       price_min: state.priceMin,
       price_max: state.priceMax,
       date_filter: state.dateFilter,
+      extended_filters: state.extendedFilters ?? {},
     })
     .select()
     .single();
@@ -123,6 +131,7 @@ export async function updateConfig(
       price_min: state.priceMin,
       price_max: state.priceMax,
       date_filter: state.dateFilter,
+      extended_filters: state.extendedFilters ?? {},
       updated_at: new Date().toISOString(),
     })
     .eq('id', configId);
