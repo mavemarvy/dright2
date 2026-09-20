@@ -216,13 +216,8 @@ export default function WithdrawPage() {
       }
     }
 
-    // Send notifications
-    try {
-      const { notifyWithdrawalRequested } = await import('../lib/financialNotifications');
-      await notifyWithdrawalRequested(user.id, Math.round(canonicalAmount * 100) / 100, resultData.reference || '');
-    } catch {
-      // notifications are non-critical
-    }
+    // The withdrawal_requests INSERT trigger is the canonical notification source.
+    // It creates the in-app notification and queues email delivery server-side.
 
     setResult({
       reference: resultData.reference || '',
