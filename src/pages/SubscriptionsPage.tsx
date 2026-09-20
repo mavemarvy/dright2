@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Check, Crown, Sparkles, Zap, TrendingUp, CreditCard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getCurrencySymbol } from '../lib/currency';
+import { getCurrencySymbol, formatCurrency } from '../lib/currency';
 import { useSubscriptionPlans, useUserSubscriptions, cancelSubscription, type SubscriptionPlan } from '../lib/paystackService';
+import { getMyPlatformAccess, type PlatformAccessStatus } from '../lib/platformAccess';
 
 const PLAN_ICONS: Record<string, any> = {
   affiliate: TrendingUp, vendor: Crown, premium: Sparkles, ai: Zap, advertising: CreditCard,
+  platform_access: Crown,
 };
 const PLAN_COLORS: Record<string, string> = {
   affiliate: 'from-blue-500 to-blue-400', vendor: 'from-purple-500 to-purple-400',
   premium: 'from-amber-500 to-amber-400', ai: 'from-cyan-500 to-cyan-400', advertising: 'from-emerald-500 to-emerald-400',
+  platform_access: 'from-indigo-600 to-primary-500',
 };
 
 export default function SubscriptionsPage() {
@@ -20,6 +23,19 @@ export default function SubscriptionsPage() {
   const { plans, loading } = useSubscriptionPlans();
   const { subscriptions, reload } = useUserSubscriptions(user?.id);
   const [subscribing] = useState<string | null>(null);
+  const [platformAccess, setPlatformAccess] = useState<PlatformAccessStatus | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setPlatformAccess(null);
+      return;
+    }
+    let active = true;
+    void getMyPlatformAccess().then(access => {
+      if (active) setPlatformAccess(access);
+    });
+    return () => { active = false; };
+  }, [user]);
 
   const activeSubIds = new Set(subscriptions.filter(s => s.status === 'active' || s.status === 'trialing').map(s => s.plan_id));
 
@@ -47,7 +63,47 @@ export default function SubscriptionsPage() {
         </div>
       </div>
 
-      {null}
+      {platformAccess && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary-600">DRIGHT Platform Access</p>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white mt-1">
+                {platformAccess.access_state === 'trial'
+                  ? 'Professional access free trial'
+                  : platformAccess.access_state === 'subscribed'
+                    ? 'Platform subscription active'
+                    : platformAccess.access_state === 'subscription_required'
+                      ? 'Platform subscription required'
+                      : platformAccess.access_state === 'configuration_pending'
+                        ? 'Platform subscription is being configured'
+                        : 'Buyer access is free'}
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {platformAccess.access_state === 'trial' && platformAccess.trial_end
+                  ? `Your professional-role trial runs until ${new Date(platformAccess.trial_end).toLocaleDateString()}.`
+                  : platformAccess.access_state === 'subscription_required'
+                    ? 'Your free professional-access period has ended. Subscribe to use the paid-role features selected by Admin.'
+                    : platformAccess.access_state === 'subscribed'
+                      ? 'Your selected professional-role tools remain available while this subscription is active.'
+                      : 'Browsing, buying, purchases, and buyer features remain free.'}
+              </p>
+              <p className="text-xs text-emerald-600 mt-2 font-medium">Buyer access always remains free.</p>
+            </div>
+
+            {platformAccess.access_state === 'subscription_required' && platformAccess.plan_id && (
+              <button
+                onClick={() => navigate(`/subscriptions/checkout?plan_id=${platformAccess.plan_id}`)}
+                className="shrink-0 px-4 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold"
+              >
+                Subscribe {platformAccess.price && platformAccess.price > 0
+                  ? `· ${formatCurrency(platformAccess.price, platformAccess.currency || 'USD')}/month`
+                  : ''}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {subscriptions.filter(s => s.status === 'active' || s.status === 'trialing').length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4">
