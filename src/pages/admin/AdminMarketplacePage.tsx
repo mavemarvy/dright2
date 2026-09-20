@@ -6,6 +6,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { RankingWeights } from '../../lib/rankingEngine';
+import AdminTaxonomyManager from '../../components/admin/AdminTaxonomyManager';
 
 interface FeaturedProduct {
   id: string;
@@ -792,6 +793,8 @@ export default function AdminMarketplacePage() {
               </div>
             </div>
           </div>
+
+          <AdminTaxonomyManager />
 
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="flex items-center justify-between gap-3 mb-4">
