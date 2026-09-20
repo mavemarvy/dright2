@@ -139,7 +139,38 @@ export default function AdvancedFilterBar({
     priceMin: filters.priceMin,
     priceMax: filters.priceMax,
     dateFilter: 'all',
-  }), [searchQuery, filters.category, filters.sortBy, filters.location, filters.priceMin, filters.priceMax]);
+    extendedFilters: {
+      subcategory: filters.subcategory,
+      condition: filters.condition,
+      productType: filters.productType,
+      delivery: filters.delivery,
+      verifiedSeller: filters.verifiedSeller,
+      minRating: filters.minRating,
+      availability: filters.availability,
+      hasDiscount: filters.hasDiscount,
+      freeDelivery: filters.freeDelivery,
+      taxonomyCategoryId: filters.taxonomyCategoryId,
+      attributeFilters: filters.attributeFilters,
+    },
+  }), [
+    searchQuery,
+    filters.category,
+    filters.sortBy,
+    filters.location,
+    filters.priceMin,
+    filters.priceMax,
+    filters.subcategory,
+    filters.condition,
+    filters.productType,
+    filters.delivery,
+    filters.verifiedSeller,
+    filters.minRating,
+    filters.availability,
+    filters.hasDiscount,
+    filters.freeDelivery,
+    filters.taxonomyCategoryId,
+    filters.attributeFilters,
+  ]);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -239,6 +270,11 @@ export default function AdvancedFilterBar({
     const config = savedConfigs.find(item => item.id === configId);
     if (!config) return;
 
+    const extended = config.extendedFilters ?? {};
+    const savedAttributes = extended.attributeFilters && typeof extended.attributeFilters === 'object'
+      ? extended.attributeFilters as Record<string, unknown>
+      : {};
+
     onSearchQueryChange?.(config.searchQuery);
     onFilterChange({
       ...DEFAULT_FILTER_STATE,
@@ -247,6 +283,19 @@ export default function AdvancedFilterBar({
       location: config.locationFilter || '',
       priceMin: config.priceMin || '',
       priceMax: config.priceMax || '',
+      subcategory: typeof extended.subcategory === 'string' ? extended.subcategory : '',
+      condition: typeof extended.condition === 'string' ? extended.condition : '',
+      productType: typeof extended.productType === 'string' ? extended.productType : '',
+      delivery: typeof extended.delivery === 'string' ? extended.delivery : '',
+      verifiedSeller: extended.verifiedSeller === true,
+      minRating: typeof extended.minRating === 'number' ? extended.minRating : 0,
+      availability: typeof extended.availability === 'string' ? extended.availability : '',
+      hasDiscount: extended.hasDiscount === true,
+      freeDelivery: extended.freeDelivery === true,
+      taxonomyCategoryId: typeof extended.taxonomyCategoryId === 'string'
+        ? extended.taxonomyCategoryId
+        : '',
+      attributeFilters: savedAttributes,
     });
     setActiveConfigId(config.id);
     showToast(`Loaded "${config.name}".`);
