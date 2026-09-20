@@ -135,6 +135,7 @@ export default function DrightStarterProductPage() {
           name: product.title,
           description: product.description,
           price: product.price,
+          currency: product.currency,
           availability: 'in_stock',
           brandName: 'DRIGHT',
         }}
