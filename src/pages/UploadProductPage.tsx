@@ -53,6 +53,7 @@ import ProductOptimizationCard from '../components/ProductOptimizationCard';
 import AIGenerateButton from '../components/ai/AIGenerateButton';
 import AIImageAnalyzer from '../components/ai/AIImageAnalyzer';
 import DynamicListingFields from '../components/listing/DynamicListingFields';
+import TaxonomyCategoryPicker from '../components/listing/TaxonomyCategoryPicker';
 import {
   saveDraft, generateDraftId,
   getLocalDrafts, markDraftPublished, removeLocalDraft,
@@ -60,14 +61,13 @@ import {
 } from '../lib/drafts';
 import {
   fetchMarketplaceEngineSettings,
-  fetchMarketplaceCategories,
   fetchMarketplaceAttributes,
   validateMarketplaceAttributes,
   resolveSellerCommissionPolicy,
   validateSellerCommission,
   upsertMarketplaceListingExtension,
   type MarketplaceEngineSettings,
-  type MarketplaceCategory,
+  type MarketplaceCategoryTreeNode,
   type SellerCommissionPolicy,
 } from '../lib/listingEngine';
 
@@ -173,8 +173,8 @@ export default function UploadProductPage() {
   const [affiliateCommission, setAffiliateCommission] = useState('10');
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
-  const [taxonomyCategories, setTaxonomyCategories] = useState<MarketplaceCategory[]>([]);
   const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
+  const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<MarketplaceCategoryTreeNode[]>([]);
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
   const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
   const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
@@ -229,13 +229,16 @@ export default function UploadProductPage() {
 
   useEffect(() => {
     if (!engineSettings?.taxonomy_enabled) {
-      setTaxonomyCategories([]);
       setSelectedTaxonomyCategoryId(null);
-      return;
+      setSelectedTaxonomyPath([]);
     }
+  }, [engineSettings?.taxonomy_enabled]);
 
-    fetchMarketplaceCategories(productType).then(setTaxonomyCategories);
-  }, [engineSettings?.taxonomy_enabled, productType]);
+  useEffect(() => {
+    setSelectedTaxonomyCategoryId(null);
+    setSelectedTaxonomyPath([]);
+    setDynamicAttributes({});
+  }, [productType]);
 
   useEffect(() => {
     if (!engineSettings?.seller_commission_policy_enabled) {
@@ -325,9 +328,6 @@ export default function UploadProductPage() {
   const isDigitalType = productType === 'DIGITAL' || productType === 'COURSE';
   const isServiceType = productType === 'SERVICE';
   const totalSteps = isDigitalType ? 3 : isServiceType ? 3 : 2;
-  const categoryOptions = engineSettings?.taxonomy_enabled && taxonomyCategories.length > 0
-    ? taxonomyCategories.map(category => ({ id: category.id, label: category.name }))
-    : CATEGORIES.map(category => ({ id: null, label: category }));
   const commissionMin = sellerCommissionPolicy?.min_percentage ?? 0;
   const commissionMax = sellerCommissionPolicy?.max_percentage ?? 100;
   const commissionLocked = sellerCommissionPolicy
@@ -568,6 +568,8 @@ export default function UploadProductPage() {
           metadata: {
             source: 'upload_product_page',
             legacy_category: form.category,
+            taxonomy_path: selectedTaxonomyPath.map(node => node.name),
+            taxonomy_path_ids: selectedTaxonomyPath.map(node => node.id),
           },
           sellerAffiliateCommission:
             !isFree && engineSettings.seller_commission_policy_enabled
@@ -844,29 +846,49 @@ export default function UploadProductPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2"><Tag className="w-4 h-4" />Category</label>
-                <div className="relative">
-                  <button type="button" onClick={() => setShowCategories(!showCategories)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 bg-white text-left flex items-center justify-between">
-                    <span>{form.category}</span>
-                    <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showCategories ? 'rotate-180' : ''}`} />
-                  </button>
-                  <AnimatePresence>
-                    {showCategories && (
-                      <motion.div initial={{ opacity: 0, y: -8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                        className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 z-20 overflow-hidden max-h-60 overflow-y-auto">
-                        {categoryOptions.map((category) => (
-                          <button key={category.id || category.label} type="button" onClick={() => {
-                            setForm({ ...form, category: category.label });
-                            setSelectedTaxonomyCategoryId(category.id);
-                            setShowCategories(false);
-                          }}
-                            className={`w-full text-left px-4 py-3 hover:bg-primary-50 transition-colors text-sm ${form.category === category.label ? 'text-primary-600 font-semibold bg-primary-50' : 'text-gray-700'}`}>{category.label}</button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                {engineSettings?.taxonomy_enabled ? (
+                  <TaxonomyCategoryPicker
+                    listingTypeCode={productType}
+                    selectedCategoryId={selectedTaxonomyCategoryId}
+                    onChange={(categoryId, path) => {
+                      setSelectedTaxonomyCategoryId(categoryId);
+                      setSelectedTaxonomyPath(path);
+                      const legacyRoot = path[0]?.name;
+                      if (legacyRoot) setForm(current => ({ ...current, category: legacyRoot }));
+                      setDynamicAttributes({});
+                    }}
+                  />
+                ) : (
+                  <>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2"><Tag className="w-4 h-4" />Category</label>
+                    <div className="relative">
+                      <button type="button" onClick={() => setShowCategories(!showCategories)}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 bg-white text-left flex items-center justify-between">
+                        <span>{form.category}</span>
+                        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showCategories ? 'rotate-180' : ''}`} />
+                      </button>
+                      <AnimatePresence>
+                        {showCategories && (
+                          <motion.div initial={{ opacity: 0, y: -8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                            className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 z-20 overflow-hidden max-h-60 overflow-y-auto">
+                            {CATEGORIES.map((category) => (
+                              <button key={category} type="button" onClick={() => {
+                                setForm({ ...form, category });
+                                setShowCategories(false);
+                              }}
+                                className={`w-full text-left px-4 py-3 hover:bg-primary-50 transition-colors text-sm ${form.category === category ? 'text-primary-600 font-semibold bg-primary-50' : 'text-gray-700'}`}>{category}</button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </>
+                )}
+                {engineSettings?.taxonomy_enabled && selectedTaxonomyPath.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Legacy marketplace grouping remains <span className="font-medium">{selectedTaxonomyPath[0].name}</span> for backward compatibility.
+                  </p>
+                )}
               </div>
               {!isServiceType && (
                 <div className="grid grid-cols-2 gap-4">
