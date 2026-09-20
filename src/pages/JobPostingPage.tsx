@@ -93,6 +93,14 @@ function readJobDraftStorage(): JobDraftStorage {
   }
 }
 
+function extractJobDraftForm(saved: JobDraftStorage): Partial<FormState> {
+  const formOnly: JobDraftStorage = { ...saved };
+  delete formOnly.__taxonomyCategoryId;
+  delete formOnly.__taxonomyPath;
+  delete formOnly.__dynamicAttributes;
+  return formOnly;
+}
+
 const INITIAL_FORM: FormState = {
   title: '',
   category: 'Advertising & Marketing',
@@ -241,16 +249,10 @@ export default function JobPostingPage() {
   const { profile, user } = useAuth();
 
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormState>(() => {
-    const saved = readJobDraftStorage();
-    const {
-      __taxonomyCategoryId: _taxonomyCategoryId,
-      __taxonomyPath: _taxonomyPath,
-      __dynamicAttributes: _dynamicAttributes,
-      ...savedForm
-    } = saved;
-    return { ...INITIAL_FORM, ...savedForm };
-  });
+  const [form, setForm] = useState<FormState>(() => ({
+    ...INITIAL_FORM,
+    ...extractJobDraftForm(readJobDraftStorage()),
+  }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
