@@ -1,10 +1,12 @@
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AppShell from './AppShell';
 import { CompactPromoStrip } from './promotion/PromotionSurfaces';
 
 export default function PublicAppShell() {
   const { user, loading } = useAuth();
+  const location = useLocation();
+  const starterCheckoutRoute = location.pathname === '/dright/starter';
 
   if (loading) {
     return (
@@ -60,12 +62,21 @@ export default function PublicAppShell() {
             >
               Sign in
             </Link>
-            <Link
-              to="/sign-up"
-              className="text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl px-4 sm:px-5 py-2.5 transition-colors min-h-[44px] flex items-center"
-            >
-              Sign up
-            </Link>
+            {starterCheckoutRoute ? (
+              <span
+                className="text-xs sm:text-sm font-semibold text-slate-500 bg-slate-100 rounded-xl px-3 sm:px-4 py-2.5 min-h-[44px] flex items-center text-center"
+                title="Complete and verify the DRIGHT Starter payment to unlock signup"
+              >
+                Pay first to sign up
+              </span>
+            ) : (
+              <Link
+                to="/sign-up"
+                className="text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl px-4 sm:px-5 py-2.5 transition-colors min-h-[44px] flex items-center"
+              >
+                Sign up
+              </Link>
+            )}
           </div>
         </div>
       </nav>
