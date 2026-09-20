@@ -175,10 +175,6 @@ export default function AdminWithdrawalsPage() {
     await runWithdrawalAction(withdrawal, 'approve');
   };
 
-  const markAsPaid = async (withdrawal: WithdrawalRequest) => {
-    await runWithdrawalAction(withdrawal, 'paid');
-  };
-
   const markManualAsPaid = async (withdrawal: WithdrawalRequest) => {
     if (!user?.id) return;
 
