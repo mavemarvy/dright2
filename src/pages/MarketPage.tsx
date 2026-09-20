@@ -49,6 +49,18 @@ import {
   isMarketplaceCardSize,
   type MarketplaceCardSize,
 } from '../lib/marketplaceLayout';
+import {
+  fetchMarketplaceEngineSettings,
+  fetchMarketplaceCategoryTree,
+  fetchMarketplaceAttributes,
+  fetchPublicMarketplaceListingExtensions,
+  getCategoryDescendantIds,
+  type MarketplaceAttributeDefinition,
+  type MarketplaceCategoryTreeNode,
+  type MarketplaceEngineSettings,
+  type PublicMarketplaceListingExtension,
+  type MarketplaceListingTypeCode,
+} from '../lib/listingEngine';
 
 export default function MarketPage() {
   const { user, isAdmin, isAccountLocked, isAccountBanned } = useAuth();
@@ -82,6 +94,10 @@ export default function MarketPage() {
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
+  const [taxonomyTree, setTaxonomyTree] = useState<MarketplaceCategoryTreeNode[]>([]);
+  const [taxonomyFilterDefinitions, setTaxonomyFilterDefinitions] = useState<MarketplaceAttributeDefinition[]>([]);
+  const [listingExtensions, setListingExtensions] = useState<Map<string, PublicMarketplaceListingExtension>>(new Map());
   const [searchParams] = useSearchParams();
 
   const [quickViewProduct, setQuickViewProduct] = useState<MarketplaceProduct | null>(null);
@@ -110,7 +126,14 @@ export default function MarketPage() {
   }, [listingCardSize]);
 
   const recommendedMode = filters.sortBy === 'recommended';
-  const usingMarketplaceV2 = recommendedMode && !marketV2Failed;
+  const hasTaxonomyFilters = Boolean(
+    filters.taxonomyCategoryId
+    || Object.values(filters.attributeFilters).some(value =>
+      Array.isArray(value) ? value.length > 0 : value !== '' && value !== null && value !== undefined
+    )
+  );
+  const useServerRecommended = recommendedMode && !hasTaxonomyFilters;
+  const usingMarketplaceV2 = useServerRecommended && !marketV2Failed;
 
   const fetchCategoryCounts = useCallback(async () => {
     const [productsResult, jobsResult] = await Promise.all([
@@ -229,6 +252,7 @@ export default function MarketPage() {
 
   useEffect(() => {
     fetchSystemConfig().then(setSystemConfig);
+    fetchMarketplaceEngineSettings().then(setEngineSettings);
     void fetchCategoryCounts();
     if (user) void fetchReferralCode();
     void fetchRankingWeights().then(setRankingWeights);
@@ -240,8 +264,68 @@ export default function MarketPage() {
   }, [user, searchParams, fetchCategoryCounts, fetchReferralCode]);
 
   useEffect(() => {
+    const supported = ['PHYSICAL', 'DIGITAL', 'SERVICE', 'COURSE'].includes(filters.productType);
+    if (!engineSettings?.taxonomy_enabled || !supported) {
+      setTaxonomyTree([]);
+      setFilters(prev => prev.taxonomyCategoryId || Object.keys(prev.attributeFilters).length > 0
+        ? { ...prev, taxonomyCategoryId: '', attributeFilters: {} }
+        : prev
+      );
+      return;
+    }
+
+    fetchMarketplaceCategoryTree(filters.productType as MarketplaceListingTypeCode)
+      .then(setTaxonomyTree);
+  }, [engineSettings?.taxonomy_enabled, filters.productType]);
+
+  useEffect(() => {
+    const supported = ['PHYSICAL', 'DIGITAL', 'SERVICE', 'COURSE'].includes(filters.productType);
+    if (!engineSettings?.dynamic_forms_enabled || !supported) {
+      setTaxonomyFilterDefinitions([]);
+      return;
+    }
+
+    fetchMarketplaceAttributes(
+      filters.productType as MarketplaceListingTypeCode,
+      filters.taxonomyCategoryId || null,
+    ).then(definitions => setTaxonomyFilterDefinitions(
+      definitions.filter(definition => definition.is_filterable)
+    ));
+  }, [
+    engineSettings?.dynamic_forms_enabled,
+    filters.productType,
+    filters.taxonomyCategoryId,
+  ]);
+
+  useEffect(() => {
+    if (
+      !(engineSettings?.taxonomy_enabled || engineSettings?.dynamic_forms_enabled)
+      || products.length === 0
+    ) {
+      setListingExtensions(new Map());
+      return;
+    }
+
+    let active = true;
+    fetchPublicMarketplaceListingExtensions(
+      'product',
+      products.map(product => product.id),
+    ).then(map => {
+      if (active) setListingExtensions(map);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    engineSettings?.taxonomy_enabled,
+    engineSettings?.dynamic_forms_enabled,
+    products,
+  ]);
+
+  useEffect(() => {
     setVisibleCount(24);
-    if (recommendedMode) {
+    if (useServerRecommended) {
       setMarketV2Failed(false);
       const timer = window.setTimeout(() => { void fetchRecommendedPage(true); }, 250);
       return () => window.clearTimeout(timer);
@@ -250,7 +334,7 @@ export default function MarketPage() {
     void fetchProducts().catch(error => console.error('[marketplace] catalog load failed', error)).finally(() => setLoading(false));
   // Primitive dependencies intentionally reset true pagination when a server filter changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recommendedMode, searchQuery, filters.category, filters.location, filters.priceMin, filters.priceMax, filters.productType, filters.verifiedSeller, filters.minRating]);
+  }, [useServerRecommended, searchQuery, filters.category, filters.location, filters.priceMin, filters.priceMax, filters.productType, filters.verifiedSeller, filters.minRating, filters.taxonomyCategoryId, filters.attributeFilters]);
 
   useEffect(() => {
     if (quickViewProduct) {
@@ -285,6 +369,51 @@ export default function MarketPage() {
     document.getElementById('marketplace-products')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const taxonomyDescendants = useMemo(
+    () => getCategoryDescendantIds(taxonomyTree, filters.taxonomyCategoryId || null),
+    [taxonomyTree, filters.taxonomyCategoryId],
+  );
+
+  const selectedTaxonomyNode = useMemo(
+    () => taxonomyTree.find(node => node.id === filters.taxonomyCategoryId) ?? null,
+    [taxonomyTree, filters.taxonomyCategoryId],
+  );
+
+  const matchesDynamicAttributeFilters = useCallback((
+    extension: PublicMarketplaceListingExtension | undefined,
+  ) => {
+    const entries = Object.entries(filters.attributeFilters).filter(([, value]) =>
+      Array.isArray(value) ? value.length > 0 : value !== '' && value !== null && value !== undefined
+    );
+    if (entries.length === 0) return true;
+    if (!extension) return false;
+
+    return entries.every(([key, expected]) => {
+      const actual = extension.attributes[key];
+
+      if (Array.isArray(expected)) {
+        if (expected.length === 0) return true;
+        const actualValues = Array.isArray(actual) ? actual.map(String) : [String(actual ?? '')];
+        return expected.map(String).some(value => actualValues.includes(value));
+      }
+
+      if (typeof expected === 'boolean') {
+        return Boolean(actual) === expected;
+      }
+
+      if (typeof expected === 'number') {
+        return Number(actual) === expected;
+      }
+
+      const wanted = String(expected).trim().toLowerCase();
+      if (!wanted) return true;
+      if (Array.isArray(actual)) {
+        return actual.some(value => String(value).toLowerCase().includes(wanted));
+      }
+      return String(actual ?? '').toLowerCase().includes(wanted);
+    });
+  }, [filters.attributeFilters]);
+
   const filteredProducts = products.filter(p => {
     if (searchQuery.trim()) {
       const parsed = parseNaturalLanguageSearch(searchQuery);
@@ -297,6 +426,20 @@ export default function MarketPage() {
       if (!matchesSearch) return false;
       if (parsed.priceMax && getBuyerFacingPrice(p) > parsed.priceMax) return false;
     }
+    if (filters.taxonomyCategoryId) {
+      const extension = listingExtensions.get(p.id);
+      const extensionCategoryId = extension?.category_id ?? null;
+      const matchesTaxonomy = extensionCategoryId
+        ? taxonomyDescendants.has(extensionCategoryId)
+        : Boolean(
+            selectedTaxonomyNode?.depth === 0
+            && p.category?.toLowerCase() === selectedTaxonomyNode.name.toLowerCase()
+          );
+      if (!matchesTaxonomy) return false;
+    }
+
+    if (!matchesDynamicAttributeFilters(listingExtensions.get(p.id))) return false;
+
     if (filters.category !== 'All') {
       const cat = MARKETPLACE_CATEGORIES.find(c => c.name === filters.category);
       if (cat) {
@@ -390,7 +533,7 @@ export default function MarketPage() {
     } finally { setTeamSubmitting(false); }
   };
 
-  const isBrowsing = !searchQuery && filters.category === 'All';
+  const isBrowsing = !searchQuery && filters.category === 'All' && !hasTaxonomyFilters;
   const contextualPlacement = searchQuery.trim()
     ? 'search'
     : filters.productType?.toUpperCase() === 'COURSE'
@@ -440,6 +583,8 @@ export default function MarketPage() {
           onSearchQueryChange={setSearchQuery}
           cardSize={listingCardSize}
           onCardSizeChange={setListingCardSize}
+          taxonomyEnabled={Boolean(engineSettings?.taxonomy_enabled)}
+          dynamicFilterDefinitions={taxonomyFilterDefinitions}
         />
       </div>
 
