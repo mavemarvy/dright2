@@ -25,6 +25,7 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
   const [form, setForm] = useState({ bank_code: '', bank_name: '', account_number: '', account_name: '', is_default: false });
   const [saving, setSaving] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banks, setBanks] = useState<PaystackBank[]>(NIGERIAN_BANKS);
   const [banksLoading, setBanksLoading] = useState(true);
@@ -123,11 +124,22 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
     onAccountsChanged?.();
   };
 
-  const handleDelete = async (id: string) => {
-    const result = await deleteBankAccount(id);
+  const handleDelete = async (account: BankAccount) => {
+    const confirmed = window.confirm(
+      `Delete ${account.bank_name} account ending ${account.account_number.slice(-4)}? You can add and verify another account afterwards.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(account.id);
+    setError(null);
+    const result = await deleteBankAccount(account.id);
+    setDeletingId(null);
+
     if (result.success) {
       await reload();
       onAccountsChanged?.();
+    } else {
+      setError(result.error || 'Unable to delete bank account');
     }
   };
 
@@ -325,48 +337,48 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
                   </div>
                 </div>
 
-                {(!compact || (!account.is_verified && account.verification_status !== 'pending')) && (
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {!account.is_verified && account.verification_status !== 'pending' && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); void handleVerify(account); }}
-                        disabled={verifyingId === account.id}
-                        className="px-2 py-1.5 rounded-lg hover:bg-primary-50 text-primary-600 text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-50"
-                        title="Verify account with Paystack"
-                      >
-                        {verifyingId === account.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
-                        {compact && (verifyingId === account.id ? 'Verifying' : 'Verify')}
-                      </button>
-                    )}
-                    {!compact && !account.is_default && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); void handleSetDefault(account.id); }}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600"
-                        title="Set as default"
-                      >
-                        <Star className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {!compact && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); startEdit(account); }}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600"
-                        title="Edit"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {!compact && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); void handleDelete(account.id); }}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-500"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {!account.is_verified && account.verification_status !== 'pending' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void handleVerify(account); }}
+                      disabled={verifyingId === account.id}
+                      className="px-2 py-1.5 rounded-lg hover:bg-primary-50 text-primary-600 text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-50"
+                      title="Verify account with Paystack"
+                    >
+                      {verifyingId === account.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
+                      {compact && (verifyingId === account.id ? 'Verifying' : 'Verify')}
+                    </button>
+                  )}
+                  {!compact && !account.is_default && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void handleSetDefault(account.id); }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600"
+                      title="Set as default"
+                    >
+                      <Star className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {!compact && !account.is_verified && account.verification_status !== 'verified' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); startEdit(account); }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600"
+                      title="Edit unverified account"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); void handleDelete(account); }}
+                    disabled={deletingId === account.id}
+                    className={`${compact ? 'px-2 py-1.5 text-xs font-semibold inline-flex items-center gap-1' : 'p-1.5'} rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 disabled:opacity-50`}
+                    title="Delete bank account"
+                  >
+                    {deletingId === account.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Trash2 className="w-3.5 h-3.5" />}
+                    {compact && (deletingId === account.id ? 'Deleting' : 'Delete')}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -376,7 +388,7 @@ export default function BankAccountManager({ onSelect, selectedId, compact, onAc
       {!compact && (
         <p className="text-xs text-gray-400 flex items-start gap-1.5">
           <Shield className="w-3 h-3 mt-0.5 flex-shrink-0" />
-          Bank account details are encrypted and never shared. Account verification uses Paystack's secure resolve API.
+          Account verification uses Paystack's secure resolve API. Verified account details cannot be edited; delete and re-add an account if the bank details need to change.
         </p>
       )}
     </div>
