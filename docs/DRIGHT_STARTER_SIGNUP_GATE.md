@@ -8,3 +8,4 @@ The DRIGHT Starter funnel is payment-gated.
 - Admin-configured professional platform roles are also gated during normal signup.
 - Buyer signup remains free.
 - The funnel marker is cleared only after the verified purchase is claimed by the newly created account.
+- Production rollout uses the standard GitHub → Vercel deployment path.
