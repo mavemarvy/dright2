@@ -544,6 +544,7 @@ export default function UploadProductPage() {
         commission_rate: isFree ? 0 : commissionRate,
         image_url: imageUrl,
         category: form.category,
+        listing_taxonomy_category_id: selectedTaxonomyCategoryId,
         admin_task_percent: isFree ? 0 : adminTaskPercent,
         sales_team_task_percent: isFree ? 0 : salesTeamTaskPercent,
         affiliate_commission_percent: isFree ? 0 : (parseFloat(affiliateCommission) || 0),
