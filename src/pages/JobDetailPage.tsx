@@ -13,6 +13,7 @@ import SeoHead from '../components/SeoHead';
 import NapFooter from '../components/NapFooter';
 import { startOrFindConversation } from '../lib/chatHooks';
 import type { Job, JobApplication } from '../lib/types';
+import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -294,6 +295,8 @@ export default function JobDetailPage() {
             </div>
           )}
         </motion.div>
+
+        <ListingMarketingMaterialsPanel kind="job" listingId={job.id} />
 
         {/* Application Form */}
         {showApplyForm && (
