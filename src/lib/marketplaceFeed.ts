@@ -42,8 +42,45 @@ export async function fetchMarketplaceFeedV2(
     items?: unknown[]; has_more?: boolean; next_cursor?: string | null;
     personalized?: boolean; algorithm_version?: number;
   };
+
+  let items = (payload.items || []) as MarketplaceFeedPage['items'];
+
+  // The Starter catalog mirror lives in the generic products table for ranking,
+  // but its authoritative commercial currency is NGN, not the marketplace USD base.
+  // Enrich the ranked item from the first-party settings RPC so ProductCard never
+  // converts ₦5,000 as though it were $5,000.
+  const { data: starterData } = await supabase.rpc('get_public_dright_starter_product');
+  const starterPayload = starterData && typeof starterData === 'object'
+    ? starterData as Record<string, any>
+    : null;
+  const starterProduct = starterPayload?.available ? starterPayload.product : null;
+  const starterId = starterProduct?.marketplace_product_id
+    ? String(starterProduct.marketplace_product_id)
+    : null;
+
+  if (starterId) {
+    items = items.map(item => item.id === starterId
+      ? {
+          ...item,
+          sku: 'DRIGHT-STARTER-ACCESS',
+          affiliate_commission_percent: Number(starterProduct.affiliate_commission_percent ?? 0),
+          specifications: {
+            ...(item.specifications || {}),
+            system_product_kind: 'dright_starter_access',
+            source_currency: String(starterProduct.currency || 'NGN').toUpperCase(),
+            display_currency: String(starterProduct.currency || 'NGN').toUpperCase(),
+            official_rating_enabled: Boolean(starterProduct.official_rating_enabled),
+            official_rating: Number(starterProduct.official_rating ?? 0),
+            special_route: '/dright/starter',
+            official_store: true,
+            first_party: true,
+          },
+        }
+      : item);
+  }
+
   return {
-    items: (payload.items || []) as MarketplaceFeedPage['items'],
+    items,
     hasMore: Boolean(payload.has_more),
     nextCursor: payload.next_cursor || null,
     personalized: Boolean(payload.personalized),
