@@ -73,7 +73,7 @@ export function NewArrivalsSection() {
     (async () => {
       const { data } = await supabase
         .from('products')
-        .select('id, name, description, price, commission_rate, image_url, category, uploaded_by, created_at, admin_task_percent, sales_team_task_percent, is_free, stock_quantity, product_type, total_reviews, average_rating, total_sales, view_count, is_featured, is_sponsored')
+        .select('id, name, description, price, commission_rate, image_url, category, uploaded_by, created_at, admin_task_percent, sales_team_task_percent, is_free, stock_quantity, product_type, total_reviews, average_rating, total_sales, view_count, is_featured, is_sponsored, sku, affiliate_commission_percent, specifications')
         .eq('is_active', true)
         .eq('is_hidden', false)
         .eq('approval_status', 'approved')
@@ -245,7 +245,7 @@ export function FeaturedServicesSection() {
     (async () => {
       const { data } = await supabase
         .from('products')
-        .select('id, name, description, price, commission_rate, image_url, category, uploaded_by, created_at, admin_task_percent, sales_team_task_percent, is_free, product_type, total_reviews, average_rating, total_sales, view_count, is_featured, is_sponsored')
+        .select('id, name, description, price, commission_rate, image_url, category, uploaded_by, created_at, admin_task_percent, sales_team_task_percent, is_free, product_type, total_reviews, average_rating, total_sales, view_count, is_featured, is_sponsored, sku, affiliate_commission_percent, specifications')
         .eq('is_active', true)
         .eq('is_hidden', false)
         .eq('approval_status', 'approved')
