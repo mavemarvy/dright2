@@ -18,9 +18,24 @@ export interface PlatformAccessStatus {
   currency?: string;
   trial_enabled?: boolean;
   trial_days?: number;
+  trial_start?: string | null;
   trial_end?: string | null;
+  trial_source?: string | null;
   trial_active?: boolean;
+  trial_total_days?: number;
+  trial_days_used?: number;
+  trial_days_remaining?: number;
   subscription_active?: boolean;
+  subscription_id?: string | null;
+  subscription_status?: string | null;
+  subscription_plan_name?: string | null;
+  subscription_interval?: string | null;
+  subscription_period_start?: string | null;
+  subscription_period_end?: string | null;
+  subscription_days_used?: number;
+  subscription_days_remaining?: number;
+  grace_period_end?: string | null;
+  cancel_at_period_end?: boolean;
   requires_subscription?: boolean;
   plan_id?: string | null;
   access_state: PlatformAccessState;
@@ -91,9 +106,24 @@ export async function getMyPlatformAccess(): Promise<PlatformAccessStatus | null
     currency: String(row.currency ?? 'USD'),
     trial_enabled: Boolean(row.trial_enabled),
     trial_days: Number(row.trial_days ?? 30),
+    trial_start: row.trial_start ? String(row.trial_start) : null,
     trial_end: row.trial_end ? String(row.trial_end) : null,
+    trial_source: row.trial_source ? String(row.trial_source) : null,
     trial_active: Boolean(row.trial_active),
+    trial_total_days: Number(row.trial_total_days ?? 0),
+    trial_days_used: Number(row.trial_days_used ?? 0),
+    trial_days_remaining: Number(row.trial_days_remaining ?? 0),
     subscription_active: Boolean(row.subscription_active),
+    subscription_id: row.subscription_id ? String(row.subscription_id) : null,
+    subscription_status: row.subscription_status ? String(row.subscription_status) : null,
+    subscription_plan_name: row.subscription_plan_name ? String(row.subscription_plan_name) : null,
+    subscription_interval: row.subscription_interval ? String(row.subscription_interval) : null,
+    subscription_period_start: row.subscription_period_start ? String(row.subscription_period_start) : null,
+    subscription_period_end: row.subscription_period_end ? String(row.subscription_period_end) : null,
+    subscription_days_used: Number(row.subscription_days_used ?? 0),
+    subscription_days_remaining: Number(row.subscription_days_remaining ?? 0),
+    grace_period_end: row.grace_period_end ? String(row.grace_period_end) : null,
+    cancel_at_period_end: Boolean(row.cancel_at_period_end),
     requires_subscription: Boolean(row.requires_subscription),
     plan_id: row.plan_id ? String(row.plan_id) : null,
     access_state: String(row.access_state ?? 'buyer_free') as PlatformAccessState,
@@ -183,4 +213,120 @@ export async function updateAdminPlatformAccessPolicy(
   const next = await getAdminPlatformAccessPolicy();
   if (!next) throw new Error('Unable to reload platform access policy');
   return next;
+}
+
+
+export interface AdminSubscriptionPlan {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  plan_type: string;
+  amount: number;
+  currency: string;
+  interval: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  trial_days: number;
+  grace_period_days: number;
+  features: string[];
+  is_active: boolean;
+  paystack_plan_code: string | null;
+  sort_order: number;
+}
+
+export interface AdminSubscriptionCatalog {
+  plans: AdminSubscriptionPlan[];
+  platform_access: PlatformAccessAdminPolicy | null;
+}
+
+export async function getAdminSubscriptionCatalog(): Promise<AdminSubscriptionCatalog | null> {
+  const { data, error } = await supabase.rpc('admin_get_subscription_catalog');
+  if (error || !data || typeof data !== 'object') {
+    if (error && !/permission/i.test(error.message || '')) console.error('Failed to load subscription catalog', error);
+    return null;
+  }
+  const payload = data as Record<string, any>;
+  const plans = Array.isArray(payload.plans)
+    ? payload.plans.map((row: any) => ({
+        ...row,
+        amount: Number(row.amount ?? 0),
+        trial_days: Number(row.trial_days ?? 0),
+        grace_period_days: Number(row.grace_period_days ?? 0),
+        sort_order: Number(row.sort_order ?? 0),
+        features: Array.isArray(row.features) ? row.features.map(String) : [],
+        is_active: Boolean(row.is_active),
+      }))
+    : [];
+  return {
+    plans,
+    platform_access: payload.platform_access
+      ? await getAdminPlatformAccessPolicy()
+      : null,
+  };
+}
+
+export async function updateAdminSubscriptionPlan(
+  plan: AdminSubscriptionPlan,
+): Promise<AdminSubscriptionPlan> {
+  const { data, error } = await supabase.rpc('admin_update_subscription_plan', {
+    p_plan_id: plan.id,
+    p_patch: {
+      name: plan.name,
+      description: plan.description,
+      amount: Number(plan.amount || 0),
+      currency: String(plan.currency || 'USD').toUpperCase(),
+      interval: plan.plan_type === 'platform_access' ? 'monthly' : plan.interval,
+      trial_days: Number(plan.trial_days || 0),
+      grace_period_days: Number(plan.grace_period_days || 0),
+      features: plan.features,
+      is_active: plan.is_active,
+    },
+  });
+  if (error) throw error;
+  const row = data as any;
+  return {
+    ...row,
+    amount: Number(row.amount ?? 0),
+    trial_days: Number(row.trial_days ?? 0),
+    grace_period_days: Number(row.grace_period_days ?? 0),
+    sort_order: Number(row.sort_order ?? 0),
+    features: Array.isArray(row.features) ? row.features.map(String) : [],
+    is_active: Boolean(row.is_active),
+  } as AdminSubscriptionPlan;
+}
+
+export interface SalesProgressionStatus {
+  authenticated: boolean;
+  eligible: boolean;
+  stage_key: string;
+  stage_label: string;
+  weekly_target: number;
+  weekly_sales: number;
+  remaining_sales: number;
+  target_met: boolean;
+  period_start: string;
+  period_end: string;
+  seconds_remaining: number;
+  next_stage_key: string | null;
+  downgrade_stage_key: string | null;
+}
+
+export async function getMySalesProgressionStatus(): Promise<SalesProgressionStatus | null> {
+  const { data, error } = await supabase.rpc('get_my_sales_progression_status');
+  if (error || !data || typeof data !== 'object') return null;
+  const row = data as Record<string, unknown>;
+  return {
+    authenticated: Boolean(row.authenticated),
+    eligible: Boolean(row.eligible),
+    stage_key: String(row.stage_key || ''),
+    stage_label: String(row.stage_label || ''),
+    weekly_target: Number(row.weekly_target ?? 0),
+    weekly_sales: Number(row.weekly_sales ?? 0),
+    remaining_sales: Number(row.remaining_sales ?? 0),
+    target_met: Boolean(row.target_met),
+    period_start: String(row.period_start || ''),
+    period_end: String(row.period_end || ''),
+    seconds_remaining: Number(row.seconds_remaining ?? 0),
+    next_stage_key: row.next_stage_key ? String(row.next_stage_key) : null,
+    downgrade_stage_key: row.downgrade_stage_key ? String(row.downgrade_stage_key) : null,
+  };
 }
