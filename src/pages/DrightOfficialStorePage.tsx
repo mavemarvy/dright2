@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { BadgeCheck, ChevronRight, Loader2, ShieldCheck, Store, Users } from 'lucide-react';
 import { DrightBrand, DrightMark } from '../components/DrightBrand';
 import { fetchDrightStarterProduct, type DrightStarterPublicSettings } from '../lib/drightStarter';
-import { formatCurrencyValue } from '../lib/currency';
+import { formatDisplayCurrency } from '../lib/currency';
 import SeoHead from '../components/SeoHead';
 
 export default function DrightOfficialStorePage() {
@@ -84,7 +84,7 @@ export default function DrightOfficialStorePage() {
               <div className="p-6 sm:p-8">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs font-bold text-primary-600 uppercase tracking-wide">{product.category}</span>
-                  <span className="text-xl font-black text-gray-900 dark:text-white">{formatCurrencyValue(product.price, product.currency)}</span>
+                  <span className="text-xl font-black text-gray-900 dark:text-white">{formatDisplayCurrency(product.price, product.currency)}</span>
                 </div>
                 <h3 className="mt-3 text-2xl font-black text-gray-900 dark:text-white">{product.title}</h3>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-6">{product.subtitle}</p>
