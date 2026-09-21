@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import { trackListingEvent } from '../lib/marketplaceAnalytics';
 import { trackProductView } from '../lib/analyticsService';
 import { generateAffiliateLink, copyToClipboard } from '../lib/affiliate';
+import { buildDrightStarterAffiliateLink } from '../lib/drightStarter';
 import {
   fetchSystemConfig, calculateSubscriptionTotal, getBuyerFacingPrice,
   ALL_TIERS, DURATIONS,
@@ -40,6 +41,7 @@ import AdvancedFilterBar, {
 } from '../components/marketplace/AdvancedFilterBar';
 import ShareMenu from '../components/marketplace/ShareMenu';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
+import DrightOfficialStoreMarketplaceCard from '../components/marketplace/DrightOfficialStoreMarketplaceCard';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
 import {
@@ -204,7 +206,8 @@ export default function MarketPage() {
         id, name, description, price, commission_rate, image_url, category,
         uploaded_by, created_at, sales_team_tier, admin_task_percent, sales_team_task_percent,
         is_free, stock_quantity, initial_stock, product_type, demo_video_url, total_reviews,
-        average_rating, total_sales, view_count, is_featured, is_sponsored
+        average_rating, total_sales, view_count, is_featured, is_sponsored,
+        sku, affiliate_commission_percent, specifications
       `)
       .eq('is_active', true)
       .eq('is_hidden', false)
@@ -381,7 +384,11 @@ export default function MarketPage() {
 
   const handleCopyAffiliateLink = async (product: MarketplaceProduct) => {
     if (isAccountLocked || isAccountBanned || !referralCode) return;
-    const link = generateAffiliateLink(referralCode, product.id);
+    const isDrightStarter = product.sku === 'DRIGHT-STARTER-ACCESS'
+      || product.specifications?.system_product_kind === 'dright_starter_access';
+    const link = isDrightStarter
+      ? buildDrightStarterAffiliateLink(referralCode)
+      : generateAffiliateLink(referralCode, product.id);
     const success = await copyToClipboard(link);
     if (success) {
       setCopiedId(product.id);
@@ -622,6 +629,9 @@ export default function MarketPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* First-party DRIGHT inventory is independent from sponsored/featured seller visibility. */}
+      <DrightOfficialStoreMarketplaceCard />
 
       {isBrowsing && (
         <div className="mt-8">
