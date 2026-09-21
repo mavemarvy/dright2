@@ -1,4 +1,3 @@
-import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
@@ -6,7 +5,7 @@ import {
   Wallet, Sparkles, Shield, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getCurrencySymbol, formatCurrency } from '../lib/currency';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { supabase } from '../lib/supabase';
 import { getWalletSummary, type WalletSummary } from '../lib/walletEngine';
 import { fetchPaymentProviders, type PaymentProvider } from '../lib/paymentProviders';
@@ -36,11 +35,11 @@ interface PlanData {
 export default function SubscriptionCheckoutPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { format } = useCurrency();
   const [searchParams] = useSearchParams();
   const planId = searchParams.get('plan_id') || '';
 
   const [plan, setPlan] = useState<PlanData | null>(null);
-  const cSym = getCurrencySymbol(plan?.currency || 'NGN');
   const [providers, setProviders] = useState<PaymentProvider[]>([]);
   const [summary, setSummary] = useState<WalletSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,7 +84,10 @@ export default function SubscriptionCheckoutPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const walletBalance = summary ? Number(summary.balance) : 0;
-  const canPayWithWallet = walletBalance >= (plan?.amount || 0);
+  const walletCurrency = String(summary?.currency || 'NGN').toUpperCase();
+  const planCurrency = String(plan?.currency || 'NGN').toUpperCase();
+  const walletCurrencyMatchesPlan = Boolean(plan) && walletCurrency === planCurrency;
+  const canPayWithWallet = walletCurrencyMatchesPlan && walletBalance >= (plan?.amount || 0);
 
   const handleProceedToPayment = () => {
     setError(null);
@@ -261,12 +263,9 @@ export default function SubscriptionCheckoutPage() {
               </span>
             </div>
             <div className="mt-4">
-              <span className="text-3xl font-bold">{formatCurrency(plan.amount, plan.currency || 'NGN')}</span>
+              <span className="text-3xl font-bold">{format(plan.amount, plan.currency || 'USD')}</span>
               <span className="text-sm opacity-80">/{plan.interval}</span>
             </div>
-            {plan.trial_days > 0 && (
-              <p className="text-xs opacity-80 mt-2">{plan.trial_days}-day free trial included</p>
-            )}
             {plan.features && plan.features.length > 0 && (
               <div className="mt-4 space-y-1.5">
                 {plan.features.map((feature, i) => (
@@ -301,8 +300,12 @@ export default function SubscriptionCheckoutPage() {
                   <div className="flex-1">
                     <p className="font-semibold text-gray-900 text-sm">Pay from Wallet</p>
                     <p className="text-xs text-gray-500">
-                      Balance: {cSym}{walletBalance.toLocaleString()}
-                      {!canPayWithWallet && ' (insufficient)'}
+                      Balance: {format(walletBalance, walletCurrency)}
+                      {!walletCurrencyMatchesPlan
+                        ? ` (wallet is ${walletCurrency}; plan bills in ${planCurrency})`
+                        : !canPayWithWallet
+                          ? ' (insufficient)'
+                          : ''}
                     </p>
                   </div>
                   {canPayWithWallet && <ChevronRight className="w-5 h-5 text-gray-400" />}
@@ -354,7 +357,7 @@ export default function SubscriptionCheckoutPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Amount</span>
-                  <span className="font-bold text-primary-600">{formatDisplayCurrency(Number(plan.amount), 'NGN')}</span>
+                  <span className="font-bold text-primary-600">{format(Number(plan.amount), plan.currency || 'USD')}</span>
                 </div>
               </div>
 
@@ -381,7 +384,7 @@ export default function SubscriptionCheckoutPage() {
             <div className="bg-white rounded-2xl border border-gray-100 p-5">
               <div className="flex justify-between items-center mb-3">
                 <span className="font-bold text-gray-900">Total</span>
-                <span className="text-xl font-bold text-primary-600">{formatDisplayCurrency(Number(plan.amount), 'NGN')}</span>
+                <span className="text-xl font-bold text-primary-600">{format(Number(plan.amount), plan.currency || 'USD')}</span>
               </div>
               <p className="text-xs text-gray-400">Billed {plan.interval}. Cancel anytime.</p>
             </div>
