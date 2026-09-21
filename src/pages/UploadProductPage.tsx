@@ -55,6 +55,8 @@ import AIGenerateButton from '../components/ai/AIGenerateButton';
 import AIImageAnalyzer from '../components/ai/AIImageAnalyzer';
 import DynamicListingFields from '../components/listing/DynamicListingFields';
 import TaxonomyCategoryPicker from '../components/listing/TaxonomyCategoryPicker';
+import MarketingMaterialsEditor from '../components/listing/MarketingMaterialsEditor';
+import { persistListingMarketingMaterials, type MarketingMaterialDraft } from '../lib/marketingMaterials';
 import {
   saveDraft, generateDraftId,
   getLocalDrafts, markDraftPublished, removeLocalDraft,
@@ -178,6 +180,7 @@ export default function UploadProductPage() {
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
   const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
   const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
+  const [marketingMaterials, setMarketingMaterials] = useState<MarketingMaterialDraft[]>([]);
 
   // Digital/Course state
   const [deliveryType, setDeliveryType] = useState('INSTANT_DOWNLOAD');
@@ -707,6 +710,20 @@ export default function UploadProductPage() {
         setPortfolioLinks([]);
       }
 
+      // Optional marketing materials never block the listing itself.
+      if (user?.id && marketingMaterials.length > 0) {
+        try {
+          await persistListingMarketingMaterials({
+            kind: 'product',
+            listingId: productId,
+            ownerId: user.id,
+            materials: marketingMaterials,
+          });
+        } catch (materialError) {
+          console.warn('Optional marketing materials could not be saved:', materialError);
+        }
+      }
+
       // Mark draft as published if this was a draft
       if (draftId) {
         await markDraftPublished(draftId);
@@ -721,6 +738,7 @@ export default function UploadProductPage() {
       setStep(1);
       setProductType('DIGITAL');
       setHasDrightSalesTeam(false);
+      setMarketingMaterials([]);
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
       console.error('Upload error:', err);
@@ -1469,6 +1487,14 @@ export default function UploadProductPage() {
             </Link>
           )}
         </div>
+
+        {step === totalSteps && (
+          <MarketingMaterialsEditor
+            value={marketingMaterials}
+            onChange={setMarketingMaterials}
+            disabled={submitting}
+          />
+        )}
 
         {/* Navigation Buttons */}
         <div className="flex gap-3">
