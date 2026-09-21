@@ -10,7 +10,7 @@ import {
 import { getProductBadges, type ProductBadge } from '../../lib/marketplace';
 import { ProfileLink } from '../Social';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency } from '../../lib/currency';
+import { formatCurrency, formatCurrencyValue } from '../../lib/currency';
 import { getBuyerFacingPrice } from '../../lib/pricing';
 import {
   MARKETPLACE_IMAGE_HEIGHT_CLASSES,
@@ -48,6 +48,9 @@ export interface MarketplaceProduct {
   old_price?: number | null;
   is_featured?: boolean;
   is_sponsored?: boolean;
+  sku?: string | null;
+  affiliate_commission_percent?: number | null;
+  specifications?: Record<string, unknown> | null;
 }
 
 interface ProductCardProps {
@@ -117,9 +120,33 @@ export default function ProductCard({
     is_sponsored: product.is_sponsored,
   });
 
+  const specs = product.specifications && typeof product.specifications === 'object'
+    ? product.specifications
+    : {};
+  const isDrightStarter = product.sku === 'DRIGHT-STARTER-ACCESS'
+    || specs.system_product_kind === 'dright_starter_access';
+  const productHref = isDrightStarter ? '/dright/starter' : `/product/${product.id}`;
   const displayPrice = getBuyerFacingPrice(product);
   const displayOldPrice = product.old_price ? getBuyerFacingPrice(product, product.old_price) : null;
-  const commission = product.is_free ? 0 : (product.price * product.commission_rate) / 100;
+  const sourceCurrency = isDrightStarter
+    ? String(specs.source_currency || specs.display_currency || 'NGN').toUpperCase()
+    : 'USD';
+  const affiliatePercent = isDrightStarter
+    ? Number(product.affiliate_commission_percent ?? specs.affiliate_commission_percent ?? 0)
+    : Number(product.commission_rate || 0);
+  const commission = product.is_free ? 0 : (product.price * affiliatePercent) / 100;
+  const priceText = isDrightStarter
+    ? formatCurrencyValue(displayPrice, sourceCurrency)
+    : formatCurrency(displayPrice);
+  const oldPriceText = displayOldPrice
+    ? (isDrightStarter ? formatCurrencyValue(displayOldPrice, sourceCurrency) : formatCurrency(displayOldPrice))
+    : null;
+  const commissionText = isDrightStarter
+    ? formatCurrencyValue(commission, sourceCurrency)
+    : formatCurrency(commission);
+  const officialRating = isDrightStarter && specs.official_rating_enabled
+    ? Number(specs.official_rating || 0)
+    : 0;
   const discountPercent = product.discount_percent ?? (displayOldPrice && displayOldPrice > displayPrice
     ? Math.round(((displayOldPrice - displayPrice) / displayOldPrice) * 100)
     : 0);
@@ -135,7 +162,7 @@ export default function ProductCard({
     >
       {/* Image area */}
       <div className={`relative ${MARKETPLACE_IMAGE_HEIGHT_CLASSES[cardSize]} bg-gray-50 dark:bg-gray-700 overflow-hidden transition-[height] duration-200`}>
-        <Link to={`/product/${product.id}`}>
+        <Link to={productHref}>
           {!imgLoaded && (
             <div className="absolute inset-0 skeleton" />
           )}
@@ -157,7 +184,12 @@ export default function ProductCard({
 
         {/* Badges top-left */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5">
-          {badges.slice(0, 2).map((badge: ProductBadge, i: number) => (
+          {isDrightStarter && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm bg-emerald-600 text-white inline-flex items-center gap-1">
+              <BadgeCheck className="w-3 h-3" /> Official DRIGHT
+            </span>
+          )}
+          {badges.slice(0, isDrightStarter ? 1 : 2).map((badge: ProductBadge, i: number) => (
             <span key={i} className={`text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ${BADGE_STYLES[badge.color] || badge.color}`}>
               {badge.label}
             </span>
@@ -236,7 +268,7 @@ export default function ProductCard({
         </div>
 
         {/* Title */}
-        <Link to={`/product/${product.id}`}>
+        <Link to={productHref}>
           <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight line-clamp-2 mb-1 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
             {product.name}
           </h3>
@@ -264,11 +296,15 @@ export default function ProductCard({
         </div>
 
         {/* Rating */}
-        {(product.average_rating ?? 0) > 0 && (
+        {((product.average_rating ?? 0) > 0 || officialRating > 0) && (
           <div className="flex items-center gap-1.5 mb-2">
             <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{Number(product.average_rating).toFixed(1)}</span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">({product.total_reviews || 0} reviews)</span>
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+              {officialRating > 0 ? officialRating.toFixed(1) : Number(product.average_rating).toFixed(1)}
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {officialRating > 0 ? 'DRIGHT Official Rating' : `(${product.total_reviews || 0} reviews)`}
+            </span>
             {(product.total_sales ?? 0) > 0 && (
               <span className="text-xs text-gray-400 ml-1">· {product.total_sales} sold</span>
             )}
@@ -282,18 +318,18 @@ export default function ProductCard({
           ) : isJob ? (
             <div className="flex flex-col">
               <span className="text-xs text-gray-400">Salary</span>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(displayPrice)}</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{priceText}</span>
             </div>
           ) : isService ? (
             <div className="flex flex-col">
               <span className="text-xs text-gray-400 dark:text-gray-500">Starting at</span>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(displayPrice)}</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{priceText}</span>
             </div>
           ) : (
             <>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(displayPrice)}</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{priceText}</span>
               {displayOldPrice && displayOldPrice > displayPrice && (
-                <span className="text-sm text-gray-400 dark:text-gray-500 line-through">{formatCurrency(displayOldPrice)}</span>
+                <span className="text-sm text-gray-400 dark:text-gray-500 line-through">{oldPriceText}</span>
               )}
             </>
           )}
@@ -302,14 +338,14 @@ export default function ProductCard({
         {/* Commission */}
         {!product.is_free && commission > 0 && (
           <p className="text-xs text-emerald-600 font-medium mb-2.5">
-            Earn {formatCurrency(commission)} commission
+            Earn {commissionText} commission
           </p>
         )}
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           <Link
-            to={`/product/${product.id}`}
+            to={productHref}
             className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-semibold text-center transition-colors flex items-center justify-center gap-1.5"
           >
             {isJob ? (
@@ -320,13 +356,15 @@ export default function ProductCard({
               <><ShoppingBag className="w-4 h-4" /> Buy</>
             )}
           </Link>
-          <Link
-            to="/chat"
-            className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Chat with seller"
-          >
-            <MessageSquare className="w-4 h-4" />
-          </Link>
+          {!isDrightStarter && (
+            <Link
+              to="/chat"
+              className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Chat with seller"
+            >
+              <MessageSquare className="w-4 h-4" />
+            </Link>
+          )}
           <button
             onClick={() => onShare(product)}
             className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
