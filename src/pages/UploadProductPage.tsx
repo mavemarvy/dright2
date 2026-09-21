@@ -40,6 +40,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
 import { supabase } from '../lib/supabase';
+import { canCreateListing } from '../lib/listingAllowance';
 import {
   fetchSystemConfig,
   calculatePricing,
@@ -520,6 +521,12 @@ export default function UploadProductPage() {
     const stockNum = form.stock ? parseInt(form.stock) : null;
     if (stockNum !== null && (isNaN(stockNum) || stockNum < 0)) {
       setError('Stock quantity must be a non-negative number'); return;
+    }
+
+    const hasListingCapacity = await canCreateListing(productType, selectedTaxonomyCategoryId);
+    if (!hasListingCapacity) {
+      setError('Your listing allowance is exhausted. Buy additional listing capacity from Subscriptions & Capacity or wait for the monthly reset.');
+      return;
     }
 
     setSubmitting(true);
