@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CreditCard, Loader2, Save, ShieldCheck, Users } from 'lucide-react';
+import AdminListingCapacitySettings from '../../components/admin/AdminListingCapacitySettings';
 import {
   getAdminSubscriptionCatalog,
   getAdminPlatformAccessPolicy,
@@ -101,7 +102,7 @@ export default function AdminSubscriptionsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-gray-900 dark:text-white">Subscriptions</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Manage DRIGHT plans, role access, trials, pricing, billing cadence, and feature gates.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Manage platform access, listing capacity, optional add-ons, pricing, and feature gates.</p>
           </div>
         </div>
       </div>
@@ -261,10 +262,12 @@ export default function AdminSubscriptionsPage() {
         </section>
       )}
 
+      <AdminListingCapacitySettings />
+
       <section className="space-y-3">
         <div>
-          <h2 className="font-black text-gray-900 dark:text-white">Subscription Catalog</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Prices and billing cadence are server-authoritative. DRIGHT Platform Access remains monthly.</p>
+          <h2 className="font-black text-gray-900 dark:text-white">Optional Subscription Add-ons</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Plan-specific introductory trials are disabled. The only free-access trial is controlled by DRIGHT Platform Access above; Starter purchases use their separate verified-purchase trial.</p>
         </div>
         <div className="grid lg:grid-cols-2 gap-4">
           {(catalog?.plans || []).map(plan => (
@@ -289,7 +292,7 @@ export default function AdminSubscriptionsPage() {
                 className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5 text-sm"
               />
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <label>
                   <span className="block text-[11px] font-semibold text-gray-500 mb-1">Price</span>
                   <input type="number" min={0} step="0.01" value={plan.amount} onChange={e => updatePlan(plan.id, { amount: Number(e.target.value) })}
@@ -307,11 +310,6 @@ export default function AdminSubscriptionsPage() {
                     className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2 text-sm disabled:opacity-60">
                     {intervals.map(interval => <option key={interval} value={interval}>{interval}</option>)}
                   </select>
-                </label>
-                <label>
-                  <span className="block text-[11px] font-semibold text-gray-500 mb-1">Trial days {plan.plan_type === 'platform_access' ? '(use Access Policy above)' : ''}</span>
-                  <input type="number" min={0} max={730} value={plan.plan_type === 'platform_access' ? 0 : plan.trial_days} disabled={plan.plan_type === 'platform_access'} onChange={e => updatePlan(plan.id, { trial_days: Number(e.target.value) })}
-                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2 text-sm disabled:opacity-60" />
                 </label>
               </div>
 
