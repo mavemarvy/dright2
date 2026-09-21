@@ -192,8 +192,8 @@ export default function AdminDrightOfficialProductManager() {
       if (marketingMaterials.length > 0) {
         try {
           await persistListingMarketingMaterials({
-            kind: 'official_product',
-            listingId: result.officialProductId,
+            kind: 'product',
+            listingId: result.marketplaceProductId,
             ownerId: user.id,
             materials: marketingMaterials,
           });
