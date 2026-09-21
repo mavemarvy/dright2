@@ -10,6 +10,7 @@ import { useCampaign, useBookmarks, useSubmitTask, useWorkerProfile } from '../l
 import { useAuth } from '../contexts/AuthContext';
 import { LEVEL_ICONS, type WorkerLevel } from '../lib/campaignTypes';
 import { uploadCampaignFile } from '../lib/campaignLib';
+import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 
 export default function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -171,6 +172,10 @@ export default function CampaignDetailPage() {
           </div>
         </div>
       )}
+
+      <div className="mb-4">
+        <ListingMarketingMaterialsPanel kind="task" listingId={campaign.id} />
+      </div>
 
       {/* Submit Form */}
       {submitResult ? (
