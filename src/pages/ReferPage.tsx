@@ -41,6 +41,7 @@ import {
   type RewardStatus,
 } from '../lib/referral';
 import { formatCurrency } from '../lib/currency';
+import DrightStarterProductCard from '../components/DrightStarterProductCard';
 
 const LeaderboardSection = lazy(() => import('../components/ReferralLeaderboard'));
 
@@ -214,7 +215,10 @@ export default function ReferPage() {
         <div className="absolute -right-24 -bottom-24 w-64 h-64 bg-white/5 rounded-full" />
       </motion.div>
 
-      {/* Desktop 12-column grid */}
+      {/* Official Starter affiliate test product */}
+      <DrightStarterProductCard className="mb-6" />
+
+            {/* Desktop 12-column grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left column: control center + analytics */}
         <div className="lg:col-span-8 space-y-6">
