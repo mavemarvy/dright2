@@ -275,7 +275,9 @@ export async function updateAdminSubscriptionPlan(
       amount: Number(plan.amount || 0),
       currency: String(plan.currency || 'USD').toUpperCase(),
       interval: plan.plan_type === 'platform_access' ? 'monthly' : plan.interval,
-      trial_days: Number(plan.trial_days || 0),
+      // Introductory access trials are centralized in platform_access_settings.
+      // Optional add-on plans never create a second free-trial period.
+      trial_days: 0,
       grace_period_days: Number(plan.grace_period_days || 0),
       features: plan.features,
       is_active: plan.is_active,
