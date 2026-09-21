@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { BadgeCheck, ExternalLink, Loader2, Save, Star, Store, WalletCards } from 'lucide-react';
+import { BadgeCheck, ExternalLink, Loader2, Save, Star, Store, Target, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   getAdminDrightStarterSettings,
+  getAdminDrightStarterAffiliateChallenge,
   updateAdminDrightStarterSettings,
+  updateAdminDrightStarterAffiliateChallenge,
   type DrightStarterAdminSettings,
+  type DrightStarterAffiliateChallengeSettings,
 } from '../../lib/drightStarter';
 import { formatCurrencyValue } from '../../lib/currency';
 
@@ -32,13 +35,18 @@ function Toggle({
 
 export default function AdminDrightStarterProductSettings() {
   const [settings, setSettings] = useState<DrightStarterAdminSettings | null>(null);
+  const [challenge, setChallenge] = useState<DrightStarterAffiliateChallengeSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    void getAdminDrightStarterSettings().then((value) => {
+    void Promise.all([
+      getAdminDrightStarterSettings(),
+      getAdminDrightStarterAffiliateChallenge(),
+    ]).then(([value, challengeValue]) => {
       setSettings(value);
+      setChallenge(challengeValue);
       setLoading(false);
     });
   }, []);
@@ -50,7 +58,11 @@ export default function AdminDrightStarterProductSettings() {
     try {
       const next = await updateAdminDrightStarterSettings(settings);
       setSettings(next);
-      setMessage('Official DRIGHT Store and Starter product settings saved.');
+      if (challenge) {
+        const nextChallenge = await updateAdminDrightStarterAffiliateChallenge(challenge);
+        setChallenge(nextChallenge);
+      }
+      setMessage('Official DRIGHT Store, Starter product, and affiliate challenge settings saved.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to save Starter product settings.');
     } finally {
@@ -193,17 +205,29 @@ export default function AdminDrightStarterProductSettings() {
           </label>
         </div>
 
-        <div className="grid sm:grid-cols-3 gap-4 mt-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Starter price ({product.currency})</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Starter price</label>
             <input
               type="number"
               min="0"
-              step="1"
+              step="0.01"
               value={product.price}
               onChange={(e) => setSettings({ ...settings, product: { ...product, price: Number(e.target.value || 0) } })}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+            <input
+              type="text"
+              maxLength={3}
+              value={product.currency}
+              onChange={(e) => setSettings({ ...settings, product: { ...product, currency: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) } })}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 uppercase"
+              placeholder="USD"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">Payment provider must support this ISO currency.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Affiliate commission %</label>
@@ -250,11 +274,31 @@ export default function AdminDrightStarterProductSettings() {
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Product description</label>
             <textarea
-              rows={4}
+              rows={5}
               value={product.description}
               onChange={(e) => setSettings({ ...settings, product: { ...product, description: e.target.value } })}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-y"
             />
+            <p className="text-[11px] text-gray-500 mt-1">
+              Use <code>{{'{{trial_days}}'}}</code> anywhere in the copy. It automatically follows Included access days.
+            </p>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">What users get during Starter access</label>
+            <textarea
+              rows={6}
+              value={product.benefits.join('\n')}
+              onChange={(e) => setSettings({
+                ...settings,
+                product: {
+                  ...product,
+                  benefits: e.target.value.split('\n').map((value) => value.trim()).filter(Boolean),
+                },
+              })}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-y"
+              placeholder="One benefit per line"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">One benefit per line. <code>{{'{{trial_days}}'}}</code> is dynamic.</p>
           </div>
         </div>
 
@@ -307,6 +351,93 @@ export default function AdminDrightStarterProductSettings() {
             </p>
           </div>
         </div>
+
+        {challenge && (
+          <div className="mt-6 border-t border-gray-100 pt-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Target className="w-5 h-5 text-violet-600" />
+              <div>
+                <h3 className="font-semibold text-gray-900">Starter Affiliate Challenge</h3>
+                <p className="text-xs text-gray-500">Uses verified Starter purchases attributed to each affiliate. Existing Challenges and Leaderboard pages remain the canonical pages.</p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Challenge enabled</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Turn affiliate onboarding progression on/off.</p>
+                </div>
+                <Toggle value={challenge.enabled} onChange={() => setChallenge({ ...challenge, enabled: !challenge.enabled })} />
+              </label>
+
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Restrict affiliate marketplace</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Affiliate-only onboarding sees Starter + own listings until target is reached.</p>
+                </div>
+                <Toggle
+                  value={challenge.restrict_marketplace_until_complete}
+                  onChange={() => setChallenge({ ...challenge, restrict_marketplace_until_complete: !challenge.restrict_marketplace_until_complete })}
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Allow own listings while restricted</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Keeps products uploaded by that user visible.</p>
+                </div>
+                <Toggle
+                  value={challenge.allow_own_listings_while_restricted}
+                  onChange={() => setChallenge({ ...challenge, allow_own_listings_while_restricted: !challenge.allow_own_listings_while_restricted })}
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Seller profile exempt</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Affiliates who also selected Seller/Vendor keep the normal marketplace.</p>
+                </div>
+                <Toggle
+                  value={challenge.seller_profile_exempt}
+                  onChange={() => setChallenge({ ...challenge, seller_profile_exempt: !challenge.seller_profile_exempt })}
+                />
+              </label>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Verified sales needed</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100000"
+                  value={challenge.target_sales}
+                  onChange={(e) => setChallenge({ ...challenge, target_sales: Math.max(1, Number(e.target.value || 1)) })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unlock level name</label>
+                <input
+                  value={challenge.unlock_label}
+                  onChange={(e) => setChallenge({ ...challenge, unlock_label: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Challenge description</label>
+                <textarea
+                  rows={3}
+                  value={challenge.description_template}
+                  onChange={(e) => setChallenge({ ...challenge, description_template: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-y"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">Use <code>{{'{{target_sales}}'}}</code> to keep the text synchronized with the sales target.</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
