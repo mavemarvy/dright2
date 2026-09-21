@@ -1,0 +1,22 @@
+name: Subscription Capacity Branch Build
+
+on:
+  push:
+    branches:
+      - feature/subscription-listing-capacity-v2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build
