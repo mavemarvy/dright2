@@ -6,8 +6,8 @@ alter table public.dright_official_store_settings
 alter table public.dright_starter_product_settings
   add column if not exists marketplace_product_id uuid references public.products(id) on delete set null;
 
-create or replace function public.sync_dright_starter_marketplace_product()
-returns trigger
+create or replace function public.sync_dright_starter_marketplace_product_now()
+returns uuid
 language plpgsql
 security definer
 set search_path=public
@@ -29,7 +29,7 @@ begin
   limit 1;
 
   if v_settings.singleton is null then
-    return coalesce(new, old);
+    return v_product;
   end if;
 
   v_owner := v_store.owner_user_id;
@@ -52,7 +52,7 @@ begin
   end if;
 
   if v_owner is null then
-    return coalesce(new, old);
+    return v_product;
   end if;
 
   v_product := v_settings.marketplace_product_id;
@@ -160,12 +160,26 @@ begin
     where id=v_product;
   end if;
 
-  return coalesce(new, old);
+  return v_product;
 end;
 $$;
 
-revoke all on function public.sync_dright_starter_marketplace_product() from public,anon,authenticated;
-grant execute on function public.sync_dright_starter_marketplace_product() to service_role;
+revoke all on function public.sync_dright_starter_marketplace_product_now() from public,anon,authenticated;
+grant execute on function public.sync_dright_starter_marketplace_product_now() to service_role;
+
+create or replace function public.sync_dright_starter_marketplace_product_trigger()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $
+begin
+  perform public.sync_dright_starter_marketplace_product_now();
+  return new;
+end;
+$;
+
+revoke all on function public.sync_dright_starter_marketplace_product_trigger() from public,anon,authenticated;
 
 drop trigger if exists sync_dright_starter_marketplace_product_trigger
 on public.dright_starter_product_settings;
@@ -176,12 +190,12 @@ after insert or update of
   included_trial_days,is_enabled,public_visible,guest_only,
   official_badge_enabled,official_rating_enabled,official_rating
 on public.dright_starter_product_settings
-for each row execute function public.sync_dright_starter_marketplace_product();
+for each row execute function public.sync_dright_starter_marketplace_product_trigger();
 
 -- Seed/synchronize the canonical catalog mirror now.
-do $$
+do $
 begin
-  perform public.sync_dright_starter_marketplace_product();
-end $$;
+  perform public.sync_dright_starter_marketplace_product_now();
+end $;
 
 commit;
