@@ -345,6 +345,57 @@ export default function AdminDrightStarterProductSettings() {
           </div>
         </div>
 
+        <div className="mt-4 rounded-2xl border border-gray-200 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Starter product images</p>
+              <p className="text-xs text-gray-500 mt-0.5">Upload a real cover/gallery for Starter Access. The first image becomes the marketplace cover.</p>
+            </div>
+            <div>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => addStarterImages(e.target.files)}
+              />
+              <button
+                type="button"
+                disabled={uploadingImages}
+                onClick={() => imageInputRef.current?.click()}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 disabled:opacity-50"
+              >
+                {uploadingImages ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+                {uploadingImages ? 'Uploading…' : 'Upload images'}
+              </button>
+            </div>
+          </div>
+
+          {product.image_urls.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+              {product.image_urls.map((url, index) => (
+                <div key={url + index} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeStarterImage(index)}
+                    className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1"
+                    aria-label="Remove Starter image"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                  {index === 0 && <span className="absolute left-2 bottom-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black">COVER</span>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-dashed border-gray-200 p-5 text-center text-xs text-gray-500">
+              No Starter image uploaded yet. The legacy DRIGHT logo fallback remains until you add one.
+            </div>
+          )}
+        </div>
+
         <div className="grid sm:grid-cols-2 gap-4 mt-4">
           <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
             <div>
