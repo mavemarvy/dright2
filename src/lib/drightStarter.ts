@@ -25,6 +25,8 @@ export interface DrightStarterProduct {
   official_rating_enabled: boolean;
   official_rating: number;
   benefits: string[];
+  image_url: string | null;
+  image_urls: string[];
 }
 
 export interface DrightStarterPublicSettings {
@@ -64,6 +66,8 @@ export interface DrightStarterAdminSettings {
     official_rating_enabled: boolean;
     official_rating: number;
     benefits: string[];
+    image_url: string | null;
+    image_urls: string[];
     updated_at: string;
     updated_by: string | null;
   };
@@ -121,6 +125,8 @@ export async function fetchDrightStarterProduct(): Promise<DrightStarterPublicSe
       affiliate_commission_percent: Number(payload.product?.affiliate_commission_percent ?? 0),
       included_trial_days: Number(payload.product?.included_trial_days ?? 0),
       official_rating: Number(payload.product?.official_rating ?? 0),
+      image_url: payload.product?.image_url ? String(payload.product.image_url) : null,
+      image_urls: Array.isArray(payload.product?.image_urls) ? payload.product.image_urls.map(String) : [],
       description: renderDrightStarterTemplate(
         String(payload.product?.description || ''),
         Number(payload.product?.included_trial_days ?? 0),
@@ -155,6 +161,8 @@ export async function getAdminDrightStarterSettings(): Promise<DrightStarterAdmi
       included_trial_days: Number(payload.product?.included_trial_days ?? 0),
       official_rating: Number(payload.product?.official_rating ?? 0),
       benefits: Array.isArray(payload.product?.benefits) ? payload.product.benefits.map(String) : [],
+      image_url: payload.product?.image_url ? String(payload.product.image_url) : null,
+      image_urls: Array.isArray(payload.product?.image_urls) ? payload.product.image_urls.map(String) : [],
     },
   };
 }
@@ -187,6 +195,8 @@ export async function updateAdminDrightStarterSettings(
       official_rating_enabled: settings.product.official_rating_enabled,
       official_rating: Number(settings.product.official_rating || 0),
       benefits: settings.product.benefits,
+      image_url: settings.product.image_url,
+      image_urls: settings.product.image_urls,
     },
   });
   if (error) throw error;
