@@ -280,7 +280,7 @@ export default function AdminDrightStarterProductSettings() {
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-y"
             />
             <p className="text-[11px] text-gray-500 mt-1">
-              Use <code>{{'{{trial_days}}'}}</code> anywhere in the copy. It automatically follows Included access days.
+              Use <code>{'{{trial_days}}'}</code> anywhere in the copy. It automatically follows Included access days.
             </p>
           </div>
           <div className="sm:col-span-2">
@@ -298,7 +298,7 @@ export default function AdminDrightStarterProductSettings() {
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-y"
               placeholder="One benefit per line"
             />
-            <p className="text-[11px] text-gray-500 mt-1">One benefit per line. <code>{{'{{trial_days}}'}}</code> is dynamic.</p>
+            <p className="text-[11px] text-gray-500 mt-1">One benefit per line. <code>{'{{trial_days}}'}</code> is dynamic.</p>
           </div>
         </div>
 
@@ -433,7 +433,7 @@ export default function AdminDrightStarterProductSettings() {
                   onChange={(e) => setChallenge({ ...challenge, description_template: e.target.value })}
                   className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-y"
                 />
-                <p className="text-[11px] text-gray-500 mt-1">Use <code>{{'{{target_sales}}'}}</code> to keep the text synchronized with the sales target.</p>
+                <p className="text-[11px] text-gray-500 mt-1">Use <code>{'{{target_sales}}'}</code> to keep the text synchronized with the sales target.</p>
               </div>
             </div>
           </div>
