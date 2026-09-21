@@ -79,7 +79,7 @@ begin
       '/dright-logo.webp',
       v_settings.category,
       v_settings.is_enabled and v_settings.public_visible,
-      'approved',
+      'pending',
       0,
       0,
       v_settings.affiliate_commission_percent,
@@ -129,8 +129,6 @@ begin
         commission_rate=0,
         category=v_settings.category,
         is_active=v_settings.is_enabled and v_settings.public_visible,
-        approval_status='approved',
-        rejection_reason=null,
         admin_task_percent=0,
         sales_team_task_percent=0,
         affiliate_commission_percent=v_settings.affiliate_commission_percent,
@@ -156,7 +154,6 @@ begin
         ),
         is_featured=true,
         is_sponsored=false,
-        reviewed_at=coalesce(reviewed_at,now()),
         updated_at=now()
     where id=v_product;
   end if;
