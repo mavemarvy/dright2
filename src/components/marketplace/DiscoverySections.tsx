@@ -55,7 +55,7 @@ async function enrichWithSellers(products: MarketplaceProduct[]): Promise<Market
 
 // ─── Discovery Sections (no ranking labels) ───────────────────────────────────
 
-function useDiscoverySections() {
+function useDiscoverySections(showRecentlyViewed: boolean) {
   const [sections, setSections] = useState<{ id: string; products: MarketplaceProduct[] }[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -78,16 +78,18 @@ function useDiscoverySections() {
       if (topRated.length > 0) results.push({ id: 'top_rated', products: topRated });
       if (bestSellers.length > 0) results.push({ id: 'best_sellers', products: bestSellers });
 
-      const viewedIds = recentlyViewed.length > 0 ? recentlyViewed : getRecentlyViewedIds();
-      if (viewedIds.length > 0) {
-        const viewedProducts = await enrichWithSellers(await fetchProductsByIds(viewedIds.slice(0, 10)));
-        if (viewedProducts.length > 0) results.push({ id: 'recently_viewed', products: viewedProducts });
+      if (showRecentlyViewed) {
+        const viewedIds = recentlyViewed.length > 0 ? recentlyViewed : getRecentlyViewedIds();
+        if (viewedIds.length > 0) {
+          const viewedProducts = await enrichWithSellers(await fetchProductsByIds(viewedIds.slice(0, 10)));
+          if (viewedProducts.length > 0) results.push({ id: 'recently_viewed', products: viewedProducts });
+        }
       }
 
       setSections(results);
       setLoading(false);
     })();
-  }, [user?.id, recentlyViewed]);
+  }, [user?.id, recentlyViewed, showRecentlyViewed]);
 
   return { sections, loading };
 }
@@ -292,9 +294,15 @@ function PersonalizedFeedSections({ sections }: { sections: RecommendationSectio
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function DiscoverySections() {
+export default function DiscoverySections({
+  showRecommended = true,
+  showRecentlyViewed = true,
+}: {
+  showRecommended?: boolean;
+  showRecentlyViewed?: boolean;
+}) {
   const { user } = useAuth();
-  const { sections: staticSections, loading: staticLoading } = useDiscoverySections();
+  const { sections: staticSections, loading: staticLoading } = useDiscoverySections(showRecentlyViewed);
   const { sections: personalizedSections, loading: personalizedLoading } = usePersonalizedFeed(user?.id);
   const { products: sponsoredProducts, campaignByProduct } = useSponsoredMarketplaceProducts(user?.id);
 
@@ -328,7 +336,7 @@ export default function DiscoverySections() {
         </div>
       )}
 
-      {user && personalizedSections.length > 0 && (
+      {showRecommended && user && personalizedSections.length > 0 && (
         <div className="bg-gradient-to-br from-primary-50 to-blue-50 rounded-3xl p-5 md:p-6">
           <div className="flex items-center gap-2 mb-5">
             <div className="w-9 h-9 rounded-xl bg-primary-600 flex items-center justify-center">
@@ -344,7 +352,9 @@ export default function DiscoverySections() {
       )}
 
       <div className="space-y-8">
-        {staticSections.map(section => (
+        {staticSections
+          .filter(section => showRecentlyViewed || section.id !== 'recently_viewed')
+          .map(section => (
           <ProductRow
             key={section.id}
             products={section.products}
