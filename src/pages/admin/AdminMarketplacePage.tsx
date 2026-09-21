@@ -57,7 +57,23 @@ interface MarketplaceUiSettings {
   key: string;
   categories_section_visible: boolean;
   categories_default_collapsed: boolean;
+  recommended_section_visible: boolean;
+  recently_viewed_section_visible: boolean;
+  continue_browsing_section_visible: boolean;
+  new_arrivals_section_visible: boolean;
 }
+
+type MarketplaceDiscoveryVisibilityKey =
+  | 'recommended_section_visible'
+  | 'recently_viewed_section_visible'
+  | 'continue_browsing_section_visible'
+  | 'new_arrivals_section_visible';
+
+type MarketplaceDiscoverySection =
+  | 'recommended'
+  | 'recently_viewed'
+  | 'continue_browsing'
+  | 'new_arrivals';
 
 interface ListingEngineSettings {
   id: boolean;
@@ -110,6 +126,10 @@ export default function AdminMarketplacePage() {
     key: 'default',
     categories_section_visible: true,
     categories_default_collapsed: true,
+    recommended_section_visible: true,
+    recently_viewed_section_visible: true,
+    continue_browsing_section_visible: true,
+    new_arrivals_section_visible: true,
   });
   const [canManageCategories, setCanManageCategories] = useState(false);
   const [categorySavingId, setCategorySavingId] = useState<string | null>(null);
@@ -317,6 +337,30 @@ export default function AdminMarketplacePage() {
         categories_default_collapsed: defaultCollapsed,
       }));
     }
+    setCategorySavingId(null);
+  };
+
+  const handleDiscoverySectionVisibility = async (
+    section: MarketplaceDiscoverySection,
+    key: MarketplaceDiscoveryVisibilityKey,
+  ) => {
+    if (!canManageCategories) return;
+
+    const nextVisible = !categorySettings[key];
+    setCategorySavingId(`discovery:${section}`);
+    setCategoryError(null);
+
+    const { error } = await supabase.rpc('set_marketplace_discovery_section_visibility', {
+      p_section: section,
+      p_visible: nextVisible,
+    });
+
+    if (error) {
+      setCategoryError(error.message);
+    } else {
+      setCategorySettings(prev => ({ ...prev, [key]: nextVisible }));
+    }
+
     setCategorySavingId(null);
   };
 
@@ -672,6 +716,58 @@ export default function AdminMarketplacePage() {
                   {categorySettings.categories_default_collapsed ? 'Collapsed' : 'Expanded'}
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100">Marketplace Discovery Sections</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Independently show or hide these marketplace sections for users. Other discovery sections remain unchanged.
+                </p>
+              </div>
+              <Eye className="w-5 h-5 text-gray-400 shrink-0" />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              {([
+                ['recommended', 'recommended_section_visible', 'Recommended For You', 'Personalized recommendations based on user activity.'],
+                ['recently_viewed', 'recently_viewed_section_visible', 'Recently Viewed', 'The recently viewed product row inside discovery.'],
+                ['continue_browsing', 'continue_browsing_section_visible', 'Continue Browsing', 'The separate continue-browsing history section.'],
+                ['new_arrivals', 'new_arrivals_section_visible', 'New Arrivals', 'Fresh listings recently published.'],
+              ] as const).map(([section, key, label, description]) => {
+                const visible = categorySettings[key];
+                const savingKey = `discovery:${section}`;
+                return (
+                  <div
+                    key={section}
+                    className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">{label}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={categorySavingId === savingKey}
+                      onClick={() => void handleDiscoverySectionVisibility(section, key)}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 min-w-[88px] justify-center transition-colors disabled:opacity-50 ${
+                        visible
+                          ? 'bg-success text-white'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                      }`}
+                    >
+                      {categorySavingId === savingKey
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : visible
+                          ? <Eye className="w-3.5 h-3.5" />
+                          : <EyeOff className="w-3.5 h-3.5" />}
+                      {visible ? 'Visible' : 'Hidden'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
