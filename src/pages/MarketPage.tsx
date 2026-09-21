@@ -685,7 +685,7 @@ export default function MarketPage() {
       </div>
 
       <AnimatePresence>
-        {showCategorySection && (
+        {showCategorySection && !starterAffiliateProgress?.marketplace_limited && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mt-6">
             <CategorySection onCategorySelect={handleCategorySelect} categoryCounts={categoryCounts} />
           </motion.div>
@@ -695,7 +695,7 @@ export default function MarketPage() {
       {/* First-party DRIGHT inventory is independent from sponsored/featured seller visibility. */}
       <DrightOfficialStoreMarketplaceCard />
 
-      {isBrowsing && (
+      {isBrowsing && !starterAffiliateProgress?.marketplace_limited && (
         <div className="mt-8">
           <DiscoverySections
             showRecommended={marketplaceSectionVisibility.recommended}
@@ -711,7 +711,7 @@ export default function MarketPage() {
       )}
 
       <div className="mt-8" id="marketplace-products">
-        {filters.sortBy === 'trending' && <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />}
+        {filters.sortBy === 'trending' && !starterAffiliateProgress?.marketplace_limited && <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />}
 
         <div className="flex items-center justify-between mb-4 mt-4">
           <div>
@@ -731,7 +731,7 @@ export default function MarketPage() {
           </div>
         </div>
 
-        {contextualPlacement && <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />}
+        {contextualPlacement && !starterAffiliateProgress?.marketplace_limited && <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />}
 
         {loading && (
           <div className={`grid ${viewMode === 'grid' ? MARKETPLACE_GRID_CLASSES[listingCardSize] : 'grid-cols-1'} gap-3 sm:gap-5 mt-6`}>
