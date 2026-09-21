@@ -340,8 +340,10 @@ export default function AdminSystemSettingsPage() {
 
               <label className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Free trial</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Default is 90 days (about three months).</p>
+                  <p className="text-sm font-semibold text-gray-900">Standard signup free trial</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Default is 30 days for users who did not claim DRIGHT Starter Access. Starter buyers use the independent Starter-product access duration below.
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -357,7 +359,7 @@ export default function AdminSystemSettingsPage() {
               </label>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Trial Days</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Standard Trial Days</label>
                 <input
                   type="number"
                   min="0"
