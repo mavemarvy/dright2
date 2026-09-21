@@ -242,10 +242,11 @@ export async function getDrightStarterSignupPolicy(): Promise<{
 }> {
   const { data, error } = await supabase.rpc('get_public_dright_starter_signup_policy');
   if (error || !data || typeof data !== 'object') {
-    // Fail safe for the default professional roles if the public policy cannot be loaded.
+    // Standard signup must remain available even if the optional Starter-policy lookup fails.
+    // The paid Starter funnel still performs its own server-verified payment gate.
     return {
-      starterProductRequired: true,
-      requiredProfiles: ['service_provider', 'affiliate', 'marketer', 'employer', 'task_creator', 'task_worker'],
+      starterProductRequired: false,
+      requiredProfiles: [],
     };
   }
   const payload = data as Record<string, unknown>;
