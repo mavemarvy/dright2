@@ -20,6 +20,7 @@ import {
 import { formatCurrencyValue } from '../lib/currency';
 import { resolveAndRecordTracking } from '../lib/affiliate';
 import SeoHead from '../components/SeoHead';
+import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 
 export default function DrightStarterProductPage() {
   const { user, profile } = useAuth();
@@ -198,6 +199,16 @@ export default function DrightStarterProductPage() {
                     ))}
                   </div>
                 </div>
+
+                {product.marketplace_product_id && (
+                  <div className="mt-5 text-slate-900">
+                    <ListingMarketingMaterialsPanel
+                      kind="product"
+                      listingId={product.marketplace_product_id}
+                      title="Starter affiliate marketing kit"
+                    />
+                  </div>
+                )}
 
                 <div className="mt-5 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-5">
                   <h3 className="font-bold text-blue-100">Affiliate test product</h3>
