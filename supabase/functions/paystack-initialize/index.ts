@@ -145,13 +145,54 @@ Deno.serve(async (req: Request) => {
       const planAmount = Number(plan.amount);
       const planCurrency = String(plan.currency || "NGN").toUpperCase();
       if (!Number.isFinite(planAmount) || planAmount <= 0) return json({ error: "Invalid subscription plan amount" }, 400);
-      if (planCurrency !== "NGN") return json({ error: "This Paystack flow currently supports NGN subscription plans only" }, 400);
+      if (!["NGN", "USD"].includes(planCurrency)) {
+        return json({ error: `Paystack subscription checkout currently supports NGN or USD-priced plans, not ${planCurrency}` }, 400);
+      }
       purpose = subscriptionPurpose(plan.plan_type);
       referenceId = plan.id;
       amountMinor = Math.round(planAmount * 100);
       paymentCurrency = planCurrency;
-      if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) return json({ error: "Payment amount does not match the current subscription price", amount: planAmount }, 409);
-      canonicalMetadata = { ...requestedMetadata, plan_id: plan.id, plan_slug: plan.slug, plan_name: plan.name, plan_type: plan.plan_type, plan_interval: plan.interval, user_id: user.id, authoritative_amount: planAmount };
+      if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) {
+        return json({ error: "Payment amount does not match the current subscription price", amount: planAmount, currency: planCurrency }, 409);
+      }
+
+      if (planCurrency === "USD") {
+        const fx = await getUsdToNgnRate();
+        const gatewayAmount = Math.round(planAmount * fx.rate * 100) / 100;
+        gatewayAmountMinor = Math.round(gatewayAmount * 100);
+        gatewayCurrency = "NGN";
+        canonicalMetadata = {
+          ...requestedMetadata,
+          plan_id: plan.id,
+          plan_slug: plan.slug,
+          plan_name: plan.name,
+          plan_type: plan.plan_type,
+          plan_interval: plan.interval,
+          user_id: user.id,
+          authoritative_amount: planAmount,
+          authoritative_currency: planCurrency,
+          gateway_amount: gatewayAmount,
+          gateway_currency: gatewayCurrency,
+          fx_rate: fx.rate,
+          fx_source: fx.source,
+        };
+      } else {
+        gatewayAmountMinor = amountMinor;
+        gatewayCurrency = "NGN";
+        canonicalMetadata = {
+          ...requestedMetadata,
+          plan_id: plan.id,
+          plan_slug: plan.slug,
+          plan_name: plan.name,
+          plan_type: plan.plan_type,
+          plan_interval: plan.interval,
+          user_id: user.id,
+          authoritative_amount: planAmount,
+          authoritative_currency: planCurrency,
+          gateway_amount: planAmount,
+          gateway_currency: gatewayCurrency,
+        };
+      }
     } else if (purpose === "listing_capacity") {
       const packId = requestedReferenceId
         || (typeof requestedMetadata.pack_id === "string" ? requestedMetadata.pack_id.trim() : "");
