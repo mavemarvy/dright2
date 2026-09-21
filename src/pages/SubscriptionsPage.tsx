@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Check, Crown, Sparkles, Zap, TrendingUp, CreditCard } from 'lucide-react';
+import { Loader2, Check, Crown, Sparkles, Zap, TrendingUp, CreditCard, Clock3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../lib/currency';
 import { useSubscriptionPlans, useUserSubscriptions, cancelSubscription, type SubscriptionPlan } from '../lib/paystackService';
@@ -52,6 +52,30 @@ export default function SubscriptionsPage() {
 
   const grouped = plans.reduce((acc, p) => { (acc[p.plan_type] = acc[p.plan_type] || []).push(p); return acc; }, {} as Record<string, SubscriptionPlan[]>);
 
+  const accessTimer = platformAccess?.subscription_active && platformAccess.subscription_period_end
+    ? {
+        label: platformAccess.subscription_plan_name || 'DRIGHT Platform Access',
+        type: 'Subscription',
+        used: Number(platformAccess.subscription_days_used || 0),
+        remaining: Number(platformAccess.subscription_days_remaining || 0),
+        total: Math.max(1, Number(platformAccess.subscription_days_used || 0) + Number(platformAccess.subscription_days_remaining || 0)),
+        end: platformAccess.subscription_period_end,
+      }
+    : platformAccess?.trial_active && platformAccess.trial_end
+      ? {
+          label: platformAccess.trial_source === 'dright_starter_purchase' ? 'DRIGHT Starter Access' : 'Professional Access Trial',
+          type: platformAccess.trial_source === 'dright_starter_purchase' ? 'Verified Starter Trial' : 'Free Trial',
+          used: Number(platformAccess.trial_days_used || 0),
+          remaining: Number(platformAccess.trial_days_remaining || 0),
+          total: Math.max(1, Number(platformAccess.trial_total_days || platformAccess.trial_days || 1)),
+          end: platformAccess.trial_end,
+        }
+      : null;
+
+  const accessProgress = accessTimer
+    ? Math.min(100, Math.max(0, (accessTimer.used / accessTimer.total) * 100))
+    : 0;
+
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -64,12 +88,12 @@ export default function SubscriptionsPage() {
 
       {platformAccess && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-primary-600">DRIGHT Platform Access</p>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mt-1">
                 {platformAccess.access_state === 'trial'
-                  ? 'Professional access free trial'
+                  ? (platformAccess.trial_source === 'dright_starter_purchase' ? 'DRIGHT Starter access active' : 'Professional access free trial')
                   : platformAccess.access_state === 'subscribed'
                     ? 'Platform subscription active'
                     : platformAccess.access_state === 'subscription_required'
@@ -78,15 +102,33 @@ export default function SubscriptionsPage() {
                         ? 'Platform subscription is being configured'
                         : 'Buyer access is free'}
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                {platformAccess.access_state === 'trial' && platformAccess.trial_end
-                  ? `Your professional-role trial runs until ${new Date(platformAccess.trial_end).toLocaleDateString()}.`
-                  : platformAccess.access_state === 'subscription_required'
-                    ? 'Your free professional-access period has ended. Subscribe to use the paid-role features selected by Admin.'
+
+              {accessTimer ? (
+                <div className="mt-3 max-w-xl">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-gray-700 dark:text-gray-200">
+                      <Clock3 className="w-3.5 h-3.5 text-primary-500" />
+                      {accessTimer.label} · {accessTimer.type}
+                    </span>
+                    <span className="text-gray-500">{accessTimer.remaining} day{accessTimer.remaining === 1 ? '' : 's'} remaining</span>
+                  </div>
+                  <div className="mt-2 h-2.5 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-primary-500" style={{ width: `${accessProgress}%` }} />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-gray-400">
+                    <span>{accessTimer.used} days used</span>
+                    <span>Ends {new Date(accessTimer.end).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mt-1">
+                  {platformAccess.access_state === 'subscription_required'
+                    ? 'Your professional-access period has ended. Subscribe to use the paid-role features selected by Admin.'
                     : platformAccess.access_state === 'subscribed'
-                      ? 'Your selected professional-role tools remain available while this subscription is active.'
+                      ? 'Your professional-role tools remain available while this subscription is active.'
                       : 'Browsing, buying, purchases, and buyer features remain free.'}
-              </p>
+                </p>
+              )}
               <p className="text-xs text-emerald-600 mt-2 font-medium">Buyer access always remains free.</p>
             </div>
 
