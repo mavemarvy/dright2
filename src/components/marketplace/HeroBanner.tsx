@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Tag, Plus, Flame, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Tag, Plus, Flame, ArrowRight, BadgeCheck } from 'lucide-react';
+import { DrightMark } from '../DrightBrand';
 import { useActiveBanners, useTrackBannerEvent } from '../../lib/bannerHooks';
 import { resolveBannerUrl } from '../../lib/bannerTypes';
 import type { MarketplaceBanner } from '../../lib/bannerTypes';
@@ -191,6 +192,17 @@ export default function HeroBanner({ onBrowseCategories }: HeroBannerProps) {
               className="inline-flex items-center gap-2 px-5 py-3 bg-white text-primary-700 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors shadow-lg">
               <Plus className="w-4 h-4" /> Sell Now
             </Link>
+            <Link
+              to="/dright"
+              className="inline-flex items-center gap-2 px-4 py-3 bg-slate-950/85 backdrop-blur border border-emerald-300/30 text-white rounded-xl font-bold text-sm hover:bg-slate-950 transition-colors shadow-lg"
+              aria-label="Official DRIGHT Shop"
+            >
+              <DrightMark size={24} />
+              <span className="leading-tight">
+                <span className="block text-[9px] uppercase tracking-[0.16em] text-emerald-300">Verified</span>
+                <span className="inline-flex items-center gap-1">Official DRIGHT Shop <BadgeCheck className="w-3.5 h-3.5 text-emerald-300" /></span>
+              </span>
+            </Link>
           </div>
         </div>
       </div>
@@ -240,6 +252,17 @@ export default function HeroBanner({ onBrowseCategories }: HeroBannerProps) {
           <Link to="/upload-product"
             className="inline-flex items-center gap-2 px-5 py-3 bg-white text-primary-700 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors shadow-lg">
             <Plus className="w-4 h-4" /> Sell Now
+          </Link>
+          <Link
+            to="/dright"
+            className="inline-flex items-center gap-2 px-4 py-3 bg-slate-950/85 backdrop-blur border border-emerald-300/30 text-white rounded-xl font-bold text-sm hover:bg-slate-950 transition-colors shadow-lg"
+            aria-label="Official DRIGHT Shop"
+          >
+            <DrightMark size={24} />
+            <span className="leading-tight">
+              <span className="block text-[9px] uppercase tracking-[0.16em] text-emerald-300">Verified</span>
+              <span className="inline-flex items-center gap-1">Official DRIGHT Shop <BadgeCheck className="w-3.5 h-3.5 text-emerald-300" /></span>
+            </span>
           </Link>
         </div>
       </div>
