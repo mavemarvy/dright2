@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, Copy, ExternalLink, Rocket, Star, WalletCards } from 'lucide-react';
+import { BadgeCheck, Copy, ExternalLink, Rocket, Star, Target, WalletCards } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { canUsePlatformFeature } from '../lib/platformAccess';
 import {
   buildDrightStarterAffiliateLink,
   fetchDrightStarterProduct,
+  getMyDrightStarterAffiliateProgress,
+  renderDrightStarterTemplate,
+  type DrightStarterAffiliateProgress,
   type DrightStarterPublicSettings,
 } from '../lib/drightStarter';
 import { formatCurrencyValue } from '../lib/currency';
@@ -14,11 +17,18 @@ export default function DrightStarterProductCard({ className = '' }: { className
   const { user, profile } = useAuth();
   const [settings, setSettings] = useState<DrightStarterPublicSettings | null>(null);
   const [canAffiliate, setCanAffiliate] = useState(false);
+  const [progress, setProgress] = useState<DrightStarterAffiliateProgress | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     void fetchDrightStarterProduct().then(setSettings);
-    if (user) void canUsePlatformFeature('affiliate_marketing').then(setCanAffiliate);
+    if (user) {
+      void canUsePlatformFeature('affiliate_marketing').then(setCanAffiliate);
+      void getMyDrightStarterAffiliateProgress().then(setProgress);
+    } else {
+      setCanAffiliate(false);
+      setProgress(null);
+    }
   }, [user]);
 
   if (!settings?.available || !settings.product || !settings.store) return null;
@@ -71,6 +81,44 @@ export default function DrightStarterProductCard({ className = '' }: { className
             <p className="text-2xl font-black">{formatCurrencyValue(product.price, product.currency)}</p>
           </div>
         </div>
+
+        {progress?.applies && progress.enabled && (
+          <div className="mt-5 rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-violet-200 flex items-center gap-1.5">
+                  <Target className="w-4 h-4" /> Starter Affiliate Challenge
+                </p>
+                <p className="text-sm text-violet-100 mt-1">
+                  {renderDrightStarterTemplate(
+                    progress.description_template,
+                    product.included_trial_days,
+                    progress.target_sales,
+                  )}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-black">
+                {progress.sales}/{progress.target_sales}
+              </span>
+            </div>
+            <div className="mt-3 h-2 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-violet-300 transition-all"
+                style={{ width: `${Math.min(100, progress.target_sales > 0 ? (progress.sales / progress.target_sales) * 100 : 0)}%` }}
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-violet-200">
+              <span>
+                {progress.completed
+                  ? `${progress.unlock_label} unlocked`
+                  : `${progress.remaining_sales} verified sale${progress.remaining_sales === 1 ? '' : 's'} remaining`}
+              </span>
+              <Link to="/challenges" className="font-bold text-white hover:underline">
+                View challenge
+              </Link>
+            </div>
+          </div>
+        )}
 
         <div className="mt-5 flex flex-col sm:flex-row gap-3">
           <Link
