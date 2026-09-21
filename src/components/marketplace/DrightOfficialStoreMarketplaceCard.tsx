@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BadgeCheck, Rocket, ShieldCheck, Store, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { formatCurrencyValue } from '../../lib/currency';
+import { formatDisplayCurrency } from '../../lib/currency';
 import { DrightMark } from '../DrightBrand';
 
 interface OfficialStorePayload {
@@ -104,7 +104,7 @@ export default function DrightOfficialStoreMarketplaceCard() {
                     <p className="text-xs text-blue-200/80 mt-1 line-clamp-1">{starter.subtitle}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-lg font-black">{formatCurrencyValue(starter.price, starter.currency)}</p>
+                    <p className="text-lg font-black">{formatDisplayCurrency(starter.price, starter.currency)}</p>
                     <p className="text-[10px] text-emerald-200 font-semibold">{starter.affiliate_commission_percent}% affiliate</p>
                   </div>
                 </div>
