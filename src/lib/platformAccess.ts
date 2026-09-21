@@ -90,7 +90,7 @@ export async function getMyPlatformAccess(): Promise<PlatformAccessStatus | null
     price: Number(row.price ?? 0),
     currency: String(row.currency ?? 'USD'),
     trial_enabled: Boolean(row.trial_enabled),
-    trial_days: Number(row.trial_days ?? 90),
+    trial_days: Number(row.trial_days ?? 30),
     trial_end: row.trial_end ? String(row.trial_end) : null,
     trial_active: Boolean(row.trial_active),
     subscription_active: Boolean(row.subscription_active),
@@ -125,7 +125,7 @@ export async function getAdminPlatformAccessPolicy(): Promise<PlatformAccessAdmi
     settings: {
       ...payload.settings,
       monthly_price: Number(payload.settings?.monthly_price ?? 0),
-      trial_days: Number(payload.settings?.trial_days ?? 90),
+      trial_days: Number(payload.settings?.trial_days ?? 30),
       grace_period_days: Number(payload.settings?.grace_period_days ?? 3),
     },
     roles: Array.isArray(payload.roles)
