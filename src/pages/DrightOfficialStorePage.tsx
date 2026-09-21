@@ -3,16 +3,22 @@ import { Link } from 'react-router-dom';
 import { BadgeCheck, ChevronRight, Loader2, ShieldCheck, Store, Users } from 'lucide-react';
 import { DrightBrand, DrightMark } from '../components/DrightBrand';
 import { fetchDrightStarterProduct, type DrightStarterPublicSettings } from '../lib/drightStarter';
+import { fetchPublicDrightOfficialProducts, type DrightOfficialProduct } from '../lib/drightOfficialStore';
 import { formatDisplayCurrency } from '../lib/currency';
 import SeoHead from '../components/SeoHead';
 
 export default function DrightOfficialStorePage() {
   const [settings, setSettings] = useState<DrightStarterPublicSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [officialProducts, setOfficialProducts] = useState<DrightOfficialProduct[]>([]);
 
   useEffect(() => {
-    void fetchDrightStarterProduct().then((value) => {
+    void Promise.all([
+      fetchDrightStarterProduct(),
+      fetchPublicDrightOfficialProducts(),
+    ]).then(([value, products]) => {
       setSettings(value);
+      setOfficialProducts(products);
       setLoading(false);
     });
   }, []);
@@ -75,11 +81,15 @@ export default function DrightOfficialStorePage() {
             className="group block overflow-hidden rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-shadow"
           >
             <div className="grid md:grid-cols-[220px_1fr]">
-              <div className="min-h-[210px] bg-gradient-to-br from-slate-950 via-slate-900 to-primary-950 flex items-center justify-center p-8">
-                <div className="text-center">
-                  <DrightMark size={100} className="mx-auto" />
-                  <p className="text-white font-black mt-4 tracking-[0.14em] text-sm">STARTER ACCESS</p>
-                </div>
+              <div className="min-h-[210px] bg-gradient-to-br from-slate-950 via-slate-900 to-primary-950 flex items-center justify-center overflow-hidden">
+                {product.image_url && product.image_url !== '/dright-logo.webp' ? (
+                  <img src={product.image_url} alt={product.title} className="w-full h-full min-h-[210px] object-cover" />
+                ) : (
+                  <div className="text-center p-8">
+                    <DrightMark size={100} className="mx-auto" />
+                    <p className="text-white font-black mt-4 tracking-[0.14em] text-sm">STARTER ACCESS</p>
+                  </div>
+                )}
               </div>
               <div className="p-6 sm:p-8">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -103,6 +113,44 @@ export default function DrightOfficialStorePage() {
               </div>
             </div>
           </Link>
+
+          {officialProducts.length > 0 && (
+            <div className="mt-10">
+              <div className="mb-5">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-600">More from DRIGHT</p>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white mt-1">Official products</h2>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {officialProducts.map((item) => (
+                  <Link
+                    key={item.id}
+                    to={`/product/${item.marketplace_product_id}`}
+                    className="group rounded-2xl overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:shadow-lg transition-shadow"
+                  >
+                    <div className="aspect-[4/3] bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center"><DrightMark size={72} /></div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wide text-primary-600">{item.category}</span>
+                        {item.official_badge_enabled && <BadgeCheck className="w-4 h-4 text-emerald-500" />}
+                      </div>
+                      <h3 className="font-black text-gray-900 dark:text-white mt-2 line-clamp-2">{item.name}</h3>
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.subtitle || item.description}</p>
+                      <div className="mt-4 flex items-center justify-between gap-2">
+                        <span className="font-black text-gray-900 dark:text-white">{formatDisplayCurrency(item.price, item.currency)}</span>
+                        <span className="text-xs text-emerald-700 dark:text-emerald-300">{item.affiliate_commission_percent}% affiliate</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </main>
     </>
