@@ -309,9 +309,9 @@ export default function AdminSubscriptionsPage() {
                   </select>
                 </label>
                 <label>
-                  <span className="block text-[11px] font-semibold text-gray-500 mb-1">Trial days</span>
-                  <input type="number" min={0} max={730} value={plan.trial_days} onChange={e => updatePlan(plan.id, { trial_days: Number(e.target.value) })}
-                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2 text-sm" />
+                  <span className="block text-[11px] font-semibold text-gray-500 mb-1">Trial days {plan.plan_type === 'platform_access' ? '(use Access Policy above)' : ''}</span>
+                  <input type="number" min={0} max={730} value={plan.plan_type === 'platform_access' ? 0 : plan.trial_days} disabled={plan.plan_type === 'platform_access'} onChange={e => updatePlan(plan.id, { trial_days: Number(e.target.value) })}
+                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2 text-sm disabled:opacity-60" />
                 </label>
               </div>
 
