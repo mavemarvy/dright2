@@ -10,7 +10,7 @@ import {
 import { getProductBadges, type ProductBadge } from '../../lib/marketplace';
 import { ProfileLink } from '../Social';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency, formatCurrencyValue } from '../../lib/currency';
+import { formatCurrency, formatDisplayCurrency } from '../../lib/currency';
 import { getBuyerFacingPrice } from '../../lib/pricing';
 import {
   MARKETPLACE_IMAGE_HEIGHT_CLASSES,
@@ -136,13 +136,13 @@ export default function ProductCard({
     : Number(product.commission_rate || 0);
   const commission = product.is_free ? 0 : (product.price * affiliatePercent) / 100;
   const priceText = isDrightStarter
-    ? formatCurrencyValue(displayPrice, sourceCurrency)
+    ? formatDisplayCurrency(displayPrice, sourceCurrency)
     : formatCurrency(displayPrice);
   const oldPriceText = displayOldPrice
-    ? (isDrightStarter ? formatCurrencyValue(displayOldPrice, sourceCurrency) : formatCurrency(displayOldPrice))
+    ? (isDrightStarter ? formatDisplayCurrency(displayOldPrice, sourceCurrency) : formatCurrency(displayOldPrice))
     : null;
   const commissionText = isDrightStarter
-    ? formatCurrencyValue(commission, sourceCurrency)
+    ? formatDisplayCurrency(commission, sourceCurrency)
     : formatCurrency(commission);
   const officialRating = isDrightStarter && specs.official_rating_enabled
     ? Number(specs.official_rating || 0)
