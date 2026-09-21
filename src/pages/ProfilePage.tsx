@@ -26,6 +26,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { supabase } from '../lib/supabase';
 import SalesTeamSection from '../components/SalesTeamSection';
+import ProfileProgressOverview from '../components/profile/ProfileProgressOverview';
 import { useFollowStats, useFriendsCount } from '../lib/socialHooks';
 import {
   getWalletSummary,
@@ -647,6 +648,8 @@ export default function ProfilePage() {
           )}
         </div>
       </motion.div>
+
+      <ProfileProgressOverview />
 
       {/* Sales Team: Marketer & Advertiser Section */}
       <SalesTeamSection
