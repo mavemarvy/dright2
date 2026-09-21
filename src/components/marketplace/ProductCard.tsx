@@ -235,36 +235,47 @@ export default function ProductCard({
           </div>
         )}
 
-        {/* Quick view on hover */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <button
-            onClick={(e) => { e.preventDefault(); onQuickView(product); }}
-            className="px-4 py-2 bg-white/95 backdrop-blur rounded-xl text-sm font-semibold text-gray-900 shadow-lg hover:bg-white transition-colors flex items-center gap-2"
-          >
-            <Eye className="w-4 h-4" /> Quick View
-          </button>
-        </div>
+        {/* Starter uses its dedicated commercial page so the generic quick-view cannot mislabel currency. */}
+        {!isDrightStarter && (
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+            <button
+              onClick={(e) => { e.preventDefault(); onQuickView(product); }}
+              className="px-4 py-2 bg-white/95 backdrop-blur rounded-xl text-sm font-semibold text-gray-900 shadow-lg hover:bg-white transition-colors flex items-center gap-2"
+            >
+              <Eye className="w-4 h-4" /> Quick View
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="p-4 flex flex-col flex-1">
         {/* Seller info */}
         <div className="flex items-center gap-2 mb-2.5">
-          <ProfileLink
-            userId={product.uploaded_by}
-            username={product.seller_name || undefined}
-            displayName={product.seller_name || undefined}
-            avatar={product.seller_avatar}
-            size="sm"
-            showName={true}
-            showBadge={true}
-            verified={product.seller_verified}
-            className="flex-1 min-w-0"
-          />
-          {product.seller_verified && (
-            <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" aria-label="Verified seller" />
+          {isDrightStarter ? (
+            <Link to="/dright" className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-xs font-bold text-primary-700 dark:text-primary-300">
+              <BadgeCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+              Official DRIGHT Store
+            </Link>
+          ) : (
+            <>
+              <ProfileLink
+                userId={product.uploaded_by}
+                username={product.seller_name || undefined}
+                displayName={product.seller_name || undefined}
+                avatar={product.seller_avatar}
+                size="sm"
+                showName={true}
+                showBadge={true}
+                verified={product.seller_verified}
+                className="flex-1 min-w-0"
+              />
+              {product.seller_verified && (
+                <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" aria-label="Verified seller" />
+              )}
+              <ProductCardFollowButton sellerId={product.uploaded_by} />
+            </>
           )}
-          <ProductCardFollowButton sellerId={product.uploaded_by} />
         </div>
 
         {/* Title */}
