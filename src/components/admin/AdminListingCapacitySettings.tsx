@@ -328,7 +328,11 @@ export default function AdminListingCapacitySettings() {
                     const scope=e.target.value as ListingAllowanceRule['scope_type'];
                     updateRule(index, {
                       scope_type: scope,
-                      listing_type_code: scope === 'listing_type' || scope === 'category' ? (rule.listing_type_code || 'PHYSICAL') : rule.listing_type_code,
+                      listing_type_code: scope === 'global'
+                        ? null
+                        : scope === 'listing_type' || scope === 'category'
+                          ? (rule.listing_type_code || 'PHYSICAL')
+                          : rule.listing_type_code,
                       category_id: scope === 'category' ? rule.category_id : null,
                       role_key: scope === 'role' ? rule.role_key : null,
                       user_id: scope === 'user' ? rule.user_id : null,
