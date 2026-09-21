@@ -114,6 +114,7 @@ interface Product {
   tags?: string[];
   total_sales?: number;
   view_count?: number;
+  specifications?: Record<string, unknown> | null;
 }
 
 export default function ProductDetailPage() {
@@ -177,7 +178,12 @@ export default function ProductDetailPage() {
       const { data: prod, error: prodErr } = await supabase
         .from('products').select('*').eq('id', id!).maybeSingle();
       if (prodErr || !prod) { setError('Product not found'); return; }
-      setProduct(prod as Product);
+      const loadedProduct = prod as Product;
+      if (loadedProduct.specifications?.system_product_kind === 'dright_starter_access') {
+        navigate(`/dright/starter${window.location.search}`, { replace: true });
+        return;
+      }
+      setProduct(loadedProduct);
 
       // Fetch product images from product_images table
       const { data: images } = await supabase
