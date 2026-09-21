@@ -7,7 +7,7 @@ import {
   MessageCircle, Users, Bell, Activity, TrendingUp, Wallet, Target,
   Settings as SettingsGear, HelpCircle, GraduationCap, Trophy,
   ChevronLeft, ChevronRight, Search, Heart, ScrollText,
-  Gift, Newspaper, Rocket, AlertTriangle,
+  Gift, Newspaper, Rocket, AlertTriangle, CreditCard,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage, type TranslationKey } from '../contexts/LanguageContext';
@@ -45,6 +45,7 @@ const primaryNav: NavEntry[] = [
 
 const accountNav: NavEntry[] = [
   { path: '/profile', labelKey: 'profile', icon: User },
+  { path: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
   { path: '/wallet', labelKey: 'wallet', icon: Wallet },
   { path: '/my-orders', labelKey: 'myOrders', icon: Receipt },
   { path: '/wishlist', labelKey: 'savedItems', icon: Heart },
