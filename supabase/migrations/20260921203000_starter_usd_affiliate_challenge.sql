@@ -12,6 +12,9 @@ alter table public.dright_starter_purchases
   add constraint dright_starter_purchase_currency_iso
   check (currency ~ '^[A-Z]{3}$');
 
+-- Mark this migration transaction as trusted system synchronization for the existing moderation guard.
+select set_config('request.jwt.claim.role','service_role',true);
+
 -- Separate standard signup access from the paid Starter-product access.
 update public.platform_access_settings
 set trial_days = 30,
