@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { BadgeCheck, ExternalLink, Loader2, Save, Star, Store, Target, WalletCards } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BadgeCheck, ExternalLink, ImagePlus, Loader2, Save, Star, Store, Target, WalletCards, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   getAdminDrightStarterSettings,
@@ -10,6 +10,8 @@ import {
   type DrightStarterAffiliateChallengeSettings,
 } from '../../lib/drightStarter';
 import { formatCurrencyValue } from '../../lib/currency';
+import { useAuth } from '../../contexts/AuthContext';
+import { uploadOfficialProductImages } from '../../lib/drightOfficialStore';
 
 function Toggle({
   value,
@@ -34,11 +36,14 @@ function Toggle({
 }
 
 export default function AdminDrightStarterProductSettings() {
+  const { user } = useAuth();
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<DrightStarterAdminSettings | null>(null);
   const [challenge, setChallenge] = useState<DrightStarterAffiliateChallengeSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   useEffect(() => {
     void Promise.all([
