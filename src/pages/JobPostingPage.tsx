@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { canCreateListing } from '../lib/listingAllowance';
 import { SUPPORTED_CURRENCIES, formatSalaryRange } from '../lib/currency';
 import type { JobType, WorkSetup, CareerLevel } from '../lib/types';
 import PostUploadConfirmation from '../components/PostUploadConfirmation';
@@ -418,6 +419,12 @@ export default function JobPostingPage() {
     setSaving(true);
     setError(null);
     try {
+      const hasListingCapacity = await canCreateListing('JOB', selectedTaxonomyCategoryId);
+      if (!hasListingCapacity) {
+        setError('Your job listing allowance is exhausted. Buy additional listing capacity from Subscriptions & Capacity or wait for the monthly reset.');
+        setSaving(false);
+        return;
+      }
       const { data: jobData, error: insertError } = await supabase.from('jobs').insert({
         employer_id: user.id,
         title: form.title.trim(),
