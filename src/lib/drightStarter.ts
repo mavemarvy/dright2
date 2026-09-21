@@ -121,7 +121,20 @@ export async function fetchDrightStarterProduct(): Promise<DrightStarterPublicSe
       affiliate_commission_percent: Number(payload.product?.affiliate_commission_percent ?? 0),
       included_trial_days: Number(payload.product?.included_trial_days ?? 0),
       official_rating: Number(payload.product?.official_rating ?? 0),
-      benefits: Array.isArray(payload.product?.benefits) ? payload.product.benefits.map(String) : [],
+      description: renderDrightStarterTemplate(
+        String(payload.product?.description || ''),
+        Number(payload.product?.included_trial_days ?? 0),
+      ),
+      subtitle: renderDrightStarterTemplate(
+        String(payload.product?.subtitle || ''),
+        Number(payload.product?.included_trial_days ?? 0),
+      ),
+      benefits: Array.isArray(payload.product?.benefits)
+        ? payload.product.benefits.map((value: unknown) => renderDrightStarterTemplate(
+            String(value),
+            Number(payload.product?.included_trial_days ?? 0),
+          ))
+        : [],
     },
   };
 }
@@ -165,6 +178,7 @@ export async function updateAdminDrightStarterSettings(
       description: settings.product.description,
       category: settings.product.category,
       price: Number(settings.product.price || 0),
+      currency: String(settings.product.currency || 'USD').toUpperCase(),
       affiliate_commission_percent: Number(settings.product.affiliate_commission_percent || 0),
       included_trial_days: Number(settings.product.included_trial_days || 0),
       is_enabled: settings.product.is_enabled,
@@ -322,4 +336,122 @@ export async function claimPendingDrightStarterPurchase(): Promise<{
     claimed,
     trialEndsAt: payload.trial_ends_at ? String(payload.trial_ends_at) : null,
   };
+}
+
+
+export interface DrightStarterAffiliateChallengeSettings {
+  singleton?: boolean;
+  enabled: boolean;
+  target_sales: number;
+  unlock_label: string;
+  description_template: string;
+  restrict_marketplace_until_complete: boolean;
+  allow_own_listings_while_restricted: boolean;
+  seller_profile_exempt: boolean;
+  updated_at?: string;
+  updated_by?: string | null;
+}
+
+export interface DrightStarterAffiliateProgress {
+  authenticated: boolean;
+  enabled: boolean;
+  applies: boolean;
+  sales: number;
+  target_sales: number;
+  remaining_sales: number;
+  completed: boolean;
+  unlock_label: string;
+  description_template: string;
+  restrict_marketplace_until_complete: boolean;
+  allow_own_listings_while_restricted: boolean;
+  marketplace_limited: boolean;
+  selected_profiles: string[];
+  seller_exempt: boolean;
+}
+
+export function renderDrightStarterTemplate(
+  value: string,
+  trialDays: number,
+  targetSales?: number,
+): string {
+  const days = Math.max(0, Math.floor(Number(trialDays) || 0));
+  const sales = Math.max(0, Math.floor(Number(targetSales) || 0));
+  return String(value || '')
+    .replace(/\{\{trial_days\}\}/gi, String(days))
+    .replace(/\{\{target_sales\}\}/gi, String(sales));
+}
+
+export async function getDrightStarterAffiliateChallenge(): Promise<DrightStarterAffiliateChallengeSettings | null> {
+  const { data, error } = await supabase.rpc('get_public_dright_starter_affiliate_challenge');
+  if (error || !data || typeof data !== 'object') return null;
+  const row = data as Record<string, unknown>;
+  return {
+    enabled: row.enabled === true,
+    target_sales: Number(row.target_sales ?? 20),
+    unlock_label: String(row.unlock_label || 'Level 1 Pro Affiliate'),
+    description_template: String(row.description_template || ''),
+    restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
+    allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
+    seller_profile_exempt: row.seller_profile_exempt !== false,
+  };
+}
+
+export async function getMyDrightStarterAffiliateProgress(): Promise<DrightStarterAffiliateProgress | null> {
+  const { data, error } = await supabase.rpc('get_my_dright_starter_affiliate_progress');
+  if (error || !data || typeof data !== 'object') return null;
+  const row = data as Record<string, unknown>;
+  return {
+    authenticated: row.authenticated === true,
+    enabled: row.enabled === true,
+    applies: row.applies === true,
+    sales: Number(row.sales ?? 0),
+    target_sales: Number(row.target_sales ?? 20),
+    remaining_sales: Number(row.remaining_sales ?? 0),
+    completed: row.completed === true,
+    unlock_label: String(row.unlock_label || 'Level 1 Pro Affiliate'),
+    description_template: String(row.description_template || ''),
+    restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
+    allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
+    marketplace_limited: row.marketplace_limited === true,
+    selected_profiles: Array.isArray(row.selected_profiles) ? row.selected_profiles.map(String) : [],
+    seller_exempt: row.seller_exempt === true,
+  };
+}
+
+export async function getAdminDrightStarterAffiliateChallenge(): Promise<DrightStarterAffiliateChallengeSettings | null> {
+  const { data, error } = await supabase.rpc('admin_get_dright_starter_affiliate_challenge');
+  if (error || !data || typeof data !== 'object') return null;
+  const row = data as Record<string, unknown>;
+  return {
+    singleton: true,
+    enabled: row.enabled === true,
+    target_sales: Number(row.target_sales ?? 20),
+    unlock_label: String(row.unlock_label || 'Level 1 Pro Affiliate'),
+    description_template: String(row.description_template || ''),
+    restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
+    allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
+    seller_profile_exempt: row.seller_profile_exempt !== false,
+    updated_at: row.updated_at ? String(row.updated_at) : undefined,
+    updated_by: row.updated_by ? String(row.updated_by) : null,
+  };
+}
+
+export async function updateAdminDrightStarterAffiliateChallenge(
+  settings: DrightStarterAffiliateChallengeSettings,
+): Promise<DrightStarterAffiliateChallengeSettings> {
+  const { error } = await supabase.rpc('admin_update_dright_starter_affiliate_challenge', {
+    p_settings: {
+      enabled: settings.enabled,
+      target_sales: Number(settings.target_sales || 1),
+      unlock_label: settings.unlock_label,
+      description_template: settings.description_template,
+      restrict_marketplace_until_complete: settings.restrict_marketplace_until_complete,
+      allow_own_listings_while_restricted: settings.allow_own_listings_while_restricted,
+      seller_profile_exempt: settings.seller_profile_exempt,
+    },
+  });
+  if (error) throw error;
+  const next = await getAdminDrightStarterAffiliateChallenge();
+  if (!next) throw new Error('Unable to reload Starter affiliate challenge settings.');
+  return next;
 }
