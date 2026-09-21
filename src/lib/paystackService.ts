@@ -66,7 +66,8 @@ export type PaymentPurpose =
   | 'advertiser_funding'
   | 'affiliate_subscription'
   | 'vendor_subscription'
-  | 'promotion_campaign';
+  | 'promotion_campaign'
+  | 'listing_capacity';
 
 export interface PaymentInitParams {
   amount?: number;
@@ -308,6 +309,7 @@ export const PAYMENT_PURPOSES = {
   affiliate_subscription: 'Affiliate Subscription',
   vendor_subscription: 'Vendor Subscription',
   promotion_campaign: 'Promotion Campaign',
+  listing_capacity: 'Listing Capacity',
 } as const;
 
 export const TX_STATUS_COLORS: Record<string, string> = {
