@@ -43,6 +43,7 @@ import { trackProductView } from '../lib/analyticsService';
 import { useRecentlyViewed } from '../lib/marketplaceHooks';
 import { formatCurrency } from '../lib/currency';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
+import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 
 interface ServiceTier {
   id: string;
@@ -448,6 +449,8 @@ export default function ProductDetailPage() {
             brandName: 'Dright',
           }}
         />
+        <ListingMarketingMaterialsPanel kind="product" listingId={product.id} />
+
         <ServiceDetailView
           product={{
             id: product.id,
