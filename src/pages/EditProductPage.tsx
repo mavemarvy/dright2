@@ -11,6 +11,8 @@ import type { ProductEditChanges, ProductEditLog } from '../lib/types';
 import AIGenerateButton from '../components/ai/AIGenerateButton';
 import DynamicListingFields from '../components/listing/DynamicListingFields';
 import TaxonomyCategoryPicker from '../components/listing/TaxonomyCategoryPicker';
+import MarketingMaterialsEditor from '../components/listing/MarketingMaterialsEditor';
+import { loadListingMarketingMaterials, persistListingMarketingMaterials, type MarketingMaterialDraft } from '../lib/marketingMaterials';
 import {
   fetchMarketplaceEngineSettings,
   fetchMarketplaceAttributes,
@@ -61,6 +63,9 @@ export default function EditProductPage() {
   const [originalExtensionCategoryId, setOriginalExtensionCategoryId] = useState<string | null>(null);
   const [originalTaxonomyPath, setOriginalTaxonomyPath] = useState<Array<{ id: string; name: string }>>([]);
   const [originalExtensionAttributes, setOriginalExtensionAttributes] = useState<Record<string, unknown>>({});
+  const [marketingMaterials, setMarketingMaterials] = useState<MarketingMaterialDraft[]>([]);
+  const [savingMarketingMaterials, setSavingMarketingMaterials] = useState(false);
+  const [marketingMessage, setMarketingMessage] = useState<string | null>(null);
 
   const [editHistory, setEditHistory] = useState<ProductEditLog[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -95,6 +100,13 @@ export default function EditProductPage() {
       setStockQuantity(p.stock_quantity !== null ? String(p.stock_quantity) : '');
       setCategory(p.category);
       setImagePreview(p.image_url);
+
+      try {
+        const materials = await loadListingMarketingMaterials('product', p.id);
+        setMarketingMaterials(materials);
+      } catch {
+        setMarketingMaterials([]);
+      }
 
       try {
         const extension = await fetchMyMarketplaceListingExtension('product', p.id);
@@ -181,6 +193,27 @@ export default function EditProductPage() {
     const reader = new FileReader();
     reader.onload = (ev) => setImagePreview(ev.target?.result as string);
     reader.readAsDataURL(file);
+  };
+
+  const saveMarketingKit = async () => {
+    if (!product || !user?.id || savingMarketingMaterials) return;
+    setSavingMarketingMaterials(true);
+    setMarketingMessage(null);
+    try {
+      const count = await persistListingMarketingMaterials({
+        kind: 'product',
+        listingId: product.id,
+        ownerId: user.id,
+        materials: marketingMaterials,
+      });
+      const refreshed = await loadListingMarketingMaterials('product', product.id);
+      setMarketingMaterials(refreshed);
+      setMarketingMessage(count > 0 ? `Marketing kit saved (${count} item${count === 1 ? '' : 's'}).` : 'Marketing kit cleared.');
+    } catch (materialError) {
+      setMarketingMessage(materialError instanceof Error ? materialError.message : 'Unable to save marketing materials.');
+    } finally {
+      setSavingMarketingMaterials(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -466,6 +499,28 @@ export default function EditProductPage() {
               onChange={(key, value) => setDynamicAttributes(current => ({ ...current, [key]: value }))}
             />
           )}
+
+          <div className="space-y-3">
+            <MarketingMaterialsEditor
+              value={marketingMaterials}
+              onChange={setMarketingMaterials}
+              disabled={savingMarketingMaterials}
+            />
+            {marketingMessage && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                {marketingMessage}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={saveMarketingKit}
+              disabled={savingMarketingMaterials}
+              className="w-full min-h-[46px] rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {savingMarketingMaterials ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save Marketing Kit
+            </button>
+          </div>
 
           <button type="submit" disabled={submitting}
             className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 min-h-[56px]">
