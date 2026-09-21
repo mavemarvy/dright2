@@ -1,6 +1,7 @@
 import { BadgeCheck, ExternalLink, Store } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AdminDrightStarterProductSettings from '../../components/admin/AdminDrightStarterProductSettings';
+import AdminDrightOfficialProductManager from '../../components/admin/AdminDrightOfficialProductManager';
 
 export default function AdminDrightStorePage() {
   return (
@@ -37,6 +38,7 @@ export default function AdminDrightStorePage() {
       </div>
 
       <AdminDrightStarterProductSettings />
+      <AdminDrightOfficialProductManager />
     </div>
   );
 }
