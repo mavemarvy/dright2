@@ -162,6 +162,16 @@ export default function DrightStarterProductPage() {
                   )}
                 </div>
 
+                {product.image_url && product.image_url !== '/dright-logo.webp' && (
+                  <div className="mb-6 overflow-hidden rounded-3xl border border-white/10 bg-white/5 max-w-2xl">
+                    <img
+                      src={product.image_url}
+                      alt={product.title}
+                      className="w-full max-h-[420px] object-cover"
+                    />
+                  </div>
+                )}
+
                 <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.04]">
                   {product.title}
                 </h1>
