@@ -56,6 +56,44 @@ export default function AdminDrightStarterProductSettings() {
     });
   }, []);
 
+  const addStarterImages = async (files: FileList | null) => {
+    if (!files?.length || !settings || !user?.id || uploadingImages) return;
+    setUploadingImages(true);
+    setMessage(null);
+    try {
+      const urls = await uploadOfficialProductImages(user.id, Array.from(files));
+      const existing = Array.isArray(settings.product.image_urls) ? settings.product.image_urls : [];
+      const nextImages = [...existing, ...urls];
+      setSettings({
+        ...settings,
+        product: {
+          ...settings.product,
+          image_url: nextImages[0] || null,
+          image_urls: nextImages,
+        },
+      });
+      setMessage('Starter images uploaded. Save Starter to publish the new gallery.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to upload Starter images.');
+    } finally {
+      setUploadingImages(false);
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    }
+  };
+
+  const removeStarterImage = (index: number) => {
+    if (!settings) return;
+    const nextImages = settings.product.image_urls.filter((_, i) => i !== index);
+    setSettings({
+      ...settings,
+      product: {
+        ...settings.product,
+        image_url: nextImages[0] || null,
+        image_urls: nextImages,
+      },
+    });
+  };
+
   const save = async () => {
     if (!settings || saving) return;
     setSaving(true);
