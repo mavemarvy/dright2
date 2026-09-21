@@ -12,6 +12,7 @@ export interface DrightOfficialStore {
 }
 
 export interface DrightStarterProduct {
+  marketplace_product_id?: string | null;
   title: string;
   subtitle: string;
   description: string;
@@ -51,6 +52,7 @@ export interface DrightStarterAdminSettings {
   };
   product: {
     singleton: boolean;
+    marketplace_product_id: string | null;
     title: string;
     subtitle: string;
     description: string;
