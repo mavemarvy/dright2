@@ -76,7 +76,7 @@ begin
       v_settings.description,
       v_settings.price,
       0,
-      null,
+      '/dright-logo.webp',
       v_settings.category,
       v_settings.is_enabled and v_settings.public_visible,
       'approved',
@@ -123,6 +123,7 @@ begin
     update public.products
     set uploaded_by=v_owner,
         name=v_settings.title,
+        image_url='/dright-logo.webp',
         description=v_settings.description,
         price=v_settings.price,
         commission_rate=0,
@@ -159,6 +160,23 @@ begin
         updated_at=now()
     where id=v_product;
   end if;
+
+  insert into public.digital_product_details(
+    product_id,delivery_type,download_file_url,download_limit,expiry_days,
+    access_link,file_format,file_size,includes_bonus_materials
+  ) values (
+    v_product,'LINK_ACCESS',null,null,greatest(v_settings.included_trial_days,1),
+    '/dright/starter','DRIGHT platform access',null,false
+  )
+  on conflict (product_id) do update
+    set delivery_type='LINK_ACCESS',
+        download_file_url=null,
+        download_limit=null,
+        expiry_days=greatest(v_settings.included_trial_days,1),
+        access_link='/dright/starter',
+        file_format='DRIGHT platform access',
+        file_size=null,
+        includes_bonus_materials=false;
 
   return v_product;
 end;
