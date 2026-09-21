@@ -9,3 +9,6 @@ The DRIGHT Starter funnel is payment-gated.
 - Buyer signup remains free.
 - The funnel marker is cleared only after the verified purchase is claimed by the newly created account.
 - Production rollout uses the standard GitHub → Vercel deployment path.
+
+
+Production rollout marker: 2026-09-21 — Starter payment gate and headerless product page verified for production deployment.
