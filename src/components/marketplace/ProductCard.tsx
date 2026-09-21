@@ -129,7 +129,7 @@ export default function ProductCard({
   const displayPrice = getBuyerFacingPrice(product);
   const displayOldPrice = product.old_price ? getBuyerFacingPrice(product, product.old_price) : null;
   const sourceCurrency = isDrightStarter
-    ? String(specs.source_currency || specs.display_currency || 'NGN').toUpperCase()
+    ? String(specs.price_currency || specs.source_currency || specs.display_currency || 'NGN').toUpperCase()
     : 'USD';
   const affiliatePercent = isDrightStarter
     ? Number(product.affiliate_commission_percent ?? specs.affiliate_commission_percent ?? 0)
