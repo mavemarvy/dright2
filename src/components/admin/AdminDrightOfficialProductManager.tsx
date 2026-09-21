@@ -303,8 +303,8 @@ export default function AdminDrightOfficialProductManager() {
           {engine?.dynamic_forms_enabled && definitions.length > 0 && (
             <DynamicListingFields
               definitions={definitions}
-              value={attributes}
-              onChange={setAttributes}
+              values={attributes}
+              onChange={(key, value) => setAttributes((current) => ({ ...current, [key]: value }))}
             />
           )}
 
