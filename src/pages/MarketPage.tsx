@@ -85,6 +85,12 @@ export default function MarketPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<AdvancedFilterState>({ ...DEFAULT_FILTER_STATE, sortBy: 'recommended' });
   const [showCategorySection, setShowCategorySection] = useState(true);
+  const [marketplaceSectionVisibility, setMarketplaceSectionVisibility] = useState({
+    recommended: true,
+    recentlyViewed: true,
+    continueBrowsing: true,
+    newArrivals: true,
+  });
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [listingCardSize, setListingCardSize] = useState<MarketplaceCardSize>(() => {
     if (typeof window === 'undefined') return 'medium';
@@ -116,6 +122,27 @@ export default function MarketPage() {
   const { recordView } = useRecentlyViewed(user?.id);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [rankingWeights, setRankingWeights] = useState<RankingWeights | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void supabase
+      .from('marketplace_ui_settings')
+      .select('recommended_section_visible,recently_viewed_section_visible,continue_browsing_section_visible,new_arrivals_section_visible')
+      .eq('key', 'default')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setMarketplaceSectionVisibility({
+          recommended: data.recommended_section_visible !== false,
+          recentlyViewed: data.recently_viewed_section_visible !== false,
+          continueBrowsing: data.continue_browsing_section_visible !== false,
+          newArrivals: data.new_arrivals_section_visible !== false,
+        });
+      });
+
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     try {
@@ -598,10 +625,13 @@ export default function MarketPage() {
 
       {isBrowsing && (
         <div className="mt-8">
-          <DiscoverySections />
+          <DiscoverySections
+            showRecommended={marketplaceSectionVisibility.recommended}
+            showRecentlyViewed={marketplaceSectionVisibility.recentlyViewed}
+          />
           {filters.sortBy !== 'trending' && <SponsoredPlacementCard placement="suggestions" variant="recommendation" className="my-8" />}
-          <ContinueBrowsing />
-          <NewArrivalsSection />
+          {marketplaceSectionVisibility.continueBrowsing && <ContinueBrowsing />}
+          {marketplaceSectionVisibility.newArrivals && <NewArrivalsSection />}
           {showFeaturedSellers && <FeaturedSellersSection />}
           <FeaturedServicesSection />
           <JobsSection />
