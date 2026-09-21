@@ -422,6 +422,7 @@ export default function JobPostingPage() {
         employer_id: user.id,
         title: form.title.trim(),
         category: form.category,
+        listing_taxonomy_category_id: selectedTaxonomyCategoryId,
         job_type: form.jobType,
         work_setup: form.workSetup,
         career_level: form.careerLevel,
