@@ -12,6 +12,8 @@ import {
 import { formatCurrencyValue } from '../../lib/currency';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadOfficialProductImages } from '../../lib/drightOfficialStore';
+import MarketingMaterialsEditor from '../listing/MarketingMaterialsEditor';
+import { loadListingMarketingMaterials, persistListingMarketingMaterials, type MarketingMaterialDraft } from '../../lib/marketingMaterials';
 
 function Toggle({
   value,
@@ -44,14 +46,22 @@ export default function AdminDrightStarterProductSettings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [marketingMaterials, setMarketingMaterials] = useState<MarketingMaterialDraft[]>([]);
 
   useEffect(() => {
     void Promise.all([
       getAdminDrightStarterSettings(),
       getAdminDrightStarterAffiliateChallenge(),
-    ]).then(([value, challengeValue]) => {
+    ]).then(async ([value, challengeValue]) => {
       setSettings(value);
       setChallenge(challengeValue);
+      if (value?.product.marketplace_product_id) {
+        try {
+          setMarketingMaterials(await loadListingMarketingMaterials('product', value.product.marketplace_product_id));
+        } catch {
+          setMarketingMaterials([]);
+        }
+      }
       setLoading(false);
     });
   }, []);
@@ -105,7 +115,22 @@ export default function AdminDrightStarterProductSettings() {
         const nextChallenge = await updateAdminDrightStarterAffiliateChallenge(challenge);
         setChallenge(nextChallenge);
       }
-      setMessage('Official DRIGHT Store, Starter product, and affiliate challenge settings saved.');
+      if (next.product.marketplace_product_id && user?.id) {
+        try {
+          await persistListingMarketingMaterials({
+            kind: 'product',
+            listingId: next.product.marketplace_product_id,
+            ownerId: user.id,
+            materials: marketingMaterials,
+          });
+          setMarketingMaterials(await loadListingMarketingMaterials('product', next.product.marketplace_product_id));
+        } catch (materialError) {
+          console.warn('Starter settings saved but optional marketing materials failed:', materialError);
+          setMessage('Starter settings saved, but optional marketing materials could not be updated.');
+          return;
+        }
+      }
+      setMessage('Official DRIGHT Store, Starter product, affiliate materials, and challenge settings saved.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to save Starter product settings.');
     } finally {
@@ -395,6 +420,16 @@ export default function AdminDrightStarterProductSettings() {
             </div>
           )}
         </div>
+
+        {product.marketplace_product_id && (
+          <div className="mt-4">
+            <MarketingMaterialsEditor
+              value={marketingMaterials}
+              onChange={setMarketingMaterials}
+              disabled={saving}
+            />
+          </div>
+        )}
 
         <div className="grid sm:grid-cols-2 gap-4 mt-4">
           <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
