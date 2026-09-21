@@ -200,9 +200,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const amount = Math.max(0, Number(product.price) || 0);
-    const currency = String(product.currency || "NGN").toUpperCase();
-    if (currency !== "NGN") {
-      return json({ error: "DRIGHT Starter checkout currently supports NGN only." }, 409);
+    const currency = String(product.currency || "USD").trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      return json({ error: "DRIGHT Starter currency is not configured correctly." }, 409);
     }
     if (amount <= 0) return json({ error: "DRIGHT Starter price is not configured." }, 409);
 
