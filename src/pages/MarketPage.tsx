@@ -12,7 +12,12 @@ import { supabase } from '../lib/supabase';
 import { trackListingEvent } from '../lib/marketplaceAnalytics';
 import { trackProductView } from '../lib/analyticsService';
 import { generateAffiliateLink, copyToClipboard } from '../lib/affiliate';
-import { buildDrightStarterAffiliateLink } from '../lib/drightStarter';
+import {
+  buildDrightStarterAffiliateLink,
+  getMyDrightStarterAffiliateProgress,
+  renderDrightStarterTemplate,
+  type DrightStarterAffiliateProgress,
+} from '../lib/drightStarter';
 import {
   fetchSystemConfig, calculateSubscriptionTotal, getBuyerFacingPrice,
   ALL_TIERS, DURATIONS,
@@ -101,6 +106,7 @@ export default function MarketPage() {
   });
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [starterAffiliateProgress, setStarterAffiliateProgress] = useState<DrightStarterAffiliateProgress | null>(null);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
   const [taxonomyTree, setTaxonomyTree] = useState<MarketplaceCategoryTreeNode[]>([]);
@@ -281,6 +287,14 @@ export default function MarketPage() {
   }, [user]);
 
   useEffect(() => {
+    if (user) {
+      void getMyDrightStarterAffiliateProgress().then(setStarterAffiliateProgress);
+    } else {
+      setStarterAffiliateProgress(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
     fetchSystemConfig().then(setSystemConfig);
     fetchMarketplaceEngineSettings().then(setEngineSettings);
     void fetchCategoryCounts();
@@ -449,6 +463,15 @@ export default function MarketPage() {
   }, [filters.attributeFilters]);
 
   const filteredProducts = products.filter(p => {
+    if (starterAffiliateProgress?.marketplace_limited) {
+      const isStarter = p.sku === 'DRIGHT-STARTER-ACCESS'
+        || p.specifications?.system_product_kind === 'dright_starter_access';
+      const isOwnListing = starterAffiliateProgress.allow_own_listings_while_restricted
+        && Boolean(user?.id)
+        && p.uploaded_by === user?.id;
+      if (!isStarter && !isOwnListing) return false;
+    }
+
     if (searchQuery.trim()) {
       const parsed = parseNaturalLanguageSearch(searchQuery);
       const q = parsed.keywords.join(' ').toLowerCase();
@@ -510,8 +533,20 @@ export default function MarketPage() {
     });
   })();
 
-  const displayProducts = usingMarketplaceV2 ? marketFeed : sortedProducts;
-  const visibleProducts = usingMarketplaceV2 ? marketFeed : sortedProducts.slice(0, visibleCount);
+  const gatedMarketFeed = useMemo(() => {
+    if (!starterAffiliateProgress?.marketplace_limited) return marketFeed;
+    return marketFeed.filter((product) => {
+      const isStarter = product.sku === 'DRIGHT-STARTER-ACCESS'
+        || product.specifications?.system_product_kind === 'dright_starter_access';
+      const isOwnListing = starterAffiliateProgress.allow_own_listings_while_restricted
+        && Boolean(user?.id)
+        && product.uploaded_by === user?.id;
+      return isStarter || isOwnListing;
+    });
+  }, [marketFeed, starterAffiliateProgress, user?.id]);
+
+  const displayProducts = usingMarketplaceV2 ? gatedMarketFeed : sortedProducts;
+  const visibleProducts = usingMarketplaceV2 ? gatedMarketFeed : sortedProducts.slice(0, visibleCount);
 
   useEffect(() => {
     if (!sentinelRef.current) return;
@@ -599,6 +634,33 @@ export default function MarketPage() {
               ? 'Your account is BANNED. You cannot generate affiliate links, accept contracts, or request withdrawals.'
               : 'Your account is LOCKED. Affiliate link generation, contracts, and withdrawals are temporarily disabled.'}
           </p>
+        </div>
+      )}
+
+      {starterAffiliateProgress?.marketplace_limited && (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/30 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="font-black text-violet-900 dark:text-violet-100">Starter Affiliate Challenge in progress</p>
+              <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
+                {renderDrightStarterTemplate(
+                  starterAffiliateProgress.description_template,
+                  0,
+                  starterAffiliateProgress.target_sales,
+                )} You have {starterAffiliateProgress.sales}/{starterAffiliateProgress.target_sales} verified sales.
+              </p>
+              <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">
+                This marketplace view currently shows the official Starter product
+                {starterAffiliateProgress.allow_own_listings_while_restricted ? ' and your own listings' : ''}.
+              </p>
+            </div>
+            <Link
+              to="/challenges"
+              className="shrink-0 min-h-[42px] inline-flex items-center justify-center rounded-xl bg-violet-600 text-white px-4 text-sm font-bold"
+            >
+              View Challenge
+            </Link>
+          </div>
         </div>
       )}
 
