@@ -16,6 +16,8 @@ import PostUploadConfirmation from '../components/PostUploadConfirmation';
 import AIGenerateButton from '../components/ai/AIGenerateButton';
 import DynamicListingFields from '../components/listing/DynamicListingFields';
 import TaxonomyCategoryPicker from '../components/listing/TaxonomyCategoryPicker';
+import MarketingMaterialsEditor from '../components/listing/MarketingMaterialsEditor';
+import { persistListingMarketingMaterials, type MarketingMaterialDraft } from '../lib/marketingMaterials';
 import {
   fetchMarketplaceEngineSettings,
   fetchMarketplaceAttributes,
@@ -269,6 +271,7 @@ export default function JobPostingPage() {
   );
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
   const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
+  const [marketingMaterials, setMarketingMaterials] = useState<MarketingMaterialDraft[]>([]);
   const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>(
     () => readJobDraftStorage().__dynamicAttributes ?? {}
   );
@@ -480,6 +483,19 @@ export default function JobPostingPage() {
         });
         if (extension.error) {
           console.error('Job listing extension sync failed:', extension.error);
+        }
+      }
+
+      if (user?.id && marketingMaterials.length > 0) {
+        try {
+          await persistListingMarketingMaterials({
+            kind: 'job',
+            listingId: jobData.id,
+            ownerId: user.id,
+            materials: marketingMaterials,
+          });
+        } catch (materialError) {
+          console.warn('Optional job marketing materials could not be saved:', materialError);
         }
       }
 
@@ -914,6 +930,12 @@ export default function JobPostingPage() {
                       <p className="text-sm text-gray-500 mb-4">This is how your job will appear to candidates. Ready to publish?</p>
                       <JobPreview form={form} />
                     </div>
+
+                    <MarketingMaterialsEditor
+                      value={marketingMaterials}
+                      onChange={setMarketingMaterials}
+                      disabled={saving}
+                    />
 
                     {/* Edit buttons for each step */}
                     <div className="bg-white rounded-2xl border border-gray-100 p-5">
