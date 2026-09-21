@@ -172,12 +172,12 @@ returns trigger
 language plpgsql
 security definer
 set search_path=public
-as $
+as $$
 begin
   perform public.sync_dright_starter_marketplace_product_now();
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.sync_dright_starter_marketplace_product_trigger() from public,anon,authenticated;
 
@@ -193,9 +193,9 @@ on public.dright_starter_product_settings
 for each row execute function public.sync_dright_starter_marketplace_product_trigger();
 
 -- Seed/synchronize the canonical catalog mirror now.
-do $
+do $$
 begin
   perform public.sync_dright_starter_marketplace_product_now();
-end $;
+end $$;
 
 commit;
