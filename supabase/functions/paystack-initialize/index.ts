@@ -11,6 +11,7 @@ const MIN_FUNDING_MINOR = 10_000;
 const ALLOWED_PURPOSES = new Set([
   "wallet_funding", "advertiser_funding", "product_purchase", "escrow",
   "subscription", "affiliate_subscription", "vendor_subscription", "promotion_campaign",
+  "listing_capacity",
 ]);
 const ALLOWED_CHANNELS = new Set(["card", "bank", "ussd", "bank_transfer", "mobile_money"]);
 
@@ -151,6 +152,73 @@ Deno.serve(async (req: Request) => {
       paymentCurrency = planCurrency;
       if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) return json({ error: "Payment amount does not match the current subscription price", amount: planAmount }, 409);
       canonicalMetadata = { ...requestedMetadata, plan_id: plan.id, plan_slug: plan.slug, plan_name: plan.name, plan_type: plan.plan_type, plan_interval: plan.interval, user_id: user.id, authoritative_amount: planAmount };
+    } else if (purpose === "listing_capacity") {
+      const packId = requestedReferenceId
+        || (typeof requestedMetadata.pack_id === "string" ? requestedMetadata.pack_id.trim() : "");
+      if (!packId) return json({ error: "Listing capacity pack is required" }, 400);
+
+      const { data: pack, error: packError } = await supabase
+        .from("listing_capacity_packs")
+        .select("id,name,listing_count,amount,currency,validity_days,listing_type_code,category_id,is_active")
+        .eq("id", packId)
+        .maybeSingle();
+
+      if (packError) return json({ error: "Unable to validate listing capacity pack" }, 500);
+      if (!pack || pack.is_active !== true) return json({ error: "Listing capacity pack is not available" }, 404);
+
+      const packAmount = Number(pack.amount);
+      const packCurrency = String(pack.currency || "NGN").toUpperCase();
+      if (!Number.isFinite(packAmount) || packAmount <= 0) return json({ error: "Invalid listing capacity pack price" }, 400);
+      if (!["NGN", "USD"].includes(packCurrency)) {
+        return json({ error: `Paystack listing-capacity checkout currently supports NGN or USD-priced packs, not ${packCurrency}` }, 400);
+      }
+
+      purpose = "listing_capacity";
+      referenceId = pack.id;
+      amountMinor = Math.round(packAmount * 100);
+      paymentCurrency = packCurrency;
+
+      if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) {
+        return json({ error: "Payment amount does not match the current listing capacity price", amount: packAmount, currency: packCurrency }, 409);
+      }
+
+      if (packCurrency === "USD") {
+        const fx = await getUsdToNgnRate();
+        const gatewayAmount = Math.round(packAmount * fx.rate * 100) / 100;
+        gatewayAmountMinor = Math.round(gatewayAmount * 100);
+        gatewayCurrency = "NGN";
+        canonicalMetadata = {
+          ...requestedMetadata,
+          pack_id: pack.id,
+          pack_name: pack.name,
+          listing_count: pack.listing_count,
+          validity_days: pack.validity_days,
+          listing_type_code: pack.listing_type_code,
+          category_id: pack.category_id,
+          authoritative_amount: packAmount,
+          authoritative_currency: packCurrency,
+          gateway_amount: gatewayAmount,
+          gateway_currency: gatewayCurrency,
+          fx_rate: fx.rate,
+          fx_source: fx.source,
+        };
+      } else {
+        gatewayAmountMinor = amountMinor;
+        gatewayCurrency = "NGN";
+        canonicalMetadata = {
+          ...requestedMetadata,
+          pack_id: pack.id,
+          pack_name: pack.name,
+          listing_count: pack.listing_count,
+          validity_days: pack.validity_days,
+          listing_type_code: pack.listing_type_code,
+          category_id: pack.category_id,
+          authoritative_amount: packAmount,
+          authoritative_currency: packCurrency,
+          gateway_amount: packAmount,
+          gateway_currency: gatewayCurrency,
+        };
+      }
     } else if (purpose === "promotion_campaign") {
       if (!referenceId) return json({ error: "Promotion campaign reference is required" }, 400);
       const { data: campaign, error: campaignError } = await supabase.from("promotion_campaigns")
