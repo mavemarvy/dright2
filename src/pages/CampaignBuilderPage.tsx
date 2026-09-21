@@ -9,6 +9,8 @@ import { useCategories } from '../lib/campaignHooks';
 import { useAuth } from '../contexts/AuthContext';
 import { createCampaign, uploadCampaignFile, getOrCreateWallet, depositFunds } from '../lib/campaignLib';
 import { TASK_TYPES, EVIDENCE_TYPES, REWARD_PRESETS, MAX_WORKER_PRESETS, type CampaignRequirement } from '../lib/campaignTypes';
+import MarketingMaterialsEditor from '../components/listing/MarketingMaterialsEditor';
+import { persistListingMarketingMaterials, type MarketingMaterialDraft } from '../lib/marketingMaterials';
 
 const STEPS = ['Details', 'Media', 'Requirements', 'Rewards', 'Verification', 'Launch'];
 
@@ -47,6 +49,7 @@ export default function CampaignBuilderPage() {
   const [uploadedMedia, setUploadedMedia] = useState<{ url: string; type: string; name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [marketingMaterials, setMarketingMaterials] = useState<MarketingMaterialDraft[]>([]);
 
   const platformFee = 10;
   const totalBudget = reward * maxWorkers;
@@ -137,6 +140,19 @@ export default function CampaignBuilderPage() {
         });
       }
 
+      if (marketingMaterials.length > 0) {
+        try {
+          await persistListingMarketingMaterials({
+            kind: 'task',
+            listingId: campaign.id,
+            ownerId: user.id,
+            materials: marketingMaterials,
+          });
+        } catch (materialError) {
+          console.warn('Optional task marketing materials could not be saved:', materialError);
+        }
+      }
+
       // Fund escrow: ensure wallet exists and deposit the budget
       await getOrCreateWallet(user.id);
       await depositFunds(user.id, totalDeposit);
@@ -165,6 +181,15 @@ export default function CampaignBuilderPage() {
       </div>
 
       {/* Step Content */}
+      {step === STEPS.length - 1 && (
+        <div className="mb-4">
+          <MarketingMaterialsEditor
+            value={marketingMaterials}
+            onChange={setMarketingMaterials}
+            disabled={creating}
+          />
+        </div>
+      )}
       <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-4">
         {step === 0 && (
           <div className="space-y-4">
