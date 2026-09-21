@@ -1,7 +1,8 @@
+import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import {
   Store, Star, Flag, Package, TrendingUp, Save,
-  Loader2, Check, X, Trash2, Plus, Eye, EyeOff, Settings2, ShieldCheck,
+  Loader2, Check, X, Trash2, Plus, Eye, EyeOff, Settings2, ShieldCheck, BadgeCheck,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -455,14 +456,23 @@ export default function AdminMarketplacePage() {
 
   return (
     <div className="p-4 md:p-8">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-warning to-orange-600 flex items-center justify-center">
-          <Store className="w-5 h-5 text-white" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-warning to-orange-600 flex items-center justify-center">
+            <Store className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Marketplace Controls</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Manage promotions, moderation, ranking, categories, and collections</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Marketplace Controls</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Manage promotions, moderation, ranking, categories, and collections</p>
-        </div>
+        <Link
+          to="/admin/dright-store"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 text-white px-4 py-2.5 text-sm font-bold shadow-sm"
+        >
+          <BadgeCheck className="w-4 h-4 text-emerald-400" />
+          Official DRIGHT Store
+        </Link>
       </div>
 
       {/* Tabs */}
