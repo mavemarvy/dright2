@@ -1,9 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { Trophy, Clock, Gift, CheckCircle, Loader2, Target, Star } from 'lucide-react';
 import SeoHead from '../components/SeoHead';
 import { usePublishedChallenges, useUserChallengeProgress, upsertChallengeProgress } from '../lib/contentHooks';
 import { CHALLENGE_STATUSES } from '../lib/contentTypes';
+import {
+  getMyDrightStarterAffiliateProgress,
+  renderDrightStarterTemplate,
+  type DrightStarterAffiliateProgress,
+} from '../lib/drightStarter';
 
 const ICON_MAP: Record<string, typeof Trophy> = { Trophy, Target, Star, Gift, CheckCircle };
 
@@ -11,6 +17,11 @@ export default function ChallengesPage() {
   const { challenges, loading } = usePublishedChallenges();
   const { progress: userProgress } = useUserChallengeProgress();
   const [filter, setFilter] = useState<string>('all');
+  const [starterProgress, setStarterProgress] = useState<DrightStarterAffiliateProgress | null>(null);
+
+  useEffect(() => {
+    void getMyDrightStarterAffiliateProgress().then(setStarterProgress);
+  }, []);
 
   const progressMap = useMemo(() => {
     const map: Record<string, { progress: number; is_completed: boolean; reward_claimed: boolean }> = {};
@@ -36,6 +47,57 @@ export default function ChallengesPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-10">
+        {starterProgress?.enabled && starterProgress.applies && (
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 rounded-3xl border border-violet-200 dark:border-violet-900 bg-gradient-to-br from-violet-600 to-indigo-700 text-white p-5 sm:p-6 shadow-lg"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="max-w-2xl">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-violet-100">
+                  <Target className="w-4 h-4" /> Affiliate Onboarding Challenge
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black mt-2">
+                  {starterProgress.completed ? starterProgress.unlock_label + ' unlocked' : 'Sell DRIGHT Starter Access'}
+                </h2>
+                <p className="text-sm text-violet-100 mt-2">
+                  {renderDrightStarterTemplate(
+                    starterProgress.description_template,
+                    0,
+                    starterProgress.target_sales,
+                  )}
+                </p>
+              </div>
+              <div className="sm:text-right">
+                <p className="text-xs text-violet-200">Verified Starter sales</p>
+                <p className="text-3xl font-black">{starterProgress.sales}/{starterProgress.target_sales}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 h-3 rounded-full bg-white/15 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-white transition-all"
+                style={{ width: `${Math.min(100, starterProgress.target_sales > 0 ? (starterProgress.sales / starterProgress.target_sales) * 100 : 0)}%` }}
+              />
+            </div>
+
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm text-violet-100">
+                {starterProgress.completed
+                  ? 'Challenge complete. Your affiliate onboarding level is unlocked.'
+                  : `${starterProgress.remaining_sales} verified sale${starterProgress.remaining_sales === 1 ? '' : 's'} remaining.`}
+              </p>
+              <Link
+                to="/dright/starter"
+                className="inline-flex min-h-[42px] items-center justify-center rounded-xl bg-white text-violet-700 px-4 font-black text-sm"
+              >
+                Open Starter Product
+              </Link>
+            </div>
+          </motion.section>
+        )}
+
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-8">
           <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-xl text-sm font-medium ${filter === 'all' ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'}`}>All</button>
