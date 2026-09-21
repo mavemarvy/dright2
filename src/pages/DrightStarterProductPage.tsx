@@ -4,7 +4,7 @@ import {
   ArrowRight, BadgeCheck, Check, Copy, Gift, Loader2, LockKeyhole,
   Rocket, ShieldCheck, Sparkles, Star, UserPlus, Users, WalletCards,
 } from 'lucide-react';
-import { DrightBrand, DrightMark } from '../components/DrightBrand';
+import { DrightMark } from '../components/DrightBrand';
 import TurnstileWidget from '../components/TurnstileWidget';
 import { useAuth } from '../contexts/AuthContext';
 import { canUsePlatformFeature } from '../lib/platformAccess';
@@ -149,16 +149,6 @@ export default function DrightStarterProductPage() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top_right,_#2563eb_0,_transparent_35%),radial-gradient(circle_at_bottom_left,_#10b981_0,_transparent_30%)]" />
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-14">
-            <div className="flex items-center justify-between gap-4 mb-9">
-              <Link to="/dright" className="inline-flex items-center">
-                <DrightBrand size={46} className="[&_div]:text-white" />
-              </Link>
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-300">
-                <BadgeCheck className="w-4 h-4 text-emerald-400" />
-                Official DRIGHT Store
-              </div>
-            </div>
-
             <div className="grid lg:grid-cols-[1.15fr_.85fr] gap-8 lg:gap-12 items-start">
               <div>
                 <div className="flex flex-wrap gap-2 mb-5">
