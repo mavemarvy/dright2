@@ -11,7 +11,7 @@ import {
   type DrightStarterAffiliateProgress,
   type DrightStarterPublicSettings,
 } from '../lib/drightStarter';
-import { formatCurrencyValue } from '../lib/currency';
+import { formatDisplayCurrency } from '../lib/currency';
 
 export default function DrightStarterProductCard({ className = '' }: { className?: string }) {
   const { user, profile } = useAuth();
@@ -78,7 +78,7 @@ export default function DrightStarterProductCard({ className = '' }: { className
           </div>
           <div className="sm:text-right">
             <p className="text-xs text-slate-400">Starter price</p>
-            <p className="text-2xl font-black">{formatCurrencyValue(product.price, product.currency)}</p>
+            <p className="text-2xl font-black">{formatDisplayCurrency(product.price, product.currency)}</p>
           </div>
         </div>
 
