@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   Users, UserCheck, Package, DollarSign, TrendingUp, ShoppingBag,
   Star, Heart, Search, Eye, AlertTriangle, ArrowRight, Loader2,
-  Activity, Gift, Ticket, FileCheck,
+  Activity, Gift, Ticket, FileCheck, Trophy,
 } from 'lucide-react';
 import {
   useAdminAnalytics, useAdminDailyActivity,
@@ -165,6 +165,7 @@ export default function AdminDashboardPage() {
           { to: '/admin/promotions', label: 'Promotions', icon: TrendingUp, value: (promoAnalytics as Record<string, number> | null)?.total_campaigns || 0, sub: 'campaigns' },
           { to: '/admin/coupons', label: 'Coupons', icon: Ticket, value: rewardAnalytics?.total_coupons || 0, sub: 'total coupons' },
           { to: '/admin/giveaways', label: 'Giveaways', icon: Gift, value: 0, sub: 'active' },
+          { to: '/admin/competitions', label: 'Competitions', icon: Trophy, value: 'Manage', sub: 'leaderboards & prizes' },
           { to: '/admin/verifications', label: 'Verifications', icon: FileCheck, value: kpis?.pending_verifications || 0, sub: 'pending' },
         ].map(link => (
           <Link key={link.to} to={link.to} className="bg-white rounded-2xl border border-gray-100 p-4 hover:shadow-md transition-shadow">
