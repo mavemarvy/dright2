@@ -201,8 +201,8 @@ begin
     return query
     with m as (
       select u.id user_id,
-             count(distinct cs.order_id)::numeric sale_count,
-             coalesce(sum(greatest(cs.amount-coalesce(cs.reversed_amount,0),0)),0)::numeric earning_value
+             count(distinct o.id)::numeric sale_count,
+             coalesce(sum(case when o.id is not null then greatest(cs.amount-coalesce(cs.reversed_amount,0),0) else 0 end),0)::numeric earning_value
       from public.users u
       left join public.commission_splits cs
         on cs.recipient_id=u.id
@@ -301,7 +301,12 @@ begin
         from public.compute_monthly_growth_leaderboard(s.challenge_key,p_period_start,v_end) c
       ),
       enriched as (
-        select r.rank,r.user_id,u.full_name,u.username,u.avatar_url,
+        select r.rank,r.user_id,
+               case when coalesce(u.show_full_name,true)=true
+                          and coalesce(u.privacy_full_name,'public')='public'
+                    then u.full_name else null end as full_name,
+               u.username,
+               case when coalesce(u.privacy_profile,'public')='public' then u.avatar_url else null end as avatar_url,
                r.primary_metric,r.secondary_metric,r.tertiary_metric,r.detail
         from ranked r join public.users u on u.id=r.user_id
         where r.primary_metric>0 or r.secondary_metric>0
@@ -466,7 +471,12 @@ begin
       from public.compute_monthly_growth_leaderboard(p_challenge_key,v_start,v_end) c
     ),
     enriched as (
-      select r.rank,r.user_id,u.full_name,u.username,u.avatar_url,
+      select r.rank,r.user_id,
+             case when coalesce(u.show_full_name,true)=true
+                        and coalesce(u.privacy_full_name,'public')='public'
+                  then u.full_name else null end as full_name,
+             u.username,
+             case when coalesce(u.privacy_profile,'public')='public' then u.avatar_url else null end as avatar_url,
              r.primary_metric,r.secondary_metric,r.tertiary_metric,r.detail
       from ranked r join public.users u on u.id=r.user_id
       order by r.rank
@@ -519,8 +529,11 @@ begin
     'previous_awards',coalesce((
       select jsonb_agg(jsonb_build_object(
         'id',a.id,'period_start',a.period_start,'challenge_key',a.challenge_key,
-        'rank',a.rank,'user_id',a.user_id,'full_name',u.full_name,'username',u.username,
-        'avatar_url',u.avatar_url,'primary_metric',a.primary_metric,
+        'rank',a.rank,'user_id',a.user_id,
+        'full_name',case when coalesce(u.show_full_name,true)=true and coalesce(u.privacy_full_name,'public')='public' then u.full_name else null end,
+        'username',u.username,
+        'avatar_url',case when coalesce(u.privacy_profile,'public')='public' then u.avatar_url else null end,
+        'primary_metric',a.primary_metric,
         'secondary_metric',a.secondary_metric,'reward_amount',a.reward_amount,
         'reward_currency',a.reward_currency,'status',a.status,'paid_at',a.paid_at
       ) order by a.challenge_key,a.rank)
