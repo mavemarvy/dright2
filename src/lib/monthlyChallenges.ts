@@ -352,14 +352,11 @@ export async function reviewCompetitionAward(
 export function subscribeToCompetitionActivity(onChange: () => void) {
   const channel = supabase
     .channel('monthly-growth-competition-live')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_growth_challenge_settings' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_growth_challenge_snapshots' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_growth_challenge_awards' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'referral_relationships' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'commission_splits' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'dright_starter_purchases' }, onChange)
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'monthly_growth_realtime_signal', filter: 'singleton=eq.true' },
+      () => onChange(),
+    )
     .subscribe();
 
   return () => {
