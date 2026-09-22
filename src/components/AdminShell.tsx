@@ -5,7 +5,7 @@ import {
   Settings, Megaphone, Palette, Headphones, AlertTriangle, Star, Lock, Gavel, Receipt,
   MapPin, Users as UsersIcon, Store, Bell, Settings2, TrendingUp, Ticket, Gift, BarChart3,
   ShieldAlert, History, Brain, ArrowLeft, Image, ShieldCheck, Wallet, FileText, CreditCard,
-  Webhook, BarChart4, FileEdit, ImageIcon, Layers, Plug, Share2, LifeBuoy, Award,
+  Webhook, BarChart4, FileEdit, ImageIcon, Layers, Plug, Share2, LifeBuoy, Award, Trophy,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth, ADMIN_ROLE_LABELS, type AdminRole } from '../contexts/AuthContext';
@@ -77,6 +77,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
     title: 'Affiliates & Referrals',
     items: [
       { path: '/admin/referral-analytics', label: 'Referral Analytics', icon: UsersIcon, page: 'referral_analytics' },
+      { path: '/admin/competitions', label: 'Competitions', icon: Trophy, page: 'competitions' },
       { path: '/admin/affiliate-analytics', label: 'Affiliate Analytics', icon: Share2, page: 'affiliate_analytics' },
     ],
   },
