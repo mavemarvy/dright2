@@ -503,11 +503,13 @@ export async function fetchAdminSimulatedCompetitors(
   challengeKey: string,
   limit = 50,
   offset = 0,
+  search = '',
 ): Promise<SimulatedCompetitorPage> {
   const { data, error } = await supabase.rpc('admin_get_monthly_growth_simulated_competitors', {
     p_challenge_key: challengeKey,
     p_limit: limit,
     p_offset: offset,
+    p_search: search.trim() || null,
   });
   if (error) throw error;
   const row = data ?? {};
