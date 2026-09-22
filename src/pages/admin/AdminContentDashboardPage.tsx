@@ -533,6 +533,7 @@ function ChallengesTab() {
           </Modal>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }
