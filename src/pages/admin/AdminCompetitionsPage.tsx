@@ -1,22 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, CheckCircle2, Crown, DollarSign, ExternalLink,
-  Loader2, Medal, RefreshCw, Save, ShieldAlert, Trophy, Users, Wallet, XCircle,
+  Activity, AlertTriangle, Bot, CheckCircle2, Clock3, Crown, DollarSign, ExternalLink,
+  History, Loader2, Medal, RefreshCw, Save, ShieldAlert, Trophy, Users, Wallet, XCircle,
 } from 'lucide-react';
 import {
   fetchAdminCompetitionDashboard,
+  fetchAdminSimulatedCompetitors,
   fetchMonthlyLeaderboard,
   formatChallengeReward,
+  importAdminSimulatedCompetitors,
   reviewCompetitionAward,
   subscribeToCompetitionActivity,
   updateAdminCompetitionAutoPayout,
+  updateAdminCompetitionHistoryVisibility,
+  updateAdminCompetitionSimulation,
   updateAdminMonthlyChallenge,
+  updateAdminSimulatedScore,
   type CompetitionAward,
   type CompetitionDashboardData,
   type MonthlyChallengeDefinition,
   type MonthlyLeaderboardEntry,
+  type SimulatedCompetitor,
 } from '../../lib/monthlyChallenges';
+
+const REWARD_CURRENCIES = [
+  'USD', 'NGN', 'GBP', 'EUR', 'GHS', 'ZAR', 'KES', 'CAD', 'AUD',
+  'NZD', 'AED', 'SAR', 'INR', 'JPY', 'CNY', 'BRL', 'XOF',
+];
 
 function displayName(entry: { full_name: string | null; username: string | null }) {
   return entry.full_name || entry.username || 'DRIGHT User';
@@ -35,9 +46,39 @@ function statusTone(status: string) {
   return 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
 }
 
+function eventLabel(type: string) {
+  const labels: Record<string, string> = {
+    referral_signup: 'Referral signup',
+    seller_sale: 'Completed seller sale',
+    affiliate_sale: 'Affiliate-attributed sale',
+    approved_listing: 'Approved listing',
+    starter_affiliate_sale: 'Starter affiliate sale',
+  };
+  return labels[type] || type.replace(/_/g, ' ');
+}
+
+function parseCompetitorNames(raw: string): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const original of raw.split(/\r?\n/)) {
+    let line = original.trim();
+    if (!line) continue;
+    line = line.replace(/^\s*\d+\s*[,.)-]\s*/, '').trim();
+    line = line.replace(/^["']|["']$/g, '').trim();
+    if (!line || /^no\.?\s*,?\s*full\s*name$/i.test(line) || /^full\s*name$/i.test(line)) continue;
+    const key = line.toLocaleLowerCase();
+    if (line.length >= 2 && line.length <= 120 && !seen.has(key)) {
+      seen.add(key);
+      names.push(line);
+    }
+  }
+  return names;
+}
+
 export default function AdminCompetitionsPage() {
   const [data, setData] = useState<CompetitionDashboardData | null>(null);
   const [settings, setSettings] = useState<MonthlyChallengeDefinition[]>([]);
+  const dirtyKeys = useRef(new Set<string>());
   const [selectedKey, setSelectedKey] = useState('');
   const [leaders, setLeaders] = useState<MonthlyLeaderboardEntry[]>([]);
   const [leaderTotal, setLeaderTotal] = useState(0);
@@ -45,14 +86,23 @@ export default function AdminCompetitionsPage() {
   const [leaderLoading, setLeaderLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [payoutBusy, setPayoutBusy] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [simulationBusy, setSimulationBusy] = useState(false);
   const [awardBusy, setAwardBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [importText, setImportText] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
+  const [simEntries, setSimEntries] = useState<SimulatedCompetitor[]>([]);
+  const [simTotal, setSimTotal] = useState(0);
+  const [simOffset, setSimOffset] = useState(0);
+  const [simLoading, setSimLoading] = useState(false);
+  const [simBusy, setSimBusy] = useState<string | null>(null);
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
-    window.setTimeout(() => setMessage(null), 4000);
+    window.setTimeout(() => setMessage(null), 4500);
   };
 
   const loadDashboard = useCallback(async (silent = false) => {
@@ -60,7 +110,14 @@ export default function AdminCompetitionsPage() {
     try {
       const next = await fetchAdminCompetitionDashboard();
       setData(next);
-      setSettings(next.settings);
+      setSettings(prev => {
+        if (dirtyKeys.current.size === 0) return next.settings;
+        return next.settings.map(server => (
+          dirtyKeys.current.has(server.challenge_key)
+            ? (prev.find(local => local.challenge_key === server.challenge_key) ?? server)
+            : server
+        ));
+      });
       setSelectedKey(prev => next.settings.some(s => s.challenge_key === prev) ? prev : (next.settings[0]?.challenge_key ?? ''));
       setLastUpdated(new Date());
     } catch (error) {
@@ -74,7 +131,7 @@ export default function AdminCompetitionsPage() {
     if (!key) return;
     if (!silent) setLeaderLoading(true);
     try {
-      const result = await fetchMonthlyLeaderboard(key, 'current', 10, 0);
+      const result = await fetchMonthlyLeaderboard(key, 'current', 25, 0);
       setLeaders(result.entries);
       setLeaderTotal(result.total);
       setLastUpdated(new Date());
@@ -85,13 +142,31 @@ export default function AdminCompetitionsPage() {
     }
   }, []);
 
+  const loadSimulated = useCallback(async (key: string, offset = 0, silent = false) => {
+    if (!key) return;
+    if (!silent) setSimLoading(true);
+    try {
+      const result = await fetchAdminSimulatedCompetitors(key, 50, offset);
+      setSimEntries(result.entries);
+      setSimTotal(result.total);
+      setSimOffset(result.offset);
+    } catch (error) {
+      if (!silent) showMessage('error', error instanceof Error ? error.message : 'Could not load AI challengers');
+    } finally {
+      if (!silent) setSimLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
 
   useEffect(() => {
-    if (selectedKey) void loadLeaders(selectedKey);
-  }, [selectedKey, loadLeaders]);
+    if (selectedKey) {
+      void loadLeaders(selectedKey);
+      void loadSimulated(selectedKey, 0);
+    }
+  }, [selectedKey, loadLeaders, loadSimulated]);
 
   useEffect(() => {
     let timer: number | null = null;
@@ -99,7 +174,10 @@ export default function AdminCompetitionsPage() {
       if (timer) window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         void loadDashboard(true);
-        if (selectedKey) void loadLeaders(selectedKey, true);
+        if (selectedKey) {
+          void loadLeaders(selectedKey, true);
+          if (data?.simulation_settings.enabled) void loadSimulated(selectedKey, simOffset, true);
+        }
       }, 350);
     };
     const unsubscribe = subscribeToCompetitionActivity(refresh);
@@ -114,19 +192,25 @@ export default function AdminCompetitionsPage() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [loadDashboard, loadLeaders, selectedKey]);
+  }, [data?.simulation_settings.enabled, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset]);
 
   const pendingAwards = useMemo(
     () => (data?.awards ?? []).filter(a => a.status === 'pending'),
     [data?.awards],
   );
 
+  const patchSetting = (key: string, patch: Partial<MonthlyChallengeDefinition>) => {
+    dirtyKeys.current.add(key);
+    setSettings(prev => prev.map(item => item.challenge_key === key ? { ...item, ...patch } : item));
+  };
+
   const saveCompetition = async (setting: MonthlyChallengeDefinition) => {
     setSavingKey(setting.challenge_key);
     try {
       const saved = await updateAdminMonthlyChallenge(setting);
+      dirtyKeys.current.delete(setting.challenge_key);
       setSettings(prev => prev.map(s => s.challenge_key === saved.challenge_key ? saved : s));
-      showMessage('success', `${saved.title} saved`);
+      showMessage('success', `${saved.title} saved. Prize values and currency are now persisted.`);
       await loadDashboard(true);
       if (selectedKey === saved.challenge_key) await loadLeaders(saved.challenge_key, true);
     } catch (error) {
@@ -145,7 +229,7 @@ export default function AdminCompetitionsPage() {
       showMessage(
         'success',
         next
-          ? 'Auto prize payments enabled. Only zero-risk winners are paid automatically.'
+          ? 'Auto prize payments enabled. Only zero-risk real winners are paid automatically.'
           : 'Auto prize payments disabled. Winners will wait for admin review.',
       );
       await loadDashboard(true);
@@ -153,6 +237,89 @@ export default function AdminCompetitionsPage() {
       showMessage('error', error instanceof Error ? error.message : 'Could not update auto payout');
     } finally {
       setPayoutBusy(false);
+    }
+  };
+
+  const updateHistoryVisibility = async (months: number) => {
+    setHistoryBusy(true);
+    try {
+      await updateAdminCompetitionHistoryVisibility(months);
+      showMessage('success', months === 0 ? 'Public winner history hidden.' : `Users can now view the last ${months} month${months === 1 ? '' : 's'} of finalized results.`);
+      await loadDashboard(true);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not update public history');
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
+  const toggleSimulation = async () => {
+    if (!data) return;
+    setSimulationBusy(true);
+    try {
+      const next = !data.simulation_settings.enabled;
+      await updateAdminCompetitionSimulation(next);
+      showMessage(
+        'success',
+        next
+          ? 'AI challenger mode enabled. Every simulated profile remains visibly labeled and cannot win prizes.'
+          : 'AI challenger mode disabled. Only real DRIGHT users appear publicly.',
+      );
+      await loadDashboard(true);
+      if (selectedKey) {
+        await loadLeaders(selectedKey, true);
+        await loadSimulated(selectedKey, 0, true);
+      }
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not update AI challenger mode');
+    } finally {
+      setSimulationBusy(false);
+    }
+  };
+
+  const importNames = async () => {
+    const names = parseCompetitorNames(importText);
+    if (names.length === 0) {
+      showMessage('error', 'Paste one full name per line, or numbered CSV rows, before importing.');
+      return;
+    }
+    setImportBusy(true);
+    try {
+      const result = await importAdminSimulatedCompetitors(names);
+      showMessage('success', `Imported ${result.inserted.toLocaleString()} new AI challenger profiles. Total: ${result.total.toLocaleString()}.`);
+      setImportText('');
+      if (selectedKey) await loadSimulated(selectedKey, 0);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not import AI challenger profiles');
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const updateSimEntry = (id: string, patch: Partial<SimulatedCompetitor>) => {
+    setSimEntries(prev => prev.map(entry => entry.id === id ? { ...entry, ...patch } : entry));
+  };
+
+  const saveSimEntry = async (entry: SimulatedCompetitor) => {
+    if (!selectedKey) return;
+    setSimBusy(entry.id);
+    try {
+      await updateAdminSimulatedScore(entry.id, selectedKey, {
+        base_score: entry.base_score,
+        target_score: entry.target_score,
+        increment_amount: entry.increment_amount,
+        increment_interval_seconds: entry.increment_interval_seconds,
+        enabled: entry.enabled,
+      });
+      showMessage('success', `${entry.display_name} simulation rule saved for this month.`);
+      await Promise.all([
+        loadSimulated(selectedKey, simOffset, true),
+        loadLeaders(selectedKey, true),
+      ]);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not save AI challenger score rule');
+    } finally {
+      setSimBusy(null);
     }
   };
 
@@ -191,6 +358,8 @@ export default function AdminCompetitionsPage() {
 
   const stats = data?.stats;
   const autoEnabled = Boolean(data?.payout_settings.auto_payout_enabled);
+  const simulationEnabled = Boolean(data?.simulation_settings.enabled);
+  const visibleHistoryMonths = Number(data?.history_settings.visible_months ?? 1);
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -205,9 +374,9 @@ export default function AdminCompetitionsPage() {
           <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-sm font-black uppercase tracking-[0.16em]">
             <Trophy className="w-4 h-4" /> Competition Control Center
           </div>
-          <h1 className="text-2xl md:text-3xl font-black text-gray-950 dark:text-white mt-2">Challenges, leaderboards & prize review</h1>
+          <h1 className="text-2xl md:text-3xl font-black text-gray-950 dark:text-white mt-2">Challenges, live activity, history & prize review</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-3xl">
-            Control every monthly competition, inspect live rankings, review fraud signals, and approve prize payments from one admin page.
+            Control the five monthly competitions, inspect current participants, review activity and previous winners, configure public history, and manage prize payments.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -220,16 +389,18 @@ export default function AdminCompetitionsPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
         <Activity className="w-3.5 h-3.5" />
         Live refresh: Supabase Realtime + 15-second safety refresh
         {lastUpdated && <span>· Updated {lastUpdated.toLocaleTimeString()}</span>}
+        {dirtyKeys.current.size > 0 && <span className="font-bold text-amber-600">· {dirtyKeys.current.size} unsaved competition draft{dirtyKeys.current.size === 1 ? '' : 's'} protected from auto-refresh</span>}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         {[
           { label: 'Active competitions', value: stats?.active_competitions ?? 0, icon: Trophy },
-          { label: 'Ranked users', value: stats?.ranked_users ?? 0, icon: Users },
+          { label: 'Active real users', value: stats?.active_users ?? 0, icon: Users },
+          { label: 'Ranked users', value: stats?.ranked_users ?? 0, icon: Crown },
           { label: 'Pending review', value: stats?.pending_review ?? 0, icon: AlertTriangle },
           { label: 'Fraud flagged', value: stats?.flagged_awards ?? 0, icon: ShieldAlert },
           { label: 'Paid prizes', value: stats?.paid_awards ?? 0, icon: Wallet },
@@ -252,10 +423,10 @@ export default function AdminCompetitionsPage() {
               <h2 className="font-black text-gray-950 dark:text-white">Automatic prize payments</h2>
               <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                 {autoEnabled
-                  ? 'ON: winners with zero fraud risk are automatically credited to their DRIGHT wallet after monthly finalization. Any fraud signal is held for admin review.'
-                  : 'OFF: no prize is paid automatically. Every winner remains in the review queue so an admin can verify referral or affiliate activity first.'}
+                  ? 'ON: real winners with zero fraud risk are automatically credited to their DRIGHT wallet after monthly finalization. Any fraud signal is held for admin review.'
+                  : 'OFF: no prize is paid automatically. Every real winner remains in the review queue so an admin can verify referral or affiliate activity first.'}
               </p>
-              <p className="text-xs text-gray-500 mt-2">Default and safest mode is OFF. You can turn it off again at any time.</p>
+              <p className="text-xs text-gray-500 mt-2">AI challengers are never award recipients.</p>
             </div>
           </div>
           <button
@@ -273,7 +444,7 @@ export default function AdminCompetitionsPage() {
       <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
         <div className="p-5 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-black text-gray-950 dark:text-white">Competition settings</h2>
-          <p className="text-sm text-gray-500 mt-1">Set titles, prize amounts, currency, visibility and leaderboard size.</p>
+          <p className="text-sm text-gray-500 mt-1">Prize drafts no longer get overwritten by realtime refresh. Choose the reward currency, enter prize amounts, then save each competition.</p>
         </div>
         <div className="p-5 space-y-4">
           {settings.map(setting => (
@@ -284,7 +455,7 @@ export default function AdminCompetitionsPage() {
                   <p className="font-black text-gray-950 dark:text-white mt-1">{setting.challenge_key.replace(/_/g, ' ')}</p>
                 </div>
                 <button
-                  onClick={() => setSettings(prev => prev.map(s => s.challenge_key === setting.challenge_key ? { ...s, enabled: !s.enabled } : s))}
+                  onClick={() => patchSetting(setting.challenge_key, { enabled: !setting.enabled })}
                   className={`px-3 py-1.5 rounded-full text-xs font-black ${setting.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'}`}
                 >
                   {setting.enabled ? 'Enabled' : 'Disabled'}
@@ -294,27 +465,38 @@ export default function AdminCompetitionsPage() {
               <div className="grid md:grid-cols-2 gap-3 mt-4">
                 <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
                   Title
-                  <input value={setting.title} onChange={e => setSettings(prev => prev.map(s => s.challenge_key === setting.challenge_key ? { ...s, title: e.target.value } : s))} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  <input value={setting.title} onChange={e => patchSetting(setting.challenge_key, { title: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                 </label>
                 <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
                   Reward currency
-                  <input maxLength={3} value={setting.reward_currency} onChange={e => setSettings(prev => prev.map(s => s.challenge_key === setting.challenge_key ? { ...s, reward_currency: e.target.value.toUpperCase() } : s))} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  <select value={setting.reward_currency} onChange={e => patchSetting(setting.challenge_key, { reward_currency: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm">
+                    {!REWARD_CURRENCIES.includes(setting.reward_currency) && <option value={setting.reward_currency}>{setting.reward_currency}</option>}
+                    {REWARD_CURRENCIES.map(code => <option key={code} value={code}>{code}</option>)}
+                  </select>
                 </label>
               </div>
               <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mt-3">
                 Description
-                <textarea rows={2} value={setting.description ?? ''} onChange={e => setSettings(prev => prev.map(s => s.challenge_key === setting.challenge_key ? { ...s, description: e.target.value || null } : s))} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                <textarea rows={2} value={setting.description ?? ''} onChange={e => patchSetting(setting.challenge_key, { description: e.target.value || null })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
               </label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
                 {(['reward_first','reward_second','reward_third'] as const).map((field, idx) => (
                   <label key={field} className="text-xs font-bold text-gray-600 dark:text-gray-300">
                     {idx + 1}{idx === 0 ? 'st' : idx === 1 ? 'nd' : 'rd'} prize
-                    <input type="number" min={0} value={setting[field]} onChange={e => setSettings(prev => prev.map(s => s.challenge_key === setting.challenge_key ? { ...s, [field]: Math.max(0, Number(e.target.value) || 0) } : s))} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="0.01"
+                      value={setting[field]}
+                      onChange={e => patchSetting(setting.challenge_key, { [field]: Math.max(0, Number(e.target.value) || 0) } as Partial<MonthlyChallengeDefinition>)}
+                      className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm"
+                    />
                   </label>
                 ))}
                 <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
                   Users/page
-                  <input type="number" min={3} max={200} value={setting.display_limit} onChange={e => setSettings(prev => prev.map(s => s.challenge_key === setting.challenge_key ? { ...s, display_limit: Math.min(200, Math.max(3, Number(e.target.value) || 25)) } : s))} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  <input type="number" min={3} max={200} value={setting.display_limit} onChange={e => patchSetting(setting.challenge_key, { display_limit: Math.min(200, Math.max(3, Number(e.target.value) || 25)) })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                 </label>
               </div>
               <div className="mt-4 flex items-center justify-between gap-3">
@@ -334,7 +516,7 @@ export default function AdminCompetitionsPage() {
         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h2 className="font-black text-gray-950 dark:text-white">Live competition dashboard</h2>
-            <p className="text-sm text-gray-500 mt-1">Zero-activity users are excluded from ranking.</p>
+            <p className="text-sm text-gray-500 mt-1">Recent real users now remain visible with zero activity as unranked participants. Qualifying activity moves them into ranked positions automatically.</p>
           </div>
           <select value={selectedKey} onChange={e => setSelectedKey(e.target.value)} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm font-bold">
             {settings.filter(s => s.enabled).map(s => <option key={s.challenge_key} value={s.challenge_key}>{s.title}</option>)}
@@ -346,24 +528,28 @@ export default function AdminCompetitionsPage() {
           ) : leaders.length === 0 ? (
             <div className="py-12 text-center">
               <Trophy className="w-10 h-10 mx-auto text-gray-300 mb-3" />
-              <p className="font-bold text-gray-700 dark:text-gray-200">No qualifying activity yet</p>
-              <p className="text-sm text-gray-500 mt-1">The leaderboard will populate automatically when verified activity is recorded.</p>
+              <p className="font-bold text-gray-700 dark:text-gray-200">No participants are available yet</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {leaders.map((entry, idx) => (
+              {leaders.map(entry => (
                 <div key={entry.user_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 dark:bg-gray-950/60 p-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${idx === 0 ? 'bg-amber-300 text-gray-950' : idx === 1 ? 'bg-gray-300 text-gray-900' : idx === 2 ? 'bg-orange-300 text-gray-950' : 'bg-gray-200 dark:bg-gray-800'}`}>
-                    {idx === 0 ? <Crown className="w-4 h-4" /> : idx < 3 ? <Medal className="w-4 h-4" /> : entry.rank}
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${entry.is_ranked && entry.rank === 1 ? 'bg-amber-300 text-gray-950' : entry.is_ranked && entry.rank === 2 ? 'bg-gray-300 text-gray-900' : entry.is_ranked && entry.rank === 3 ? 'bg-orange-300 text-gray-950' : 'bg-gray-200 dark:bg-gray-800'}`}>
+                    {!entry.is_ranked ? '—' : entry.rank === 1 ? <Crown className="w-4 h-4" /> : entry.rank <= 3 ? <Medal className="w-4 h-4" /> : entry.rank}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-950 dark:text-white truncate">{displayName(entry)}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-bold text-gray-950 dark:text-white truncate">{displayName(entry)}</p>
+                      {entry.is_simulated && <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-black text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"><Bot className="w-3 h-3" /> AI challenger</span>}
+                      {!entry.is_ranked && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">Unranked</span>}
+                    </div>
                     <p className="text-xs text-gray-500">{entry.primary_metric.toLocaleString()} primary · {entry.secondary_metric.toLocaleString()} secondary</p>
+                    {!entry.is_simulated && entry.reward_rank > 0 && entry.reward_rank !== entry.rank && <p className="text-[10px] text-emerald-600">Real-user prize rank #{entry.reward_rank}</p>}
                   </div>
-                  <div className="text-xs font-bold text-gray-500">#{entry.rank}</div>
+                  <div className="text-xs font-bold text-gray-500">{entry.is_ranked ? `#${entry.rank}` : '0 score'}</div>
                 </div>
               ))}
-              <p className="text-xs text-gray-400 pt-2">{leaderTotal.toLocaleString()} qualifying ranked user{leaderTotal === 1 ? '' : 's'}</p>
+              <p className="text-xs text-gray-400 pt-2">{leaderTotal.toLocaleString()} total participant{leaderTotal === 1 ? '' : 's'} in this board view.</p>
             </div>
           )}
         </div>
@@ -371,8 +557,221 @@ export default function AdminCompetitionsPage() {
 
       <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
         <div className="p-5 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2">
+            <History className="w-5 h-5 text-violet-500" />
+            <h2 className="font-black text-gray-950 dark:text-white">Winner history & public history visibility</h2>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">Choose how many completed months users can inspect. Admin keeps up to 12 months in this dashboard.</p>
+        </div>
+        <div className="p-5">
+          <div className="flex flex-wrap gap-2">
+            {[0, 1, 2, 3, 6, 12].map(months => (
+              <button
+                key={months}
+                disabled={historyBusy}
+                onClick={() => void updateHistoryVisibility(months)}
+                className={`rounded-xl px-3 py-2 text-sm font-black border ${visibleHistoryMonths === months ? 'border-violet-500 bg-violet-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'} disabled:opacity-60`}
+              >
+                {months === 0 ? 'Hide public history' : `Last ${months} month${months === 1 ? '' : 's'}`}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {(data?.history ?? []).length === 0 ? (
+              <div className="rounded-2xl bg-gray-50 dark:bg-gray-950/60 p-6 text-center">
+                <History className="w-9 h-9 mx-auto text-gray-300 mb-2" />
+                <p className="font-bold text-gray-700 dark:text-gray-200">No finalized historical leaderboard snapshots yet</p>
+                <p className="text-xs text-gray-500 mt-1">Completed monthly results will appear here after finalization. No fake winner records are created.</p>
+              </div>
+            ) : (
+              (data?.history ?? []).map(snapshot => {
+                const challenge = settings.find(s => s.challenge_key === snapshot.challenge_key);
+                const winners = snapshot.entries.filter(entry => entry.rank > 0).slice(0, 3);
+                return (
+                  <div key={`${snapshot.period_start}-${snapshot.challenge_key}`} className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <p className="font-black text-gray-950 dark:text-white">{challenge?.title ?? snapshot.challenge_key.replace(/_/g, ' ')}</p>
+                        <p className="text-xs text-gray-500">{new Date(`${snapshot.period_start}T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}</p>
+                      </div>
+                      <p className="text-xs text-gray-400">Finalized {snapshot.finalized_at ? new Date(snapshot.finalized_at).toLocaleString() : '—'}</p>
+                    </div>
+                    {winners.length === 0 ? (
+                      <p className="mt-3 text-sm text-gray-500">No qualifying winner for this month.</p>
+                    ) : (
+                      <div className="mt-3 grid sm:grid-cols-3 gap-2">
+                        {winners.map(winner => (
+                          <div key={winner.user_id} className="rounded-xl bg-gray-50 dark:bg-gray-950/60 p-3">
+                            <p className="text-[10px] font-black uppercase text-gray-400">#{winner.rank} winner</p>
+                            <p className="font-bold text-gray-950 dark:text-white mt-1 truncate">{displayName(winner)}</p>
+                            <p className="text-xs text-gray-500 mt-1">{winner.primary_metric.toLocaleString()} primary</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+        <div className="p-5 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2">
+            <Clock3 className="w-5 h-5 text-blue-500" />
+            <h2 className="font-black text-gray-950 dark:text-white">Current-month activity feed</h2>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">A direct admin trail of referrals, completed sales, affiliate attribution, approved listings and Starter affiliate sales used by the competition system.</p>
+        </div>
+        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+          {(data?.recent_activity ?? []).length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-500">No qualifying activity events recorded this month.</div>
+          ) : (data?.recent_activity ?? []).slice(0, 50).map((event, index) => (
+            <div key={`${event.event_at}-${event.event_type}-${event.actor_id}-${index}`} className="p-4 flex items-start gap-3">
+              <Activity className="w-4 h-4 mt-1 text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-gray-950 dark:text-white">
+                  {event.actor_name || event.actor_username || 'DRIGHT user'} · {eventLabel(event.event_type)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {event.target_name ? `Target: ${event.target_name} · ` : ''}
+                  Value: {event.value.toLocaleString()}
+                  {event.order_id ? ` · Order ${event.order_id.slice(0, 8)}…` : ''}
+                </p>
+              </div>
+              <p className="text-[10px] text-gray-400 shrink-0">{event.event_at ? new Date(event.event_at).toLocaleString() : '—'}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className={`rounded-3xl border overflow-hidden ${simulationEnabled ? 'border-cyan-300 dark:border-cyan-900' : 'border-gray-200 dark:border-gray-800'} bg-white dark:bg-gray-900`}>
+        <div className="p-5 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div className="flex gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-cyan-500 text-white flex items-center justify-center shrink-0"><Bot className="w-5 h-5" /></div>
+              <div>
+                <h2 className="font-black text-gray-950 dark:text-white">AI challenger gamification</h2>
+                <p className="text-sm text-gray-500 mt-1 max-w-3xl">
+                  Optional simulated competitors can provide visible performance benchmarks. They are always labeled “AI challenger”, never presented as real people or real past winners, and never receive or block real-user prizes.
+                </p>
+              </div>
+            </div>
+            <button
+              role="switch"
+              aria-checked={simulationEnabled}
+              disabled={simulationBusy}
+              onClick={toggleSimulation}
+              className={`relative w-16 h-9 rounded-full transition shrink-0 ${simulationEnabled ? 'bg-cyan-600' : 'bg-gray-300 dark:bg-gray-700'} disabled:opacity-60`}
+            >
+              <span className={`absolute top-1 w-7 h-7 rounded-full bg-white shadow transition-all ${simulationEnabled ? 'left-8' : 'left-1'}`} />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-5">
+          <div className="rounded-2xl bg-cyan-50 dark:bg-cyan-950/20 p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-cyan-700 dark:text-cyan-300">Bulk profile import</p>
+            <p className="text-xs text-gray-500 mt-1">Paste one name per line or numbered CSV rows. Numbers such as “1,” through “10000,” are stripped automatically and are not stored with the name.</p>
+            <textarea
+              rows={5}
+              value={importText}
+              onChange={e => setImportText(e.target.value)}
+              placeholder={"Iwegbu Marvelous Praise\nJohn Henry Joseph\nMantey Afriyie Elorm"}
+              className="mt-3 w-full rounded-xl border border-cyan-200 dark:border-cyan-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm"
+            />
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-gray-500">{parseCompetitorNames(importText).length.toLocaleString()} valid unique name{parseCompetitorNames(importText).length === 1 ? '' : 's'} ready</p>
+              <button disabled={importBusy || !importText.trim()} onClick={() => void importNames()} className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">
+                {importBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />} Import profiles
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+              <div>
+                <p className="font-black text-gray-950 dark:text-white">Monthly score rules · {settings.find(s => s.challenge_key === selectedKey)?.title ?? selectedKey}</p>
+                <p className="text-xs text-gray-500 mt-1">Base score starts immediately. Increment amount is added every interval until the optional target score is reached.</p>
+              </div>
+              <p className="text-xs text-gray-400">{simTotal.toLocaleString()} imported AI challenger profile{simTotal === 1 ? '' : 's'}</p>
+            </div>
+
+            {simLoading ? (
+              <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-cyan-500" /></div>
+            ) : simEntries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-6 text-center text-sm text-gray-500">No AI challenger profiles imported yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {simEntries.map(entry => (
+                  <div key={entry.id} className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-black text-gray-950 dark:text-white truncate">{entry.display_name}</p>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-black text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"><Bot className="w-3 h-3" /> AI challenger</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Effective score now: {entry.effective_score.toLocaleString()}</p>
+                      </div>
+                      <button
+                        onClick={() => updateSimEntry(entry.id, { enabled: !entry.enabled })}
+                        className={`rounded-full px-3 py-1.5 text-xs font-black ${entry.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'}`}
+                      >
+                        {entry.enabled ? 'Rule enabled' : 'Rule disabled'}
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
+                      <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                        Base score
+                        <input type="number" min={0} value={entry.base_score} onChange={e => updateSimEntry(entry.id, { base_score: Math.max(0, Number(e.target.value) || 0) })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm" />
+                      </label>
+                      <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                        Target score
+                        <input type="number" min={0} value={entry.target_score ?? ''} placeholder="No cap" onChange={e => updateSimEntry(entry.id, { target_score: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm" />
+                      </label>
+                      <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                        Add each interval
+                        <input type="number" min={0} value={entry.increment_amount} onChange={e => updateSimEntry(entry.id, { increment_amount: Math.max(0, Number(e.target.value) || 0) })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm" />
+                      </label>
+                      <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                        Interval
+                        <select value={entry.increment_interval_seconds} onChange={e => updateSimEntry(entry.id, { increment_interval_seconds: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm">
+                          <option value={60}>Every 1 minute</option>
+                          <option value={300}>Every 5 minutes</option>
+                          <option value={900}>Every 15 minutes</option>
+                          <option value={3600}>Every 1 hour</option>
+                          <option value={21600}>Every 6 hours</option>
+                          <option value={86400}>Every 1 day</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <button disabled={simBusy === entry.id} onClick={() => void saveSimEntry(entry)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
+                        {simBusy === entry.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save score rule
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex items-center justify-between gap-3">
+                  <button disabled={simOffset <= 0 || simLoading} onClick={() => void loadSimulated(selectedKey, Math.max(0, simOffset - 50))} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Previous 50</button>
+                  <p className="text-xs text-gray-500">{simTotal === 0 ? 0 : simOffset + 1}–{Math.min(simOffset + 50, simTotal)} of {simTotal.toLocaleString()}</p>
+                  <button disabled={simOffset + 50 >= simTotal || simLoading} onClick={() => void loadSimulated(selectedKey, simOffset + 50)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Next 50</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+        <div className="p-5 border-b border-gray-100 dark:border-gray-800">
           <h2 className="font-black text-gray-950 dark:text-white">Prize verification queue</h2>
-          <p className="text-sm text-gray-500 mt-1">Review finalized winners before paying when auto payout is OFF, or investigate any winner automatically held for fraud signals.</p>
+          <p className="text-sm text-gray-500 mt-1">Review finalized real winners before paying when auto payout is OFF, or investigate any winner automatically held for fraud signals.</p>
         </div>
         <div className="p-5 space-y-4">
           {pendingAwards.length === 0 ? (
@@ -437,10 +836,10 @@ export default function AdminCompetitionsPage() {
       {(data?.awards ?? []).some(a => a.status === 'paid' || a.status === 'cancelled') && (
         <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
           <div className="p-5 border-b border-gray-100 dark:border-gray-800">
-            <h2 className="font-black text-gray-950 dark:text-white">Prize history</h2>
+            <h2 className="font-black text-gray-950 dark:text-white">Prize payment history</h2>
           </div>
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
-            {(data?.awards ?? []).filter(a => a.status !== 'pending').slice(0, 30).map(award => (
+            {(data?.awards ?? []).filter(a => a.status !== 'pending').slice(0, 50).map(award => (
               <div key={award.id} className="p-4 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-gray-950 dark:text-white truncate">{displayName(award)} · {award.challenge_key.replace(/_/g, ' ')}</p>
