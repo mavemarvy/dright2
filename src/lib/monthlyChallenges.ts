@@ -26,6 +26,7 @@ export interface MonthlyHistoryPeriod {
 
 export interface MonthlyLeaderboardEntry {
   rank: number;
+  reward_rank: number;
   user_id: string;
   full_name: string | null;
   username: string | null;
@@ -107,6 +108,7 @@ function normalizeDefinition(row: any): MonthlyChallengeDefinition {
 function normalizeEntry(row: any): MonthlyLeaderboardEntry {
   return {
     rank: Number(row.rank ?? 0),
+    reward_rank: Number(row.reward_rank ?? row.rank ?? 0),
     user_id: String(row.user_id ?? ''),
     full_name: row.full_name ? String(row.full_name) : null,
     username: row.username ? String(row.username) : null,
@@ -429,6 +431,7 @@ export async function fetchAdminCompetitionDashboard(): Promise<CompetitionDashb
                 ...entry,
                 is_simulated: false,
                 is_ranked: Number(entry?.rank ?? 0) > 0,
+                reward_rank: Number(entry?.rank ?? 0),
                 source_label: 'DRIGHT user',
               }))
             : [],
