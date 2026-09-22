@@ -284,7 +284,6 @@ function SupportTab() {
           </div>
         ))}
       </div>
-      </div>
 
       <AnimatePresence>
         {editing && (
@@ -520,6 +519,7 @@ function ChallengesTab() {
             </div>
           </div>
         ))}
+      </div>
       </div>
 
       <AnimatePresence>
