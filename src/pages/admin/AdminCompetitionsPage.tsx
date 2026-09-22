@@ -99,6 +99,8 @@ export default function AdminCompetitionsPage() {
   const [simOffset, setSimOffset] = useState(0);
   const [simLoading, setSimLoading] = useState(false);
   const [simBusy, setSimBusy] = useState<string | null>(null);
+  const [simSearch, setSimSearch] = useState('');
+  const [simSearchApplied, setSimSearchApplied] = useState('');
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
@@ -142,11 +144,11 @@ export default function AdminCompetitionsPage() {
     }
   }, []);
 
-  const loadSimulated = useCallback(async (key: string, offset = 0, silent = false) => {
+  const loadSimulated = useCallback(async (key: string, offset = 0, silent = false, search = '') => {
     if (!key) return;
     if (!silent) setSimLoading(true);
     try {
-      const result = await fetchAdminSimulatedCompetitors(key, 50, offset);
+      const result = await fetchAdminSimulatedCompetitors(key, 50, offset, search);
       setSimEntries(result.entries);
       setSimTotal(result.total);
       setSimOffset(result.offset);
@@ -164,7 +166,7 @@ export default function AdminCompetitionsPage() {
   useEffect(() => {
     if (selectedKey) {
       void loadLeaders(selectedKey);
-      void loadSimulated(selectedKey, 0);
+      void loadSimulated(selectedKey, 0, false, simSearchApplied);
     }
   }, [selectedKey, loadLeaders, loadSimulated]);
 
@@ -176,7 +178,7 @@ export default function AdminCompetitionsPage() {
         void loadDashboard(true);
         if (selectedKey) {
           void loadLeaders(selectedKey, true);
-          if (data?.simulation_settings.enabled) void loadSimulated(selectedKey, simOffset, true);
+          if (data?.simulation_settings.enabled) void loadSimulated(selectedKey, simOffset, true, simSearchApplied);
         }
       }, 350);
     };
@@ -192,7 +194,7 @@ export default function AdminCompetitionsPage() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [data?.simulation_settings.enabled, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset]);
+  }, [data?.simulation_settings.enabled, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset, simSearchApplied]);
 
   const pendingAwards = useMemo(
     () => (data?.awards ?? []).filter(a => a.status === 'pending'),
@@ -268,7 +270,7 @@ export default function AdminCompetitionsPage() {
       await loadDashboard(true);
       if (selectedKey) {
         await loadLeaders(selectedKey, true);
-        await loadSimulated(selectedKey, 0, true);
+        await loadSimulated(selectedKey, 0, true, simSearchApplied);
       }
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not update AI challenger mode');
@@ -288,7 +290,7 @@ export default function AdminCompetitionsPage() {
       const result = await importAdminSimulatedCompetitors(names);
       showMessage('success', `Imported ${result.inserted.toLocaleString()} new AI challenger profiles. Total: ${result.total.toLocaleString()}.`);
       setImportText('');
-      if (selectedKey) await loadSimulated(selectedKey, 0);
+      if (selectedKey) await loadSimulated(selectedKey, 0, false, simSearchApplied);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not import AI challenger profiles');
     } finally {
@@ -313,7 +315,7 @@ export default function AdminCompetitionsPage() {
       });
       showMessage('success', `${entry.display_name} simulation rule saved for this month.`);
       await Promise.all([
-        loadSimulated(selectedKey, simOffset, true),
+        loadSimulated(selectedKey, simOffset, true, simSearchApplied),
         loadLeaders(selectedKey, true),
       ]);
     } catch (error) {
@@ -700,6 +702,44 @@ export default function AdminCompetitionsPage() {
               <p className="text-xs text-gray-400">{simTotal.toLocaleString()} imported AI challenger profile{simTotal === 1 ? '' : 's'}</p>
             </div>
 
+            <div className="mb-3 flex flex-col sm:flex-row gap-2">
+              <input
+                value={simSearch}
+                onChange={e => setSimSearch(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const next = simSearch.trim();
+                    setSimSearchApplied(next);
+                    void loadSimulated(selectedKey, 0, false, next);
+                  }
+                }}
+                placeholder="Search imported challenger by full name"
+                className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm"
+              />
+              <button
+                onClick={() => {
+                  const next = simSearch.trim();
+                  setSimSearchApplied(next);
+                  void loadSimulated(selectedKey, 0, false, next);
+                }}
+                className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-black"
+              >
+                Search
+              </button>
+              {simSearchApplied && (
+                <button
+                  onClick={() => {
+                    setSimSearch('');
+                    setSimSearchApplied('');
+                    void loadSimulated(selectedKey, 0, false, '');
+                  }}
+                  className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-bold text-gray-500"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
             {simLoading ? (
               <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-cyan-500" /></div>
             ) : simEntries.length === 0 ? (
@@ -758,9 +798,9 @@ export default function AdminCompetitionsPage() {
                 ))}
 
                 <div className="flex items-center justify-between gap-3">
-                  <button disabled={simOffset <= 0 || simLoading} onClick={() => void loadSimulated(selectedKey, Math.max(0, simOffset - 50))} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Previous 50</button>
+                  <button disabled={simOffset <= 0 || simLoading} onClick={() => void loadSimulated(selectedKey, Math.max(0, simOffset - 50), false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Previous 50</button>
                   <p className="text-xs text-gray-500">{simTotal === 0 ? 0 : simOffset + 1}–{Math.min(simOffset + 50, simTotal)} of {simTotal.toLocaleString()}</p>
-                  <button disabled={simOffset + 50 >= simTotal || simLoading} onClick={() => void loadSimulated(selectedKey, simOffset + 50)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Next 50</button>
+                  <button disabled={simOffset + 50 >= simTotal || simLoading} onClick={() => void loadSimulated(selectedKey, simOffset + 50, false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Next 50</button>
                 </div>
               </div>
             )}
