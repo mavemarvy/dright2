@@ -1,67 +1,377 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Trophy, Clock, Gift, CheckCircle, Loader2, Target, Star } from 'lucide-react';
+import {
+  Trophy, Clock, Loader2, Target, Crown, Medal, Users, ShoppingCart,
+  Store, Share2, Rocket, History, ChevronDown,
+} from 'lucide-react';
 import SeoHead from '../components/SeoHead';
-import { usePublishedChallenges, useUserChallengeProgress, upsertChallengeProgress } from '../lib/contentHooks';
-import { CHALLENGE_STATUSES } from '../lib/contentTypes';
+import {
+  fetchMonthlyChallengeCatalog,
+  fetchMonthlyLeaderboard,
+  formatChallengeReward,
+  challengeRewardForRank,
+  type MonthlyChallengeDefinition,
+  type MonthlyChallengePeriod,
+  type MonthlyChallengeSection,
+  type MonthlyLeaderboardEntry,
+} from '../lib/monthlyChallenges';
 import {
   getMyDrightStarterAffiliateProgress,
   renderDrightStarterTemplate,
   type DrightStarterAffiliateProgress,
 } from '../lib/drightStarter';
 
-const ICON_MAP: Record<string, typeof Trophy> = { Trophy, Target, Star, Gift, CheckCircle };
+const CHALLENGE_ICONS: Record<string, typeof Trophy> = {
+  top_referrer: Users,
+  top_buyer_referrer: ShoppingCart,
+  top_seller: Store,
+  top_affiliate: Share2,
+  starter_affiliate: Rocket,
+};
+
+function nameFor(entry: MonthlyLeaderboardEntry): string {
+  return entry.full_name || entry.username || 'DRIGHT User';
+}
+
+function metricText(challenge: MonthlyChallengeDefinition, entry: MonthlyLeaderboardEntry): string {
+  const p = Number(entry.primary_metric || 0);
+  const s = Number(entry.secondary_metric || 0);
+  if (challenge.challenge_key === 'top_seller') {
+    return `${p.toLocaleString()} sale${p === 1 ? '' : 's'} · ${s.toLocaleString()} approved upload${s === 1 ? '' : 's'}`;
+  }
+  if (challenge.challenge_key === 'top_affiliate' || challenge.challenge_key === 'starter_affiliate') {
+    const earned = Number(entry.detail?.affiliate_earnings ?? s ?? 0);
+    return `${p.toLocaleString()} ${challenge.metric_label} · ${earned.toLocaleString()} commission value`;
+  }
+  return `${p.toLocaleString()} ${challenge.metric_label}`;
+}
+
+function InitialAvatar({ entry, className = '' }: { entry: MonthlyLeaderboardEntry; className?: string }) {
+  if (entry.avatar_url) {
+    return <img src={entry.avatar_url} alt="" className={`w-full h-full rounded-full object-cover ${className}`} />;
+  }
+  return (
+    <div className={`w-full h-full rounded-full bg-white/15 flex items-center justify-center font-black text-white ${className}`}>
+      {nameFor(entry).slice(0, 1).toUpperCase()}
+    </div>
+  );
+}
+
+function Podium({
+  challenge,
+  entries,
+}: {
+  challenge: MonthlyChallengeDefinition;
+  entries: MonthlyLeaderboardEntry[];
+}) {
+  const top = entries.filter(e => Number(e.primary_metric) > 0 || Number(e.secondary_metric) > 0).slice(0, 3);
+  if (top.length === 0) {
+    return (
+      <div className="rounded-3xl border border-white/10 bg-white/[0.06] px-5 py-10 text-center">
+        <Trophy className="w-12 h-12 mx-auto text-violet-200/40 mb-3" />
+        <p className="font-bold text-white">The board is open</p>
+        <p className="text-sm text-violet-200 mt-1">Be the first user to take the lead this month.</p>
+      </div>
+    );
+  }
+
+  const slots = [top[1], top[0], top[2]];
+  const ranks = [2, 1, 3];
+
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end pt-4">
+      {slots.map((entry, idx) => {
+        const rank = ranks[idx];
+        if (!entry) return <div key={rank} />;
+        const isFirst = rank === 1;
+        return (
+          <motion.div
+            key={entry.user_id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`flex flex-col items-center text-center ${rank === 2 ? 'pb-1' : rank === 3 ? 'pb-0' : 'pb-5'}`}
+          >
+            <div className="relative">
+              <div className={`${isFirst ? 'w-20 h-20 sm:w-24 sm:h-24 ring-4 ring-amber-300' : 'w-16 h-16 sm:w-20 sm:h-20 ring-2 ring-white/40'} rounded-full overflow-hidden bg-violet-400/30 shadow-xl`}>
+                <InitialAvatar entry={entry} />
+              </div>
+              <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 min-w-8 h-7 px-2 rounded-full flex items-center justify-center font-black text-xs shadow-lg ${rank === 1 ? 'bg-amber-300 text-violet-950' : rank === 2 ? 'bg-slate-200 text-slate-800' : 'bg-orange-300 text-orange-950'}`}>
+                #{rank}
+              </div>
+              {isFirst && <Crown className="absolute -top-8 left-1/2 -translate-x-1/2 w-7 h-7 text-amber-300" />}
+            </div>
+            <p className="mt-5 text-xs sm:text-sm font-black text-white truncate w-full">{nameFor(entry)}</p>
+            <p className="mt-1 text-[10px] sm:text-xs text-violet-200 line-clamp-2">{metricText(challenge, entry)}</p>
+            <p className="mt-2 text-[10px] sm:text-xs font-bold text-amber-200">
+              {formatChallengeReward(challengeRewardForRank(challenge, rank), challenge.reward_currency)}
+            </p>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function ChallengesPage() {
-  const { challenges, loading } = usePublishedChallenges();
-  const { progress: userProgress } = useUserChallengeProgress();
-  const [filter, setFilter] = useState<string>('all');
+  const [period, setPeriod] = useState<MonthlyChallengePeriod>('current');
+  const [section, setSection] = useState<MonthlyChallengeSection>('referral');
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchMonthlyChallengeCatalog>> | null>(null);
+  const [selectedKey, setSelectedKey] = useState('');
+  const [entries, setEntries] = useState<MonthlyLeaderboardEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [loadingBoard, setLoadingBoard] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [starterProgress, setStarterProgress] = useState<DrightStarterAffiliateProgress | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     void getMyDrightStarterAffiliateProgress().then(setStarterProgress);
   }, []);
 
-  const progressMap = useMemo(() => {
-    const map: Record<string, { progress: number; is_completed: boolean; reward_claimed: boolean }> = {};
-    userProgress.forEach(p => { map[p.challenge_id] = { progress: p.progress, is_completed: p.is_completed, reward_claimed: p.reward_claimed }; });
-    return map;
-  }, [userProgress]);
+  useEffect(() => {
+    if (period !== 'current') return;
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [period]);
 
-  const filtered = useMemo(() => {
-    if (filter === 'all') return challenges;
-    return challenges.filter(c => c.status === filter);
-  }, [challenges, filter]);
+  useEffect(() => {
+    let alive = true;
+    setLoadingCatalog(true);
+    void fetchMonthlyChallengeCatalog(period)
+      .then(data => {
+        if (!alive) return;
+        setCatalog(data);
+        const available = data.challenges.filter(c => c.section === section);
+        setSelectedKey(prev => available.some(c => c.challenge_key === prev) ? prev : (available[0]?.challenge_key ?? ''));
+      })
+      .finally(() => alive && setLoadingCatalog(false));
+    return () => { alive = false; };
+  }, [period, section]);
+
+  const selected = useMemo(
+    () => catalog?.challenges.find(c => c.challenge_key === selectedKey) ?? null,
+    [catalog, selectedKey],
+  );
+
+  useEffect(() => {
+    if (!selected) {
+      setEntries([]);
+      setTotal(0);
+      return;
+    }
+    let alive = true;
+    setLoadingBoard(true);
+    void fetchMonthlyLeaderboard(selected.challenge_key, period, selected.display_limit, 0)
+      .then(data => {
+        if (!alive) return;
+        setEntries(data.entries);
+        setTotal(data.total);
+      })
+      .finally(() => alive && setLoadingBoard(false));
+    return () => { alive = false; };
+  }, [selected?.challenge_key, selected?.display_limit, period]);
+
+  const sectionChallenges = useMemo(
+    () => (catalog?.challenges ?? []).filter(c => c.section === section),
+    [catalog, section],
+  );
+
+  const countdown = useMemo(() => {
+    if (period !== 'current' || !catalog?.period_end) return '';
+    const ms = Math.max(0, new Date(`${catalog.period_end}T00:00:00Z`).getTime() - now);
+    const days = Math.floor(ms / 86_400_000);
+    const hours = Math.floor((ms % 86_400_000) / 3_600_000);
+    const minutes = Math.floor((ms % 3_600_000) / 60_000);
+    return `${days}d ${hours}h ${minutes}m`;
+  }, [catalog?.period_end, now, period]);
+
+  const loadMore = async () => {
+    if (!selected || entries.length >= total) return;
+    setLoadingMore(true);
+    try {
+      const data = await fetchMonthlyLeaderboard(
+        selected.challenge_key,
+        period,
+        selected.display_limit,
+        entries.length,
+      );
+      setEntries(prev => [...prev, ...data.entries]);
+      setTotal(data.total);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <SeoHead title="Challenges" description="Complete challenges and earn rewards on DRIGHT." canonical="/challenges" />
+    <div className="min-h-screen bg-slate-950 text-white">
+      <SeoHead
+        title="DRIGHT Challenges"
+        description="Compete in monthly DRIGHT referral, seller and affiliate leaderboards."
+        canonical="/challenges"
+      />
 
-      <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white py-14 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <Trophy className="w-12 h-12 mx-auto mb-4 opacity-80" />
-          <h1 className="text-3xl sm:text-4xl font-bold mb-3">DRIGHT Challenges</h1>
-          <p className="text-amber-100">Complete challenges, earn rewards, and level up</p>
+      <section className="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 px-4 py-12 sm:py-16">
+        <div className="max-w-5xl mx-auto text-center">
+          <Trophy className="w-14 h-14 mx-auto mb-4 text-white/90" />
+          <h1 className="text-3xl sm:text-4xl font-black">DRIGHT Challenges</h1>
+          <p className="mt-3 text-white/85 max-w-xl mx-auto">
+            Refer, sell, buy and affiliate your way to the top. Rankings restart automatically every month.
+          </p>
         </div>
-      </div>
+      </section>
 
-      <div className="max-w-5xl mx-auto px-4 py-10">
-        {starterProgress?.enabled && starterProgress.applies && (
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8 rounded-3xl border border-violet-200 dark:border-violet-900 bg-gradient-to-br from-violet-600 to-indigo-700 text-white p-5 sm:p-6 shadow-lg"
+      <main className="max-w-5xl mx-auto px-4 py-8 sm:py-10">
+        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-900 border border-white/10 mb-4">
+          <button
+            onClick={() => setPeriod('current')}
+            className={`rounded-xl py-3 text-sm font-black transition ${period === 'current' ? 'bg-white text-slate-950' : 'text-slate-300'}`}
           >
+            Current Month
+          </button>
+          <button
+            onClick={() => setPeriod('previous')}
+            className={`rounded-xl py-3 text-sm font-black transition flex items-center justify-center gap-2 ${period === 'previous' ? 'bg-white text-slate-950' : 'text-slate-300'}`}
+          >
+            <History className="w-4 h-4" /> Previous Month
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          {(['referral', 'affiliate'] as MonthlyChallengeSection[]).map(item => (
+            <button
+              key={item}
+              onClick={() => setSection(item)}
+              className={`rounded-2xl border px-4 py-3 text-sm font-black capitalize transition ${section === item ? 'border-violet-400 bg-violet-500/15 text-violet-200' : 'border-white/10 bg-slate-900 text-slate-400'}`}
+            >
+              {item === 'referral' ? 'Referral' : 'Affiliate'}
+            </button>
+          ))}
+        </div>
+
+        {loadingCatalog ? (
+          <div className="py-20 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-violet-300" /></div>
+        ) : (
+          <>
+            <div className="flex gap-2 overflow-x-auto pb-3 mb-3">
+              {sectionChallenges.map(challenge => {
+                const Icon = CHALLENGE_ICONS[challenge.challenge_key] || Trophy;
+                return (
+                  <button
+                    key={challenge.challenge_key}
+                    onClick={() => setSelectedKey(challenge.challenge_key)}
+                    className={`shrink-0 rounded-full border px-4 py-2 text-xs font-bold flex items-center gap-2 transition ${selectedKey === challenge.challenge_key ? 'border-amber-300 bg-amber-300 text-slate-950' : 'border-white/10 bg-slate-900 text-slate-300'}`}
+                  >
+                    <Icon className="w-4 h-4" /> {challenge.title}
+                  </button>
+                );
+              })}
+            </div>
+
+            {selected && (
+              <motion.section
+                key={`${selected.challenge_key}-${period}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="overflow-hidden rounded-[28px] border border-violet-400/20 bg-gradient-to-b from-violet-700 via-indigo-800 to-slate-950 shadow-2xl"
+              >
+                <div className="px-5 pt-6 pb-3 sm:px-8">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.2em] font-black text-violet-200">
+                        {period === 'current' ? 'Live monthly leaderboard' : 'Previous month history'}
+                      </p>
+                      <h2 className="text-2xl sm:text-3xl font-black mt-1">{selected.title}</h2>
+                      {selected.description && <p className="text-sm text-violet-100/80 mt-2 max-w-2xl">{selected.description}</p>}
+                    </div>
+                    {period === 'current' && (
+                      <div className="shrink-0 rounded-2xl bg-black/20 border border-white/10 px-3 py-2 text-right">
+                        <p className="text-[10px] text-violet-200 flex items-center gap-1 justify-end"><Clock className="w-3 h-3" /> Resets in</p>
+                        <p className="text-sm font-black">{countdown}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mt-5">
+                    {[1, 2, 3].map(rank => (
+                      <div key={rank} className="rounded-2xl bg-black/20 border border-white/10 p-3">
+                        <p className="text-[10px] text-violet-200">#{rank} reward</p>
+                        <p className="text-xs sm:text-sm font-black mt-1 text-amber-200">
+                          {formatChallengeReward(challengeRewardForRank(selected, rank), selected.reward_currency)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {loadingBoard ? (
+                    <div className="py-16 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-violet-200" /></div>
+                  ) : (
+                    <Podium challenge={selected} entries={entries} />
+                  )}
+                </div>
+
+                {!loadingBoard && (
+                  <div className="bg-slate-950/75 border-t border-white/10 px-3 sm:px-6 py-5">
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <p className="font-black text-sm">{period === 'current' ? 'Full ranking' : 'Last month winners & ranking'}</p>
+                      <p className="text-xs text-slate-400">{total.toLocaleString()} ranked users</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {entries.map(entry => {
+                        const reward = challengeRewardForRank(selected, entry.rank);
+                        return (
+                          <div key={entry.user_id} className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-3">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${entry.rank === 1 ? 'bg-amber-300 text-slate-950' : entry.rank === 2 ? 'bg-slate-300 text-slate-900' : entry.rank === 3 ? 'bg-orange-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>
+                              {entry.rank <= 3 ? (entry.rank === 1 ? <Crown className="w-4 h-4" /> : <Medal className="w-4 h-4" />) : entry.rank}
+                            </div>
+                            <div className="w-10 h-10 rounded-full overflow-hidden bg-violet-500/25 shrink-0">
+                              <InitialAvatar entry={entry} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm truncate">{nameFor(entry)}</p>
+                              <p className="text-xs text-slate-400 truncate">{metricText(selected, entry)}</p>
+                            </div>
+                            {reward > 0 && entry.rank <= 3 && (
+                              <div className="text-right shrink-0">
+                                <p className="text-[10px] text-slate-500">Prize</p>
+                                <p className="text-xs font-black text-amber-300">{formatChallengeReward(reward, selected.reward_currency)}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {entries.length < total && (
+                      <button
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="mt-4 w-full min-h-[46px] rounded-xl border border-white/10 bg-white/[0.05] text-sm font-bold text-slate-200 flex items-center justify-center gap-2"
+                      >
+                        {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+                        Load more rankings
+                      </button>
+                    )}
+                  </div>
+                )}
+              </motion.section>
+            )}
+          </>
+        )}
+
+        {starterProgress?.enabled && starterProgress.applies && (
+          <section className="mt-8 rounded-3xl border border-white/10 bg-slate-900 p-5 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="max-w-2xl">
-                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-violet-100">
-                  <Target className="w-4 h-4" /> Affiliate Onboarding Challenge
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-violet-300">
+                  <Target className="w-4 h-4" /> Affiliate onboarding challenge
                 </div>
-                <h2 className="text-xl sm:text-2xl font-black mt-2">
+                <h2 className="text-xl font-black mt-2">
                   {starterProgress.completed ? starterProgress.unlock_label + ' unlocked' : 'Sell DRIGHT Starter Access'}
                 </h2>
-                <p className="text-sm text-violet-100 mt-2">
+                <p className="text-sm text-slate-400 mt-2">
                   {renderDrightStarterTemplate(
                     starterProgress.description_template,
                     0,
@@ -70,127 +380,33 @@ export default function ChallengesPage() {
                 </p>
               </div>
               <div className="sm:text-right">
-                <p className="text-xs text-violet-200">Verified Starter sales</p>
+                <p className="text-xs text-slate-500">Verified Starter sales</p>
                 <p className="text-3xl font-black">{starterProgress.sales}/{starterProgress.target_sales}</p>
               </div>
             </div>
-
-            <div className="mt-5 h-3 rounded-full bg-white/15 overflow-hidden">
+            <div className="mt-5 h-3 rounded-full bg-white/10 overflow-hidden">
               <div
-                className="h-full rounded-full bg-white transition-all"
+                className="h-full rounded-full bg-violet-500 transition-all"
                 style={{ width: `${Math.min(100, starterProgress.target_sales > 0 ? (starterProgress.sales / starterProgress.target_sales) * 100 : 0)}%` }}
               />
             </div>
-
             <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <p className="text-sm text-violet-100">
+              <p className="text-sm text-slate-400">
                 {starterProgress.completed
                   ? 'Challenge complete. Your affiliate onboarding level is unlocked.'
                   : `${starterProgress.remaining_sales} verified sale${starterProgress.remaining_sales === 1 ? '' : 's'} remaining.`}
               </p>
-              <Link
-                to="/dright/starter"
-                className="inline-flex min-h-[42px] items-center justify-center rounded-xl bg-white text-violet-700 px-4 font-black text-sm"
-              >
+              <Link to="/dright/starter" className="inline-flex min-h-[42px] items-center justify-center rounded-xl bg-violet-500 px-4 font-black text-sm">
                 Open Starter Product
               </Link>
             </div>
-          </motion.section>
+          </section>
         )}
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2 mb-8">
-          <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-xl text-sm font-medium ${filter === 'all' ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'}`}>All</button>
-          {CHALLENGE_STATUSES.map(s => (
-            <button key={s.value} onClick={() => setFilter(s.value)} className={`px-4 py-2 rounded-xl text-sm font-medium ${filter === s.value ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'}`}>{s.label}</button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-amber-500 animate-spin" /></div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-gray-400"><Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No challenges available right now. Check back soon!</p></div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filtered.map(challenge => {
-              const Icon = ICON_MAP[challenge.icon] || Trophy;
-              const userProg = progressMap[challenge.id];
-              const progress = userProg?.progress || 0;
-              const isCompleted = userProg?.is_completed || false;
-              const rewardClaimed = userProg?.reward_claimed || false;
-              const statusInfo = CHALLENGE_STATUSES.find(s => s.value === challenge.status);
-
-              return (
-                <motion.div
-                  key={challenge.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden"
-                >
-                  {challenge.banner_image && (
-                    <div className="h-32 bg-cover bg-center" style={{ backgroundImage: `url(${challenge.banner_image})` }} />
-                  )}
-                  <div className="p-5">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isCompleted ? 'bg-green-100' : 'bg-amber-100'}`}>
-                        <Icon className={`w-5 h-5 ${isCompleted ? 'text-green-600' : 'text-amber-600'}`} />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 dark:text-white">{challenge.title}</h3>
-                        {statusInfo && <span className={`text-xs px-2 py-0.5 rounded-full bg-${statusInfo.color}-100 text-${statusInfo.color}-700`}>{statusInfo.label}</span>}
-                      </div>
-                    </div>
-
-                    {challenge.description && <p className="text-sm text-gray-500 mb-4">{challenge.description}</p>}
-
-                    {/* Reward */}
-                    {(challenge.reward_amount > 0 || challenge.reward_description) && (
-                      <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl mb-4">
-                        <Gift className="w-5 h-5 text-amber-600" />
-                        <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                          {challenge.reward_amount > 0 ? `Reward: ${challenge.reward_currency} ${challenge.reward_amount.toLocaleString()}` : challenge.reward_description}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Progress */}
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                        <span>Progress</span>
-                        <span>{progress}%</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${isCompleted ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${progress}%` }} />
-                      </div>
-                    </div>
-
-                    {/* Dates */}
-                    <div className="flex items-center gap-4 text-xs text-gray-400 mb-4">
-                      {challenge.start_date && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Starts: {new Date(challenge.start_date).toLocaleDateString()}</span>}
-                      {challenge.end_date && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Ends: {new Date(challenge.end_date).toLocaleDateString()}</span>}
-                    </div>
-
-                    {/* Action */}
-                    {isCompleted ? (
-                      <div className="flex items-center gap-2 text-green-600 font-medium text-sm">
-                        <CheckCircle className="w-5 h-5" />
-                        {rewardClaimed ? 'Reward claimed!' : 'Completed! Claim your reward.'}
-                      </div>
-                    ) : challenge.status === 'active' && (
-                      <button
-                        onClick={() => upsertChallengeProgress(challenge.id, Math.min(progress + 25, 100), progress + 25 >= 100)}
-                        className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium text-sm"
-                      >
-                        Update Progress
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        <p className="mt-6 text-center text-xs text-slate-500">
+          Monthly rankings use verified DRIGHT activity. Historical public results show only the immediately previous month.
+        </p>
+      </main>
     </div>
   );
 }
