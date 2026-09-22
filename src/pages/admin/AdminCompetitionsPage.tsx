@@ -116,11 +116,6 @@ export default function AdminCompetitionsPage() {
     };
   }, [loadDashboard, loadLeaders, selectedKey]);
 
-  const selected = useMemo(
-    () => settings.find(s => s.challenge_key === selectedKey) ?? null,
-    [settings, selectedKey],
-  );
-
   const pendingAwards = useMemo(
     () => (data?.awards ?? []).filter(a => a.status === 'pending'),
     [data?.awards],
