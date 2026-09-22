@@ -11,6 +11,7 @@ import {
   fetchMonthlyLeaderboard,
   formatChallengeReward,
   challengeRewardForRank,
+  subscribeToCompetitionActivity,
   type MonthlyChallengeDefinition,
   type MonthlyChallengePeriod,
   type MonthlyChallengeSection,
@@ -172,6 +173,48 @@ export default function ChallengesPage() {
       .finally(() => alive && setLoadingBoard(false));
     return () => { alive = false; };
   }, [selected?.challenge_key, selected?.display_limit, period]);
+
+
+  // Live leaderboard refresh: Supabase Realtime events with a 15-second polling fallback.
+  useEffect(() => {
+    if (!selected) return;
+    let alive = true;
+    let debounceId: number | null = null;
+
+    const refresh = () => {
+      if (debounceId) window.clearTimeout(debounceId);
+      debounceId = window.setTimeout(() => {
+        void Promise.all([
+          fetchMonthlyChallengeCatalog(period),
+          fetchMonthlyLeaderboard(selected.challenge_key, period, selected.display_limit, 0),
+        ]).then(([nextCatalog, nextBoard]) => {
+          if (!alive) return;
+          setCatalog(nextCatalog);
+          const available = nextCatalog.challenges.filter(c => c.section === section);
+          setSelectedKey(prev => available.some(ch => ch.challenge_key === prev) ? prev : (available[0]?.challenge_key ?? ''));
+          if (nextCatalog.challenges.some(ch => ch.challenge_key === selected.challenge_key)) {
+            setEntries(nextBoard.entries);
+            setTotal(nextBoard.total);
+          }
+        }).catch(() => {
+          // Keep the last good leaderboard visible; the next realtime/poll cycle retries.
+        });
+      }, 300);
+    };
+
+    const unsubscribe = subscribeToCompetitionActivity(refresh);
+    const intervalId = window.setInterval(refresh, 15_000);
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      alive = false;
+      unsubscribe();
+      window.clearInterval(intervalId);
+      if (debounceId) window.clearTimeout(debounceId);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [period, section, selected?.challenge_key, selected?.display_limit]);
 
   const sectionChallenges = useMemo(
     () => (catalog?.challenges ?? []).filter(c => c.section === section),
@@ -404,7 +447,7 @@ export default function ChallengesPage() {
         )}
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Monthly rankings use verified DRIGHT activity. Historical public results show only the immediately previous month.
+          Monthly rankings use verified DRIGHT activity and refresh automatically. Historical public results show only the immediately previous month.
         </p>
       </main>
     </div>
