@@ -451,7 +451,6 @@ export default function SubscriptionsPage() {
                     </div>
 
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">{plan.name}</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">{plan.description}</p>
 
                     <div className="flex items-baseline gap-1 mt-3">
                       <span className="text-2xl font-bold text-gray-900 dark:text-white">
