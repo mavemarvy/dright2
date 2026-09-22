@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
   Trophy, Clock, Loader2, Target, Crown, Medal, Users, ShoppingCart,
-  Store, Share2, Rocket, History, ChevronDown,
+  Store, Share2, Rocket, History, ChevronDown, Bot,
 } from 'lucide-react';
 import SeoHead from '../components/SeoHead';
 import {
@@ -54,8 +54,17 @@ function InitialAvatar({ entry, className = '' }: { entry: MonthlyLeaderboardEnt
   }
   return (
     <div className={`w-full h-full rounded-full bg-white/15 flex items-center justify-center font-black text-white ${className}`}>
-      {nameFor(entry).slice(0, 1).toUpperCase()}
+      {entry.is_simulated ? <Bot className="w-1/2 h-1/2" /> : nameFor(entry).slice(0, 1).toUpperCase()}
     </div>
+  );
+}
+
+function SourceBadge({ entry }: { entry: MonthlyLeaderboardEntry }) {
+  if (!entry.is_simulated) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-cyan-300/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-cyan-200">
+      <Bot className="w-3 h-3" /> {entry.source_label || 'AI challenger'}
+    </span>
   );
 }
 
@@ -66,13 +75,13 @@ function Podium({
   challenge: MonthlyChallengeDefinition;
   entries: MonthlyLeaderboardEntry[];
 }) {
-  const top = entries.filter(e => Number(e.primary_metric) > 0 || Number(e.secondary_metric) > 0).slice(0, 3);
+  const top = entries.filter(e => e.is_ranked).slice(0, 3);
   if (top.length === 0) {
     return (
       <div className="rounded-3xl border border-white/10 bg-white/[0.06] px-5 py-10 text-center">
         <Trophy className="w-12 h-12 mx-auto text-violet-200/40 mb-3" />
-        <p className="font-bold text-white">The board is open</p>
-        <p className="text-sm text-violet-200 mt-1">Be the first user to take the lead this month.</p>
+        <p className="font-bold text-white">No ranked activity yet</p>
+        <p className="text-sm text-violet-200 mt-1">Recent DRIGHT users still appear below as unranked participants until they record qualifying activity.</p>
       </div>
     );
   }
@@ -86,6 +95,9 @@ function Podium({
         const rank = ranks[idx];
         if (!entry) return <div key={rank} />;
         const isFirst = rank === 1;
+        const reward = !entry.is_simulated && entry.reward_rank > 0
+          ? challengeRewardForRank(challenge, entry.reward_rank)
+          : 0;
         return (
           <motion.div
             key={entry.user_id}
@@ -103,9 +115,14 @@ function Podium({
               {isFirst && <Crown className="absolute -top-8 left-1/2 -translate-x-1/2 w-7 h-7 text-amber-300" />}
             </div>
             <p className="mt-5 text-xs sm:text-sm font-black text-white truncate w-full">{nameFor(entry)}</p>
+            <div className="mt-1 min-h-[18px]"><SourceBadge entry={entry} /></div>
             <p className="mt-1 text-[10px] sm:text-xs text-violet-200 line-clamp-2">{metricText(challenge, entry)}</p>
             <p className="mt-2 text-[10px] sm:text-xs font-bold text-amber-200">
-              {formatChallengeReward(challengeRewardForRank(challenge, rank), challenge.reward_currency)}
+              {entry.is_simulated
+                ? 'Benchmark only · no prize'
+                : reward > 0
+                  ? formatChallengeReward(reward, challenge.reward_currency)
+                  : 'Prize rank outside top 3'}
             </p>
           </motion.div>
         );
@@ -174,10 +191,8 @@ export default function ChallengesPage() {
     return () => { alive = false; };
   }, [selected?.challenge_key, selected?.display_limit, period]);
 
-
-  // Live leaderboard refresh: Supabase Realtime events with a 15-second polling fallback.
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || period !== 'current') return;
     let alive = true;
     let debounceId: number | null = null;
 
@@ -220,6 +235,12 @@ export default function ChallengesPage() {
     () => (catalog?.challenges ?? []).filter(c => c.section === section),
     [catalog, section],
   );
+
+  const historyPeriods = catalog?.history_periods ?? [];
+  const periodLabel = period === 'current'
+    ? 'Current Month'
+    : historyPeriods.find(item => item.period === period)?.label
+      ?? (catalog?.period_start ? new Date(`${catalog.period_start}T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'History');
 
   const countdown = useMemo(() => {
     if (period !== 'current' || !catalog?.period_end) return '';
@@ -273,13 +294,35 @@ export default function ChallengesPage() {
           >
             Current Month
           </button>
-          <button
-            onClick={() => setPeriod('previous')}
-            className={`rounded-xl py-3 text-sm font-black transition flex items-center justify-center gap-2 ${period === 'previous' ? 'bg-white text-slate-950' : 'text-slate-300'}`}
-          >
-            <History className="w-4 h-4" /> Previous Month
-          </button>
+          <div className="relative">
+            <History className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select
+              value={period === 'current' ? '' : period}
+              onChange={e => {
+                if (e.target.value) setPeriod(e.target.value as MonthlyChallengePeriod);
+              }}
+              disabled={historyPeriods.length === 0}
+              className={`w-full h-full min-h-[44px] rounded-xl border-0 pl-9 pr-8 text-sm font-black outline-none ${period !== 'current' ? 'bg-white text-slate-950' : 'bg-transparent text-slate-300'} disabled:opacity-50`}
+            >
+              <option value="" disabled>{historyPeriods.length ? 'Previous results' : 'History hidden'}</option>
+              {historyPeriods.map(item => <option key={item.period} value={item.period}>{item.label}</option>)}
+            </select>
+          </div>
         </div>
+
+        {catalog?.simulation_enabled && period === 'current' && (
+          <div className="mb-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">
+            <div className="flex gap-3">
+              <Bot className="w-5 h-5 shrink-0 mt-0.5 text-cyan-300" />
+              <div>
+                <p className="font-black">AI challenger mode is active</p>
+                <p className="mt-1 text-cyan-100/80">
+                  Profiles labeled “{catalog.simulation_label}” are simulated benchmark competitors. They cannot receive prizes and do not reduce the prize rank of real DRIGHT users.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 mb-5">
           {(['referral', 'affiliate'] as MonthlyChallengeSection[]).map(item => (
@@ -323,7 +366,7 @@ export default function ChallengesPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.2em] font-black text-violet-200">
-                        {period === 'current' ? 'Live monthly leaderboard' : 'Previous month history'}
+                        {period === 'current' ? 'Live monthly leaderboard' : `${periodLabel} results`}
                       </p>
                       <h2 className="text-2xl sm:text-3xl font-black mt-1">{selected.title}</h2>
                       {selected.description && <p className="text-sm text-violet-100/80 mt-2 max-w-2xl">{selected.description}</p>}
@@ -339,7 +382,7 @@ export default function ChallengesPage() {
                   <div className="grid grid-cols-3 gap-2 mt-5">
                     {[1, 2, 3].map(rank => (
                       <div key={rank} className="rounded-2xl bg-black/20 border border-white/10 p-3">
-                        <p className="text-[10px] text-violet-200">#{rank} reward</p>
+                        <p className="text-[10px] text-violet-200">#{rank} real-user reward</p>
                         <p className="text-xs sm:text-sm font-black mt-1 text-amber-200">
                           {formatChallengeReward(challengeRewardForRank(selected, rank), selected.reward_currency)}
                         </p>
@@ -357,35 +400,57 @@ export default function ChallengesPage() {
                 {!loadingBoard && (
                   <div className="bg-slate-950/75 border-t border-white/10 px-3 sm:px-6 py-5">
                     <div className="flex items-center justify-between mb-3 px-1">
-                      <p className="font-black text-sm">{period === 'current' ? 'Full ranking' : 'Last month winners & ranking'}</p>
-                      <p className="text-xs text-slate-400">{total.toLocaleString()} ranked users</p>
+                      <p className="font-black text-sm">{period === 'current' ? 'Participants & ranking' : `${periodLabel} winners & ranking`}</p>
+                      <p className="text-xs text-slate-400">{total.toLocaleString()} participant{total === 1 ? '' : 's'}</p>
                     </div>
 
-                    <div className="space-y-2">
-                      {entries.map(entry => {
-                        const reward = challengeRewardForRank(selected, entry.rank);
-                        return (
-                          <div key={entry.user_id} className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-3">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${entry.rank === 1 ? 'bg-amber-300 text-slate-950' : entry.rank === 2 ? 'bg-slate-300 text-slate-900' : entry.rank === 3 ? 'bg-orange-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>
-                              {entry.rank <= 3 ? (entry.rank === 1 ? <Crown className="w-4 h-4" /> : <Medal className="w-4 h-4" />) : entry.rank}
-                            </div>
-                            <div className="w-10 h-10 rounded-full overflow-hidden bg-violet-500/25 shrink-0">
-                              <InitialAvatar entry={entry} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-sm truncate">{nameFor(entry)}</p>
-                              <p className="text-xs text-slate-400 truncate">{metricText(selected, entry)}</p>
-                            </div>
-                            {reward > 0 && entry.rank <= 3 && (
-                              <div className="text-right shrink-0">
-                                <p className="text-[10px] text-slate-500">Prize</p>
-                                <p className="text-xs font-black text-amber-300">{formatChallengeReward(reward, selected.reward_currency)}</p>
+                    {entries.length === 0 ? (
+                      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-6 text-center text-sm text-slate-400">
+                        No finalized results are available for this challenge and month.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {entries.map(entry => {
+                          const reward = !entry.is_simulated && entry.reward_rank > 0
+                            ? challengeRewardForRank(selected, entry.reward_rank)
+                            : 0;
+                          return (
+                            <div key={entry.user_id} className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-3">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${entry.is_ranked && entry.rank === 1 ? 'bg-amber-300 text-slate-950' : entry.is_ranked && entry.rank === 2 ? 'bg-slate-300 text-slate-900' : entry.is_ranked && entry.rank === 3 ? 'bg-orange-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>
+                                {!entry.is_ranked ? '—' : entry.rank <= 3 ? (entry.rank === 1 ? <Crown className="w-4 h-4" /> : <Medal className="w-4 h-4" />) : entry.rank}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                              <div className="w-10 h-10 rounded-full overflow-hidden bg-violet-500/25 shrink-0">
+                                <InitialAvatar entry={entry} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-bold text-sm truncate">{nameFor(entry)}</p>
+                                  <SourceBadge entry={entry} />
+                                  {!entry.is_ranked && (
+                                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase text-slate-400">Unranked</span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-400 truncate">{metricText(selected, entry)}</p>
+                                {!entry.is_simulated && entry.reward_rank > 0 && entry.reward_rank !== entry.rank && (
+                                  <p className="mt-0.5 text-[10px] text-emerald-300">Real-user prize rank #{entry.reward_rank}</p>
+                                )}
+                              </div>
+                              {entry.is_simulated ? (
+                                <div className="text-right shrink-0">
+                                  <p className="text-[10px] text-cyan-300">Benchmark</p>
+                                  <p className="text-[10px] text-slate-500">No prize</p>
+                                </div>
+                              ) : reward > 0 && entry.reward_rank <= 3 ? (
+                                <div className="text-right shrink-0">
+                                  <p className="text-[10px] text-slate-500">Prize #{entry.reward_rank}</p>
+                                  <p className="text-xs font-black text-amber-300">{formatChallengeReward(reward, selected.reward_currency)}</p>
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {entries.length < total && (
                       <button
@@ -394,7 +459,7 @@ export default function ChallengesPage() {
                         className="mt-4 w-full min-h-[46px] rounded-xl border border-white/10 bg-white/[0.05] text-sm font-bold text-slate-200 flex items-center justify-center gap-2"
                       >
                         {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
-                        Load more rankings
+                        Load more participants
                       </button>
                     )}
                   </div>
@@ -447,7 +512,7 @@ export default function ChallengesPage() {
         )}
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Monthly rankings use verified DRIGHT activity and refresh automatically. Historical public results show only the immediately previous month.
+          Monthly rankings use verified DRIGHT activity and refresh automatically. Unranked real users can appear with zero activity. Public history visibility is controlled by DRIGHT admins.
         </p>
       </main>
     </div>
