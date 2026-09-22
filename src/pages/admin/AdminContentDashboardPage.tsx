@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HelpCircle, Headphones, GraduationCap, Trophy, FileText, Shield,
@@ -21,6 +21,13 @@ import { LEGAL_PAGE_TYPES, PERMISSION_TYPES, DIFFICULTY_LEVELS, CHALLENGE_STATUS
 import type {
   HelpArticle, FaqItem, SupportDepartment, Tutorial, Challenge, LegalPage,
 } from '../../lib/contentTypes';
+import {
+  fetchAdminMonthlyChallengeSettings,
+  updateAdminMonthlyChallenge,
+  formatChallengeReward,
+  type MonthlyChallengeDefinition,
+  type MonthlyChallengeAward,
+} from '../../lib/monthlyChallenges';
 
 type Tab = 'help' | 'support' | 'tutorials' | 'challenges' | 'legal' | 'permissions';
 
@@ -277,6 +284,7 @@ function SupportTab() {
           </div>
         ))}
       </div>
+      </div>
 
       <AnimatePresence>
         {editing && (
@@ -405,12 +413,97 @@ function ChallengesTab() {
   const { challenges, setChallenges } = useAllChallenges();
   const [editing, setEditing] = useState<Challenge | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [monthlySettings, setMonthlySettings] = useState<MonthlyChallengeDefinition[]>([]);
+  const [previousAwards, setPreviousAwards] = useState<MonthlyChallengeAward[]>([]);
+  const [monthlyLoading, setMonthlyLoading] = useState(true);
   const showToast = (type: 'success' | 'error', message: string) => { setToast({ type, message }); setTimeout(() => setToast(null), 3000); };
+
+  useEffect(() => {
+    let alive = true;
+    void fetchAdminMonthlyChallengeSettings()
+      .then(data => {
+        if (!alive) return;
+        setMonthlySettings(data.settings);
+        setPreviousAwards(data.previous_awards);
+      })
+      .catch(error => {
+        if (alive) showToast('error', error instanceof Error ? error.message : 'Could not load monthly leaderboard settings');
+      })
+      .finally(() => alive && setMonthlyLoading(false));
+    return () => { alive = false; };
+  }, []);
+
+  const saveMonthly = async (setting: MonthlyChallengeDefinition) => {
+    try {
+      const saved = await updateAdminMonthlyChallenge(setting);
+      setMonthlySettings(prev => prev.map(item => item.challenge_key === saved.challenge_key ? { ...item, ...saved } : item));
+      showToast('success', `${saved.title} saved`);
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Could not save monthly challenge');
+    }
+  };
 
   return (
     <div>
       <Toast toast={toast} />
-      <button onClick={() => setEditing({} as Challenge)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm mb-4"><Plus className="w-4 h-4" /> New Challenge</button>
+
+      <section className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Monthly Growth Leaderboards</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Current boards reset automatically each calendar month. Public history shows only the immediately previous month.
+            </p>
+          </div>
+          <div className="text-xs text-gray-400">Verified activity only</div>
+        </div>
+
+        {monthlyLoading ? (
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-6 text-sm text-gray-500">Loading monthly leaderboards…</div>
+        ) : (
+          <div className="space-y-4">
+            {monthlySettings.map(setting => (
+              <MonthlyChallengeAdminCard
+                key={setting.challenge_key}
+                setting={setting}
+                onChange={next => setMonthlySettings(prev => prev.map(item => item.challenge_key === next.challenge_key ? next : item))}
+                onSave={() => void saveMonthly(setting)}
+              />
+            ))}
+          </div>
+        )}
+
+        {previousAwards.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+            <h3 className="font-bold text-gray-900 dark:text-white">Previous month prize records</h3>
+            <p className="text-xs text-gray-500 mt-1">Prize records are created from the finalized leaderboard and stay pending until finance completes payout.</p>
+            <div className="mt-3 space-y-2">
+              {previousAwards.map(award => (
+                <div key={award.id} className="flex items-center gap-3 rounded-xl bg-gray-50 dark:bg-gray-900 p-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">#{award.rank}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{award.full_name || award.username || 'DRIGHT User'}</p>
+                    <p className="text-xs text-gray-500">{award.challenge_key.replace(/_/g, ' ')} · {award.primary_metric.toLocaleString()} points</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{formatChallengeReward(award.reward_amount, award.reward_currency)}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400">{award.status}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="font-bold text-gray-900 dark:text-white">Other CMS Challenges</h2>
+            <p className="text-xs text-gray-500">Optional non-leaderboard challenges managed through the existing CMS.</p>
+          </div>
+          <button onClick={() => setEditing({} as Challenge)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm"><Plus className="w-4 h-4" /> New Challenge</button>
+        </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {challenges.map(ch => (
           <div key={ch.id} className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
@@ -440,6 +533,63 @@ function ChallengesTab() {
           </Modal>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function MonthlyChallengeAdminCard({
+  setting,
+  onChange,
+  onSave,
+}: {
+  setting: MonthlyChallengeDefinition;
+  onChange: (value: MonthlyChallengeDefinition) => void;
+  onSave: () => void;
+}) {
+  const set = <K extends keyof MonthlyChallengeDefinition>(key: K, value: MonthlyChallengeDefinition[K]) => {
+    onChange({ ...setting, [key]: value });
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">{setting.section}</p>
+          <h3 className="font-bold text-gray-900 dark:text-white mt-1">{setting.title}</h3>
+          <p className="text-xs text-gray-500 mt-1">{setting.metric_label}</p>
+        </div>
+        <ToggleInput label={setting.enabled ? 'Enabled' : 'Disabled'} value={setting.enabled} onChange={v => set('enabled', v)} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+        <Input label="Title" value={setting.title} onChange={v => set('title', v)} />
+        <Input label="Reward currency" value={setting.reward_currency} onChange={v => set('reward_currency', v.toUpperCase())} />
+      </div>
+      <div className="mt-3">
+        <TextArea label="Description" value={setting.description || ''} onChange={v => set('description', v || null)} rows={2} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <Input label="1st prize" type="number" value={String(setting.reward_first)} onChange={v => set('reward_first', Math.max(0, Number(v) || 0))} />
+        <Input label="2nd prize" type="number" value={String(setting.reward_second)} onChange={v => set('reward_second', Math.max(0, Number(v) || 0))} />
+        <Input label="3rd prize" type="number" value={String(setting.reward_third)} onChange={v => set('reward_third', Math.max(0, Number(v) || 0))} />
+      </div>
+
+      <div className="mt-3 max-w-xs">
+        <Input label="Users loaded per page" type="number" value={String(setting.display_limit)} onChange={v => set('display_limit', Math.min(200, Math.max(3, Number(v) || 25)))} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 text-xs">
+        {[1, 2, 3].map(rank => (
+          <span key={rank} className="rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 px-3 py-1.5 font-semibold">
+            #{rank}: {formatChallengeReward(rank === 1 ? setting.reward_first : rank === 2 ? setting.reward_second : setting.reward_third, setting.reward_currency)}
+          </span>
+        ))}
+      </div>
+
+      <button onClick={onSave} className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold">
+        <Save className="w-4 h-4" /> Save monthly leaderboard
+      </button>
     </div>
   );
 }
