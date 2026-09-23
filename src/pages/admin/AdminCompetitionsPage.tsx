@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity, AlertTriangle, Bot, CheckCircle2, Clock3, Crown, DollarSign, ExternalLink,
-  History, Loader2, Medal, RefreshCw, Save, ShieldAlert, Trophy, Users, Wallet, XCircle,
+  History, ImagePlus, Loader2, Medal, RefreshCw, Save, ShieldAlert, Trophy, Users, Wallet, XCircle,
 } from 'lucide-react';
 import {
   fetchAdminCompetitionDashboard,
@@ -17,6 +17,7 @@ import {
   updateAdminCompetitionSimulation,
   updateAdminMonthlyChallenge,
   updateAdminSimulatedScore,
+  uploadAdminSimulatedCompetitorAvatar,
   type CompetitionAward,
   type CompetitionDashboardData,
   type MonthlyChallengeDefinition,
@@ -99,6 +100,7 @@ export default function AdminCompetitionsPage() {
   const [simOffset, setSimOffset] = useState(0);
   const [simLoading, setSimLoading] = useState(false);
   const [simBusy, setSimBusy] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState<string | null>(null);
   const [simSearch, setSimSearch] = useState('');
   const [simSearchApplied, setSimSearchApplied] = useState('');
 
@@ -264,8 +266,8 @@ export default function AdminCompetitionsPage() {
       showMessage(
         'success',
         next
-          ? 'AI challenger mode enabled. Every simulated profile remains visibly labeled and cannot win prizes.'
-          : 'AI challenger mode disabled. Only real DRIGHT users appear publicly.',
+          ? 'AI challenger mode enabled. Public leaderboard profiles now use the same presentation as every other participant; prize eligibility remains protected internally.'
+          : 'AI challenger mode disabled. Only DRIGHT account participants appear on the public leaderboard.',
       );
       await loadDashboard(true);
       if (selectedKey) {
@@ -300,6 +302,25 @@ export default function AdminCompetitionsPage() {
 
   const updateSimEntry = (id: string, patch: Partial<SimulatedCompetitor>) => {
     setSimEntries(prev => prev.map(entry => entry.id === id ? { ...entry, ...patch } : entry));
+  };
+
+  const uploadSimAvatar = async (entry: SimulatedCompetitor, file: File) => {
+    setAvatarBusy(entry.id);
+    try {
+      const avatarUrl = await uploadAdminSimulatedCompetitorAvatar(entry.id, file);
+      updateSimEntry(entry.id, { avatar_url: avatarUrl });
+      showMessage('success', `${entry.display_name} profile picture updated.`);
+      if (selectedKey) {
+        await Promise.all([
+          loadSimulated(selectedKey, simOffset, true, simSearchApplied),
+          loadLeaders(selectedKey, true),
+        ]);
+      }
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not upload profile picture');
+    } finally {
+      setAvatarBusy(null);
+    }
   };
 
   const saveSimEntry = async (entry: SimulatedCompetitor) => {
@@ -749,12 +770,34 @@ export default function AdminCompetitionsPage() {
                 {simEntries.map(entry => (
                   <div key={entry.id} className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4">
                     <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-black text-gray-950 dark:text-white truncate">{entry.display_name}</p>
-                          <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-black text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"><Bot className="w-3 h-3" /> AI challenger</span>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex items-center justify-center font-black text-gray-500">
+                          {entry.avatar_url
+                            ? <img src={entry.avatar_url} alt="" className="w-full h-full object-cover" />
+                            : entry.display_name.slice(0, 1).toUpperCase()}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Effective score now: {entry.effective_score.toLocaleString()}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-black text-gray-950 dark:text-white truncate">{entry.display_name}</p>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-black text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"><Bot className="w-3 h-3" /> AI challenger</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">Effective score now: {entry.effective_score.toLocaleString()}</p>
+                          <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[11px] font-black text-gray-700 dark:text-gray-200">
+                            {avatarBusy === entry.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                            {entry.avatar_url ? 'Replace picture' : 'Upload picture'}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="hidden"
+                              disabled={avatarBusy === entry.id}
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                e.currentTarget.value = '';
+                                if (file) void uploadSimAvatar(entry, file);
+                              }}
+                            />
+                          </label>
+                        </div>
                       </div>
                       <button
                         onClick={() => updateSimEntry(entry.id, { enabled: !entry.enabled })}
