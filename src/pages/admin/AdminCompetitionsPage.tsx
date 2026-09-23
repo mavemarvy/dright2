@@ -8,12 +8,14 @@ import {
   fetchAdminCompetitionDashboard,
   fetchAdminSimulatedCompetitors,
   fetchAdminSimulationAutomation,
+  fetchAdminSimulatedShowcase,
   fetchMonthlyLeaderboard,
   formatChallengeReward,
   generateAdminSimulationPlan,
   importAdminSimulatedCompetitors,
   removeAdminSimulatedCompetitorAvatar,
   reviewCompetitionAward,
+  saveAdminSimulatedShowcase,
   subscribeToCompetitionActivity,
   updateAdminCompetitionAutoPayout,
   updateAdminCompetitionHistoryVisibility,
@@ -92,6 +94,12 @@ function distributionToText(distribution: Record<string, number>): string {
     .join('\n');
 }
 
+function previousMonthValue(): string {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 function parseDistributionText(raw: string): Record<string, number> {
   const result: Record<string, number> = {};
   for (const original of raw.split(/\r?\n|,/)) {
@@ -113,6 +121,7 @@ export default function AdminCompetitionsPage() {
   const simDirtyIds = useRef(new Set<string>());
   const automationDirty = useRef(false);
   const [selectedKey, setSelectedKey] = useState('');
+  const [automationKey, setAutomationKey] = useState('');
   const [leaders, setLeaders] = useState<MonthlyLeaderboardEntry[]>([]);
   const [leaderTotal, setLeaderTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -139,6 +148,11 @@ export default function AdminCompetitionsPage() {
   const [automationBusy, setAutomationBusy] = useState(false);
   const [planBusy, setPlanBusy] = useState(false);
   const [distributionText, setDistributionText] = useState('');
+  const [showcaseMonth, setShowcaseMonth] = useState(previousMonthValue);
+  const [showcaseNames, setShowcaseNames] = useState<[string, string, string]>(['', '', '']);
+  const [showcaseScores, setShowcaseScores] = useState<[number, number, number]>([500, 200, 100]);
+  const [showcasePublic, setShowcasePublic] = useState(false);
+  const [showcaseBusy, setShowcaseBusy] = useState(false);
   const [simSearch, setSimSearch] = useState('');
   const [simSearchApplied, setSimSearchApplied] = useState('');
 
@@ -161,6 +175,7 @@ export default function AdminCompetitionsPage() {
         ));
       });
       setSelectedKey(prev => next.settings.some(s => s.challenge_key === prev) ? prev : (next.settings[0]?.challenge_key ?? ''));
+      setAutomationKey(prev => next.settings.some(s => s.challenge_key === prev) ? prev : (next.settings[0]?.challenge_key ?? ''));
       setLastUpdated(new Date());
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not load competition control center');
