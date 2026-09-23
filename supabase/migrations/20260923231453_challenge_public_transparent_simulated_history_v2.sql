@@ -1,0 +1,1 @@
+-- Production history marker: public history source disclosure support is consolidated in 20260923231149_challenge_natural_distribution_settings_v2.sql.
