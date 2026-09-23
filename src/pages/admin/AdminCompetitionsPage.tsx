@@ -1027,7 +1027,7 @@ export default function AdminCompetitionsPage() {
                     className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm font-mono"
                   />
                   <span className="mt-1 block font-normal text-gray-500">
-                    Format: score=count. Example 0=2500 keeps 2,500 managed competitors at zero. Buckets are applied first; remaining selected profiles are randomized inside the min/max range.
+                    Format: score=count. Example 0=2500 keeps exactly 2,500 managed competitors at zero. Exact bucket counts stay exact; any remaining selected profiles are randomized only across other available scores inside the min/max range.
                   </span>
                 </label>
 
