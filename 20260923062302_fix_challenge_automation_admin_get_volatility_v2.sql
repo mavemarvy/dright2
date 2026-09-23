@@ -1,0 +1,1 @@
+-- Historical marker: the admin automation getter is VOLATILE in the consolidated final definition because it may seed missing settings.
