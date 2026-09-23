@@ -1,0 +1,1 @@
+-- Historical marker: exact score-bucket preservation is included in the consolidated final automation function.
