@@ -237,6 +237,31 @@ export default function AdminCompetitionsPage() {
     }
   }, []);
 
+  const loadShowcase = useCallback(async (key: string, month: string) => {
+    if (!key || !/^\d{4}-\d{2}$/.test(month)) return;
+    setShowcaseBusy(true);
+    try {
+      const data = await fetchAdminSimulatedShowcase(`${month}-01`, key);
+      const names: [string, string, string] = ['', '', ''];
+      const scores: [number, number, number] = [500, 200, 100];
+      let isPublic = false;
+      for (const entry of data.entries) {
+        if (entry.rank >= 1 && entry.rank <= 3) {
+          names[entry.rank - 1] = entry.full_name;
+          scores[entry.rank - 1] = entry.primary_metric;
+          isPublic = isPublic || entry.public_visible;
+        }
+      }
+      setShowcaseNames(names);
+      setShowcaseScores(scores);
+      setShowcasePublic(isPublic);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not load simulated history showcase');
+    } finally {
+      setShowcaseBusy(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
@@ -246,9 +271,15 @@ export default function AdminCompetitionsPage() {
       simDirtyIds.current.clear();
       void loadLeaders(selectedKey);
       void loadSimulated(selectedKey, 0, false, simSearchApplied);
-      void loadAutomation(selectedKey);
     }
-  }, [selectedKey, loadAutomation, loadLeaders, loadSimulated]);
+  }, [selectedKey, loadLeaders, loadSimulated]);
+
+  useEffect(() => {
+    if (!automationKey) return;
+    automationDirty.current = false;
+    void loadAutomation(automationKey);
+    void loadShowcase(automationKey, showcaseMonth);
+  }, [automationKey, showcaseMonth, loadAutomation, loadShowcase]);
 
   useEffect(() => {
     let timer: number | null = null;
@@ -259,7 +290,9 @@ export default function AdminCompetitionsPage() {
         if (selectedKey) {
           void loadLeaders(selectedKey, true);
           if (data?.simulation_settings.enabled) void loadSimulated(selectedKey, simOffset, true, simSearchApplied);
-          void loadAutomation(selectedKey, true);
+        }
+        if (automationKey) {
+          void loadAutomation(automationKey, true);
         }
       }, 350);
     };
@@ -275,7 +308,7 @@ export default function AdminCompetitionsPage() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [data?.simulation_settings.enabled, loadAutomation, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset, simSearchApplied]);
+  }, [automationKey, data?.simulation_settings.enabled, loadAutomation, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset, simSearchApplied]);
 
   const pendingAwards = useMemo(
     () => (data?.awards ?? []).filter(a => a.status === 'pending'),
