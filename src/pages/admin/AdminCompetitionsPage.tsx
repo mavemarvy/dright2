@@ -384,7 +384,7 @@ export default function AdminCompetitionsPage() {
       await loadDashboard(true);
       if (selectedKey) {
         await loadLeaders(selectedKey, true);
-        await loadSimulated(selectedKey, 0, true, simSearchApplied);
+        await loadSimulated(automationKey, 0, true, simSearchApplied);
       }
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not update AI challenger mode');
@@ -1032,6 +1032,22 @@ export default function AdminCompetitionsPage() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/40 p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-gray-500">Configure leaderboard separately</p>
+            <p className="text-xs text-gray-500 mt-1">Each monthly challenge has its own score distribution, top-three limits, manual overrides and history benchmark.</p>
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {settings.filter(s => s.enabled).map(setting => (
+                <button
+                  key={setting.challenge_key}
+                  onClick={() => setAutomationKey(setting.challenge_key)}
+                  className={`shrink-0 rounded-xl border px-3 py-2 text-xs font-black transition ${automationKey === setting.challenge_key ? 'border-violet-500 bg-violet-600 text-white' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300'}`}
+                >
+                  {setting.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50/60 dark:bg-violet-950/15 p-4">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
               <div>
@@ -1059,36 +1075,64 @@ export default function AdminCompetitionsPage() {
               <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-violet-500" /></div>
             ) : automation && (
               <>
-                <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="mt-4 rounded-xl border border-violet-200/80 dark:border-violet-900 bg-white/70 dark:bg-gray-950/70 p-3">
+                  <p className="text-xs font-black text-violet-700 dark:text-violet-300">
+                    {settings.find(s => s.challenge_key === automationKey)?.title ?? automationKey}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Current scores are deliberately spread across many values. Higher distribution skew keeps more profiles around 0, 1 and 2 instead of moving everyone together.
+                  </p>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Bots allowed to increase
+                    Bots in this board
                     <input type="number" min={0} max={20000} value={automation.active_competitor_count} onChange={e => patchAutomation({ active_competitor_count: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Minimum month-end score
+                    Minimum non-top target
                     <input type="number" min={0} value={automation.min_target} onChange={e => patchAutomation({ min_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Highest month-end score
+                    General non-top max
                     <input type="number" min={0} value={automation.max_target} onChange={e => patchAutomation({ max_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Unique top positions
+                    Distribution skew (1–8)
+                    <input type="number" min={1} max={8} step={0.1} value={automation.distribution_curve} onChange={e => patchAutomation({ distribution_curve: Math.min(8, Math.max(1, Number(e.target.value) || 3.5)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  </label>
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/15 p-3">
+                  <p className="text-xs font-black text-amber-800 dark:text-amber-300">Top-three month-end limits</p>
+                  <p className="text-[11px] text-gray-500 mt-1">These are independent targets for the three reserved top managed profiles. Their live score grows toward the limit during the month.</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                      #1 target
+                      <input type="number" min={0} value={automation.top_first_target} onChange={e => patchAutomation({ top_first_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-gray-950 px-2.5 py-2 text-sm" />
+                    </label>
+                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                      #2 target
+                      <input type="number" min={0} value={automation.top_second_target} onChange={e => patchAutomation({ top_second_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-gray-950 px-2.5 py-2 text-sm" />
+                    </label>
+                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                      #3 target
+                      <input type="number" min={0} value={automation.top_third_target} onChange={e => patchAutomation({ top_third_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-gray-950 px-2.5 py-2 text-sm" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                    Reserved top positions
                     <input type="number" min={0} max={20} value={automation.top_target_count} onChange={e => patchAutomation({ top_target_count: Math.max(0, Math.min(20, Math.trunc(Number(e.target.value) || 0))) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
                     Total month-end records (optional)
-                    <input
-                      type="number"
-                      min={0}
-                      value={automation.total_target_records ?? ''}
-                      placeholder="Auto-distribute"
-                      onChange={e => patchAutomation({ total_target_records: e.target.value === '' ? null : Math.max(0, Math.trunc(Number(e.target.value) || 0)) })}
-                      className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm"
-                    />
+                    <input type="number" min={0} value={automation.total_target_records ?? ''} placeholder="Auto-distribute" onChange={e => patchAutomation({ total_target_records: e.target.value === '' ? null : Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="flex items-center justify-between gap-3 rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Allow previous top bots to win again
+                    Allow previous top profiles again
                     <input type="checkbox" checked={automation.allow_repeat_winners} onChange={e => patchAutomation({ allow_repeat_winners: e.target.checked })} className="w-4 h-4" />
                   </label>
                 </div>
@@ -1129,10 +1173,63 @@ export default function AdminCompetitionsPage() {
             )}
           </div>
 
+          <div className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/15 p-4">
+            <div className="flex items-start gap-3">
+              <History className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-black text-gray-950 dark:text-white">Previous-month simulated benchmark</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Set three managed profiles and scores for a completed month. If you make it public, DRIGHT labels it “Simulated benchmark” so it is not presented as a verified prize-winner record.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid sm:grid-cols-2 gap-3">
+              <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                Completed month
+                <input type="month" max={previousMonthValue()} value={showcaseMonth} onChange={e => setShowcaseMonth(e.target.value)} className="mt-1 w-full rounded-xl border border-blue-200 dark:border-blue-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 dark:border-blue-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300">
+                Show this benchmark in public history
+                <input type="checkbox" checked={showcasePublic} onChange={e => setShowcasePublic(e.target.checked)} className="w-4 h-4" />
+              </label>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {[0, 1, 2].map(index => (
+                <div key={index} className="grid grid-cols-[42px_1fr_92px] gap-2 items-end">
+                  <div className={`h-10 rounded-xl flex items-center justify-center font-black text-sm ${index === 0 ? 'bg-amber-300 text-gray-950' : index === 1 ? 'bg-gray-200 text-gray-800' : 'bg-orange-200 text-orange-900'}`}>#{index + 1}</div>
+                  <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                    Exact managed profile name
+                    <input value={showcaseNames[index]} onChange={e => setShowcaseNames(prev => {
+                      const next = [...prev] as [string, string, string];
+                      next[index] = e.target.value;
+                      return next;
+                    })} placeholder="Search/copy an imported profile name" className="mt-1 w-full rounded-xl border border-blue-200 dark:border-blue-900 bg-white dark:bg-gray-950 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                    Score
+                    <input type="number" min={0} value={showcaseScores[index]} onChange={e => setShowcaseScores(prev => {
+                      const next = [...prev] as [number, number, number];
+                      next[index] = Math.max(0, Math.trunc(Number(e.target.value) || 0));
+                      return next;
+                    })} className="mt-1 w-full rounded-xl border border-blue-200 dark:border-blue-900 bg-white dark:bg-gray-950 px-2.5 py-2 text-sm" />
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button disabled={showcaseBusy} onClick={() => void saveShowcase()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">
+                {showcaseBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save benchmark
+              </button>
+            </div>
+          </div>
+
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
               <div>
-                <p className="font-black text-gray-950 dark:text-white">Monthly score rules · {settings.find(s => s.challenge_key === selectedKey)?.title ?? selectedKey}</p>
+                <p className="font-black text-gray-950 dark:text-white">Monthly score rules · {settings.find(s => s.challenge_key === automationKey)?.title ?? automationKey}</p>
                 <p className="text-xs text-gray-500 mt-1">Manual edits are protected from the 15-second refresh. Changing a current score or month-end target automatically switches that profile to a manual override so the automation will not overwrite it this month.</p>
               </div>
               <p className="text-xs text-gray-400">{simTotal.toLocaleString()} imported AI challenger profile{simTotal === 1 ? '' : 's'}</p>
@@ -1146,7 +1243,7 @@ export default function AdminCompetitionsPage() {
                   if (e.key === 'Enter') {
                     const next = simSearch.trim();
                     setSimSearchApplied(next);
-                    void loadSimulated(selectedKey, 0, false, next);
+                    void loadSimulated(automationKey, 0, false, next);
                   }
                 }}
                 placeholder="Search imported challenger by full name"
@@ -1156,7 +1253,7 @@ export default function AdminCompetitionsPage() {
                 onClick={() => {
                   const next = simSearch.trim();
                   setSimSearchApplied(next);
-                  void loadSimulated(selectedKey, 0, false, next);
+                  void loadSimulated(automationKey, 0, false, next);
                 }}
                 className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-black"
               >
@@ -1167,7 +1264,7 @@ export default function AdminCompetitionsPage() {
                   onClick={() => {
                     setSimSearch('');
                     setSimSearchApplied('');
-                    void loadSimulated(selectedKey, 0, false, '');
+                    void loadSimulated(automationKey, 0, false, '');
                   }}
                   className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-bold text-gray-500"
                 >
@@ -1270,9 +1367,9 @@ export default function AdminCompetitionsPage() {
                 ))}
 
                 <div className="flex items-center justify-between gap-3">
-                  <button disabled={simOffset <= 0 || simLoading} onClick={() => void loadSimulated(selectedKey, Math.max(0, simOffset - 50), false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Previous 50</button>
+                  <button disabled={simOffset <= 0 || simLoading} onClick={() => void loadSimulated(automationKey, Math.max(0, simOffset - 50), false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Previous 50</button>
                   <p className="text-xs text-gray-500">{simTotal === 0 ? 0 : simOffset + 1}–{Math.min(simOffset + 50, simTotal)} of {simTotal.toLocaleString()}</p>
-                  <button disabled={simOffset + 50 >= simTotal || simLoading} onClick={() => void loadSimulated(selectedKey, simOffset + 50, false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Next 50</button>
+                  <button disabled={simOffset + 50 >= simTotal || simLoading} onClick={() => void loadSimulated(automationKey, simOffset + 50, false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Next 50</button>
                 </div>
               </div>
             )}
