@@ -1,0 +1,1 @@
+-- Historical marker: final full-ranking and tie-break definitions are consolidated in 20260923061250_challenge_ranking_automation_foundation_v2.sql.
