@@ -59,6 +59,8 @@ export interface MonthlyLeaderboardResponse {
   offset: number;
   limit: number;
   entries: MonthlyLeaderboardEntry[];
+  viewer: MonthlyLeaderboardEntry | null;
+  viewer_offset: number;
 }
 
 export interface MonthlyChallengeAward {
@@ -171,6 +173,8 @@ export async function fetchMonthlyLeaderboard(
     offset: Number(row.offset ?? offset),
     limit: Number(row.limit ?? limit),
     entries: Array.isArray(row.entries) ? row.entries.map(normalizeEntry) : [],
+    viewer: row.viewer && typeof row.viewer === 'object' ? normalizeEntry(row.viewer) : null,
+    viewer_offset: Number(row.viewer_offset ?? 0),
   };
 }
 
@@ -333,6 +337,7 @@ export interface SimulatedCompetitor {
   increment_interval_seconds: number;
   enabled: boolean;
   effective_score: number;
+  managed_by_automation: boolean;
 }
 
 export interface SimulatedCompetitorPage {
@@ -342,6 +347,27 @@ export interface SimulatedCompetitorPage {
   offset: number;
   limit: number;
   entries: SimulatedCompetitor[];
+}
+
+export interface SimulationAutomationCurrentPlan {
+  automated_profiles: number;
+  manual_profiles: number;
+  highest_target: number | null;
+  zero_targets: number;
+}
+
+export interface SimulationAutomationSettings {
+  challenge_key: string;
+  enabled: boolean;
+  active_competitor_count: number;
+  min_target: number;
+  max_target: number;
+  top_target_count: number;
+  allow_repeat_winners: boolean;
+  total_target_records: number | null;
+  exact_distribution: Record<string, number>;
+  updated_at: string | null;
+  current_plan: SimulationAutomationCurrentPlan;
 }
 
 export interface CompetitionDashboardData {
@@ -532,6 +558,7 @@ export async function fetchAdminSimulatedCompetitors(
           increment_interval_seconds: Number(entry.increment_interval_seconds ?? 3600),
           enabled: Boolean(entry.enabled),
           effective_score: n(entry.effective_score),
+          managed_by_automation: Boolean(entry.managed_by_automation),
         }))
       : [],
   };
@@ -572,6 +599,142 @@ export async function uploadAdminSimulatedCompetitorAvatar(
   });
   if (error) throw error;
   return String(data?.avatar_url ?? avatarUrl);
+}
+
+export async function removeAdminSimulatedCompetitorAvatar(
+  competitorId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('admin_update_monthly_growth_simulated_competitor_avatar', {
+    p_competitor_id: competitorId,
+    p_avatar_url: null,
+  });
+  if (error) throw error;
+}
+
+export async function uploadAndRandomlyAssignAdminSimulatedAvatars(
+  files: File[],
+): Promise<{ requested: number; assigned: number }> {
+  if (files.length < 1 || files.length > 100) {
+    throw new Error('Choose between 1 and 100 profile pictures.');
+  }
+
+  const allowedTypes: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+  for (const file of files) {
+    if (!allowedTypes[file.type]) throw new Error('Every picture must be JPG, PNG, or WebP.');
+    if (file.size > 5 * 1024 * 1024) throw new Error(`${file.name || 'A picture'} is larger than 5 MB.`);
+  }
+
+  const batchId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const urls = new Array<string>(files.length);
+  const concurrency = 6;
+  for (let start = 0; start < files.length; start += concurrency) {
+    const group = files.slice(start, start + concurrency);
+    await Promise.all(group.map(async (file, groupIndex) => {
+      const index = start + groupIndex;
+      const extension = allowedTypes[file.type];
+      const objectPath = `batches/${batchId}/${String(index + 1).padStart(3, '0')}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from('competition-avatars')
+        .upload(objectPath, file, {
+          cacheControl: '3600',
+          contentType: file.type,
+          upsert: false,
+        });
+      if (uploadError) throw uploadError;
+      urls[index] = supabase.storage.from('competition-avatars').getPublicUrl(objectPath).data.publicUrl;
+    }));
+  }
+
+  const { data, error } = await supabase.rpc('admin_assign_monthly_growth_simulated_avatars', {
+    p_avatar_urls: urls,
+    p_replace_existing: true,
+  });
+  if (error) throw error;
+  return {
+    requested: Number(data?.requested ?? files.length),
+    assigned: Number(data?.assigned ?? 0),
+  };
+}
+
+function normalizeAutomationSettings(row: any, challengeKey: string): SimulationAutomationSettings {
+  const current = row?.current_plan ?? {};
+  const rawDistribution = row?.exact_distribution && typeof row.exact_distribution === 'object'
+    ? row.exact_distribution
+    : {};
+  const exact_distribution: Record<string, number> = {};
+  for (const [score, count] of Object.entries(rawDistribution)) {
+    exact_distribution[String(score)] = Math.max(0, Math.trunc(Number(count) || 0));
+  }
+  return {
+    challenge_key: String(row?.challenge_key ?? challengeKey),
+    enabled: Boolean(row?.enabled),
+    active_competitor_count: Math.max(0, Math.trunc(Number(row?.active_competitor_count ?? 10000))),
+    min_target: Math.max(0, Math.trunc(Number(row?.min_target ?? 0))),
+    max_target: Math.max(0, Math.trunc(Number(row?.max_target ?? 100))),
+    top_target_count: Math.max(0, Math.trunc(Number(row?.top_target_count ?? 3))),
+    allow_repeat_winners: Boolean(row?.allow_repeat_winners),
+    total_target_records: row?.total_target_records === null || row?.total_target_records === undefined
+      ? null
+      : Math.max(0, Math.trunc(Number(row.total_target_records) || 0)),
+    exact_distribution,
+    updated_at: row?.updated_at ? String(row.updated_at) : null,
+    current_plan: {
+      automated_profiles: Math.max(0, Number(current.automated_profiles ?? 0)),
+      manual_profiles: Math.max(0, Number(current.manual_profiles ?? 0)),
+      highest_target: current.highest_target === null || current.highest_target === undefined
+        ? null
+        : Number(current.highest_target),
+      zero_targets: Math.max(0, Number(current.zero_targets ?? 0)),
+    },
+  };
+}
+
+export async function fetchAdminSimulationAutomation(
+  challengeKey: string,
+): Promise<SimulationAutomationSettings> {
+  const { data, error } = await supabase.rpc('admin_get_monthly_growth_simulation_automation', {
+    p_challenge_key: challengeKey,
+  });
+  if (error) throw error;
+  return normalizeAutomationSettings(data ?? {}, challengeKey);
+}
+
+export async function updateAdminSimulationAutomation(
+  challengeKey: string,
+  settings: SimulationAutomationSettings,
+): Promise<SimulationAutomationSettings> {
+  const { data, error } = await supabase.rpc('admin_update_monthly_growth_simulation_automation', {
+    p_challenge_key: challengeKey,
+    p_enabled: settings.enabled,
+    p_active_competitor_count: Math.max(0, Math.trunc(settings.active_competitor_count)),
+    p_min_target: Math.max(0, Math.trunc(settings.min_target)),
+    p_max_target: Math.max(0, Math.trunc(settings.max_target)),
+    p_top_target_count: Math.max(0, Math.trunc(settings.top_target_count)),
+    p_allow_repeat_winners: settings.allow_repeat_winners,
+    p_total_target_records: settings.total_target_records === null
+      ? null
+      : Math.max(0, Math.trunc(settings.total_target_records)),
+    p_exact_distribution: settings.exact_distribution,
+  });
+  if (error) throw error;
+  return normalizeAutomationSettings(data ?? {}, challengeKey);
+}
+
+export async function generateAdminSimulationPlan(
+  challengeKey: string,
+): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.rpc('admin_generate_monthly_growth_simulation_plan', {
+    p_challenge_key: challengeKey,
+  });
+  if (error) throw error;
+  return (data ?? {}) as Record<string, unknown>;
 }
 
 export async function updateAdminSimulatedScore(
