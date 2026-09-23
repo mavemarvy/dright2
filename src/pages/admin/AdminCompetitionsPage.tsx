@@ -268,18 +268,18 @@ export default function AdminCompetitionsPage() {
 
   useEffect(() => {
     if (selectedKey) {
-      simDirtyIds.current.clear();
       void loadLeaders(selectedKey);
-      void loadSimulated(selectedKey, 0, false, simSearchApplied);
     }
-  }, [selectedKey, loadLeaders, loadSimulated]);
+  }, [selectedKey, loadLeaders]);
 
   useEffect(() => {
     if (!automationKey) return;
     automationDirty.current = false;
+    simDirtyIds.current.clear();
     void loadAutomation(automationKey);
+    void loadSimulated(automationKey, 0, false, simSearchApplied);
     void loadShowcase(automationKey, showcaseMonth);
-  }, [automationKey, showcaseMonth, loadAutomation, loadShowcase]);
+  }, [automationKey, showcaseMonth, loadAutomation, loadShowcase, loadSimulated]);
 
   useEffect(() => {
     let timer: number | null = null;
@@ -289,9 +289,9 @@ export default function AdminCompetitionsPage() {
         void loadDashboard(true);
         if (selectedKey) {
           void loadLeaders(selectedKey, true);
-          if (data?.simulation_settings.enabled) void loadSimulated(selectedKey, simOffset, true, simSearchApplied);
         }
         if (automationKey) {
+          if (data?.simulation_settings.enabled) void loadSimulated(automationKey, simOffset, true, simSearchApplied);
           void loadAutomation(automationKey, true);
         }
       }, 350);
@@ -404,7 +404,7 @@ export default function AdminCompetitionsPage() {
       const result = await importAdminSimulatedCompetitors(names);
       showMessage('success', `Imported ${result.inserted.toLocaleString()} new AI challenger profiles. Total: ${result.total.toLocaleString()}.`);
       setImportText('');
-      if (selectedKey) await loadSimulated(selectedKey, 0, false, simSearchApplied);
+      if (automationKey) await loadSimulated(automationKey, 0, false, simSearchApplied);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not import AI challenger profiles');
     } finally {
@@ -434,12 +434,11 @@ export default function AdminCompetitionsPage() {
       const avatarUrl = await uploadAdminSimulatedCompetitorAvatar(entry.id, file);
       updateSimEntry(entry.id, { avatar_url: avatarUrl });
       showMessage('success', `${entry.display_name} profile picture updated.`);
-      if (selectedKey) {
-        await Promise.all([
-          loadSimulated(selectedKey, simOffset, true, simSearchApplied),
-          loadLeaders(selectedKey, true),
-        ]);
+      if (automationKey) {
+        await loadSimulated(automationKey, simOffset, true, simSearchApplied);
       }
+      if (automationKey) await loadSimulated(automationKey, simOffset, true, simSearchApplied);
+      if (selectedKey) await loadLeaders(selectedKey, true);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not upload profile picture');
     } finally {
@@ -483,12 +482,8 @@ export default function AdminCompetitionsPage() {
       const result = await uploadAndRandomlyAssignAdminSimulatedAvatars(bulkAvatarFiles);
       showMessage('success', `Randomly assigned ${result.assigned.toLocaleString()} profile picture${result.assigned === 1 ? '' : 's'}.`);
       setBulkAvatarFiles([]);
-      if (selectedKey) {
-        await Promise.all([
-          loadSimulated(selectedKey, simOffset, true, simSearchApplied),
-          loadLeaders(selectedKey, true),
-        ]);
-      }
+      if (automationKey) await loadSimulated(automationKey, simOffset, true, simSearchApplied);
+      if (selectedKey) await loadLeaders(selectedKey, true);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not randomly assign profile pictures');
     } finally {
@@ -502,11 +497,11 @@ export default function AdminCompetitionsPage() {
   };
 
   const saveAutomation = async () => {
-    if (!automation || !selectedKey) return;
+    if (!automation || !automationKey) return;
     setAutomationBusy(true);
     try {
       const exactDistribution = parseDistributionText(distributionText);
-      const saved = await updateAdminSimulationAutomation(selectedKey, {
+      const saved = await updateAdminSimulationAutomation(automationKey, {
         ...automation,
         exact_distribution: exactDistribution,
       });
@@ -522,25 +517,25 @@ export default function AdminCompetitionsPage() {
   };
 
   const applyAutomationPlan = async () => {
-    if (!automation || !selectedKey) return;
+    if (!automation || !automationKey) return;
     setPlanBusy(true);
     try {
       const exactDistribution = parseDistributionText(distributionText);
-      const saved = await updateAdminSimulationAutomation(selectedKey, {
+      const saved = await updateAdminSimulationAutomation(automationKey, {
         ...automation,
         exact_distribution: exactDistribution,
       });
       automationDirty.current = false;
       setAutomation(saved);
       if (!saved.enabled) throw new Error('Turn monthly automation ON before applying a plan.');
-      const result = await generateAdminSimulationPlan(selectedKey);
+      const result = await generateAdminSimulationPlan(automationKey);
       const generated = Number(result.generated ?? 0);
       showMessage('success', `Monthly plan generated for ${generated.toLocaleString()} managed competitor${generated === 1 ? '' : 's'}.`);
       simDirtyIds.current.clear();
       await Promise.all([
-        loadAutomation(selectedKey, true),
-        loadSimulated(selectedKey, 0, false, simSearchApplied),
-        loadLeaders(selectedKey, true),
+        loadAutomation(automationKey, true),
+        loadSimulated(automationKey, 0, false, simSearchApplied),
+        selectedKey ? loadLeaders(selectedKey, true) : Promise.resolve(),
       ]);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not generate monthly automation plan');
@@ -549,11 +544,47 @@ export default function AdminCompetitionsPage() {
     }
   };
 
+  const saveShowcase = async () => {
+    if (!automationKey || !/^\d{4}-\d{2}$/.test(showcaseMonth)) return;
+    setShowcaseBusy(true);
+    try {
+      const saved = await saveAdminSimulatedShowcase(`${showcaseMonth}-01`, automationKey, {
+        first_name: showcaseNames[0],
+        first_score: showcaseScores[0],
+        second_name: showcaseNames[1],
+        second_score: showcaseScores[1],
+        third_name: showcaseNames[2],
+        third_score: showcaseScores[2],
+        public_visible: showcasePublic,
+      });
+      const names: [string, string, string] = ['', '', ''];
+      const scores: [number, number, number] = [500, 200, 100];
+      for (const entry of saved.entries) {
+        if (entry.rank >= 1 && entry.rank <= 3) {
+          names[entry.rank - 1] = entry.full_name;
+          scores[entry.rank - 1] = entry.primary_metric;
+        }
+      }
+      setShowcaseNames(names);
+      setShowcaseScores(scores);
+      showMessage(
+        'success',
+        showcasePublic
+          ? 'Simulated historical benchmark saved. Public history will clearly identify it as a simulated benchmark, not a verified prize result.'
+          : 'Simulated historical benchmark saved privately for admins.',
+      );
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not save simulated historical benchmark');
+    } finally {
+      setShowcaseBusy(false);
+    }
+  };
+
   const saveSimEntry = async (entry: SimulatedCompetitor) => {
-    if (!selectedKey) return;
+    if (!automationKey) return;
     setSimBusy(entry.id);
     try {
-      await updateAdminSimulatedScore(entry.id, selectedKey, {
+      await updateAdminSimulatedScore(entry.id, automationKey, {
         base_score: entry.base_score,
         target_score: entry.target_score,
         increment_amount: entry.increment_amount,
@@ -563,8 +594,8 @@ export default function AdminCompetitionsPage() {
       simDirtyIds.current.delete(entry.id);
       showMessage('success', `${entry.display_name} score rule saved for this month.`);
       await Promise.all([
-        loadSimulated(selectedKey, simOffset, true, simSearchApplied),
-        loadLeaders(selectedKey, true),
+        loadSimulated(automationKey, simOffset, true, simSearchApplied),
+        selectedKey ? loadLeaders(selectedKey, true) : Promise.resolve(),
       ]);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not save AI challenger score rule');
