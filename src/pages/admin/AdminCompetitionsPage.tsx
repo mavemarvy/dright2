@@ -111,6 +111,7 @@ export default function AdminCompetitionsPage() {
   const [settings, setSettings] = useState<MonthlyChallengeDefinition[]>([]);
   const dirtyKeys = useRef(new Set<string>());
   const simDirtyIds = useRef(new Set<string>());
+  const automationDirty = useRef(false);
   const [selectedKey, setSelectedKey] = useState('');
   const [leaders, setLeaders] = useState<MonthlyLeaderboardEntry[]>([]);
   const [leaderTotal, setLeaderTotal] = useState(0);
@@ -210,8 +211,10 @@ export default function AdminCompetitionsPage() {
     if (!silent) setAutomationBusy(true);
     try {
       const next = await fetchAdminSimulationAutomation(key);
-      setAutomation(next);
-      setDistributionText(distributionToText(next.exact_distribution));
+      if (!silent || !automationDirty.current) {
+        setAutomation(next);
+        setDistributionText(distributionToText(next.exact_distribution));
+      }
     } catch (error) {
       if (!silent) showMessage('error', error instanceof Error ? error.message : 'Could not load monthly automation settings');
     } finally {
@@ -364,7 +367,8 @@ export default function AdminCompetitionsPage() {
   const updateSimEntry = (id: string, patch: Partial<SimulatedCompetitor>) => {
     const scoreEdit = ['base_score', 'target_score', 'increment_amount', 'increment_interval_seconds']
       .some(key => Object.prototype.hasOwnProperty.call(patch, key));
-    simDirtyIds.current.add(id);
+    const shouldDirty = scoreEdit || Object.prototype.hasOwnProperty.call(patch, 'enabled');
+    if (shouldDirty) simDirtyIds.current.add(id);
     setSimEntries(prev => prev.map(entry => (
       entry.id === id
         ? {
@@ -445,6 +449,7 @@ export default function AdminCompetitionsPage() {
   };
 
   const patchAutomation = (patch: Partial<SimulationAutomationSettings>) => {
+    automationDirty.current = true;
     setAutomation(prev => prev ? { ...prev, ...patch } : prev);
   };
 
@@ -457,6 +462,7 @@ export default function AdminCompetitionsPage() {
         ...automation,
         exact_distribution: exactDistribution,
       });
+      automationDirty.current = false;
       setAutomation(saved);
       setDistributionText(distributionToText(saved.exact_distribution));
       showMessage('success', 'Monthly competitor automation settings saved.');
@@ -476,6 +482,7 @@ export default function AdminCompetitionsPage() {
         ...automation,
         exact_distribution: exactDistribution,
       });
+      automationDirty.current = false;
       setAutomation(saved);
       if (!saved.enabled) throw new Error('Turn monthly automation ON before applying a plan.');
       const result = await generateAdminSimulationPlan(selectedKey);
@@ -1012,7 +1019,10 @@ export default function AdminCompetitionsPage() {
                   <textarea
                     rows={5}
                     value={distributionText}
-                    onChange={e => setDistributionText(e.target.value)}
+                    onChange={e => {
+                      automationDirty.current = true;
+                      setDistributionText(e.target.value);
+                    }}
                     placeholder={"0=2500\n1=1800\n2=1400\n3=900\n10=250"}
                     className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm font-mono"
                   />
