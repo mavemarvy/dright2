@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity, AlertTriangle, Bot, CheckCircle2, Clock3, Crown, DollarSign, ExternalLink,
-  History, ImagePlus, Loader2, Medal, RefreshCw, Save, ShieldAlert, Trophy, Users, Wallet, XCircle,
+  History, ImageMinus, ImagePlus, Loader2, Medal, RefreshCw, Save, Shuffle, ShieldAlert, Sparkles, Trophy, Upload, Users, Wallet, XCircle,
 } from 'lucide-react';
 import {
   fetchAdminCompetitionDashboard,
   fetchAdminSimulatedCompetitors,
+  fetchAdminSimulationAutomation,
   fetchMonthlyLeaderboard,
   formatChallengeReward,
+  generateAdminSimulationPlan,
   importAdminSimulatedCompetitors,
+  removeAdminSimulatedCompetitorAvatar,
   reviewCompetitionAward,
   subscribeToCompetitionActivity,
   updateAdminCompetitionAutoPayout,
@@ -17,12 +20,15 @@ import {
   updateAdminCompetitionSimulation,
   updateAdminMonthlyChallenge,
   updateAdminSimulatedScore,
+  updateAdminSimulationAutomation,
   uploadAdminSimulatedCompetitorAvatar,
+  uploadAndRandomlyAssignAdminSimulatedAvatars,
   type CompetitionAward,
   type CompetitionDashboardData,
   type MonthlyChallengeDefinition,
   type MonthlyLeaderboardEntry,
   type SimulatedCompetitor,
+  type SimulationAutomationSettings,
 } from '../../lib/monthlyChallenges';
 
 const REWARD_CURRENCIES = [
@@ -66,6 +72,7 @@ function parseCompetitorNames(raw: string): string[] {
     if (!line) continue;
     line = line.replace(/^\s*\d+\s*[,.)-]\s*/, '').trim();
     line = line.replace(/^["']|["']$/g, '').trim();
+    line = line.replace(/[-‐‑‒–—−]+/g, ' ').replace(/\s+/g, ' ').trim();
     if (!line || /^no\.?\s*,?\s*full\s*name$/i.test(line) || /^full\s*name$/i.test(line)) continue;
     const key = line.toLocaleLowerCase();
     if (line.length >= 2 && line.length <= 120 && !seen.has(key)) {
@@ -76,10 +83,34 @@ function parseCompetitorNames(raw: string): string[] {
   return names;
 }
 
+function distributionToText(distribution: Record<string, number>): string {
+  return Object.entries(distribution)
+    .map(([score, count]) => [Number(score), Math.max(0, Math.trunc(Number(count) || 0))] as const)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => a[0] - b[0])
+    .map(([score, count]) => `${score}=${count}`)
+    .join('\n');
+}
+
+function parseDistributionText(raw: string): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const original of raw.split(/\r?\n|,/)) {
+    const line = original.trim();
+    if (!line) continue;
+    const match = line.match(/^(\d+)\s*(?:=|:|x|×)\s*(\d+)$/i);
+    if (!match) throw new Error(`Invalid distribution line: "${line}". Use score=count, for example 0=2000.`);
+    const score = String(Math.max(0, Math.trunc(Number(match[1]))));
+    const count = Math.max(0, Math.trunc(Number(match[2])));
+    result[score] = (result[score] ?? 0) + count;
+  }
+  return result;
+}
+
 export default function AdminCompetitionsPage() {
   const [data, setData] = useState<CompetitionDashboardData | null>(null);
   const [settings, setSettings] = useState<MonthlyChallengeDefinition[]>([]);
   const dirtyKeys = useRef(new Set<string>());
+  const simDirtyIds = useRef(new Set<string>());
   const [selectedKey, setSelectedKey] = useState('');
   const [leaders, setLeaders] = useState<MonthlyLeaderboardEntry[]>([]);
   const [leaderTotal, setLeaderTotal] = useState(0);
@@ -101,6 +132,12 @@ export default function AdminCompetitionsPage() {
   const [simLoading, setSimLoading] = useState(false);
   const [simBusy, setSimBusy] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState<string | null>(null);
+  const [bulkAvatarFiles, setBulkAvatarFiles] = useState<File[]>([]);
+  const [bulkAvatarBusy, setBulkAvatarBusy] = useState(false);
+  const [automation, setAutomation] = useState<SimulationAutomationSettings | null>(null);
+  const [automationBusy, setAutomationBusy] = useState(false);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [distributionText, setDistributionText] = useState('');
   const [simSearch, setSimSearch] = useState('');
   const [simSearchApplied, setSimSearchApplied] = useState('');
 
@@ -151,7 +188,14 @@ export default function AdminCompetitionsPage() {
     if (!silent) setSimLoading(true);
     try {
       const result = await fetchAdminSimulatedCompetitors(key, 50, offset, search);
-      setSimEntries(result.entries);
+      setSimEntries(prev => {
+        if (!silent || simDirtyIds.current.size === 0) return result.entries;
+        return result.entries.map(server => (
+          simDirtyIds.current.has(server.id)
+            ? (prev.find(local => local.id === server.id) ?? server)
+            : server
+        ));
+      });
       setSimTotal(result.total);
       setSimOffset(result.offset);
     } catch (error) {
@@ -161,16 +205,32 @@ export default function AdminCompetitionsPage() {
     }
   }, []);
 
+  const loadAutomation = useCallback(async (key: string, silent = false) => {
+    if (!key) return;
+    if (!silent) setAutomationBusy(true);
+    try {
+      const next = await fetchAdminSimulationAutomation(key);
+      setAutomation(next);
+      setDistributionText(distributionToText(next.exact_distribution));
+    } catch (error) {
+      if (!silent) showMessage('error', error instanceof Error ? error.message : 'Could not load monthly automation settings');
+    } finally {
+      if (!silent) setAutomationBusy(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
 
   useEffect(() => {
     if (selectedKey) {
+      simDirtyIds.current.clear();
       void loadLeaders(selectedKey);
       void loadSimulated(selectedKey, 0, false, simSearchApplied);
+      void loadAutomation(selectedKey);
     }
-  }, [selectedKey, loadLeaders, loadSimulated]);
+  }, [selectedKey, loadAutomation, loadLeaders, loadSimulated]);
 
   useEffect(() => {
     let timer: number | null = null;
@@ -181,6 +241,7 @@ export default function AdminCompetitionsPage() {
         if (selectedKey) {
           void loadLeaders(selectedKey, true);
           if (data?.simulation_settings.enabled) void loadSimulated(selectedKey, simOffset, true, simSearchApplied);
+          void loadAutomation(selectedKey, true);
         }
       }, 350);
     };
@@ -196,7 +257,7 @@ export default function AdminCompetitionsPage() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [data?.simulation_settings.enabled, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset, simSearchApplied]);
+  }, [data?.simulation_settings.enabled, loadAutomation, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset, simSearchApplied]);
 
   const pendingAwards = useMemo(
     () => (data?.awards ?? []).filter(a => a.status === 'pending'),
@@ -301,7 +362,18 @@ export default function AdminCompetitionsPage() {
   };
 
   const updateSimEntry = (id: string, patch: Partial<SimulatedCompetitor>) => {
-    setSimEntries(prev => prev.map(entry => entry.id === id ? { ...entry, ...patch } : entry));
+    const scoreEdit = ['base_score', 'target_score', 'increment_amount', 'increment_interval_seconds']
+      .some(key => Object.prototype.hasOwnProperty.call(patch, key));
+    simDirtyIds.current.add(id);
+    setSimEntries(prev => prev.map(entry => (
+      entry.id === id
+        ? {
+            ...entry,
+            ...patch,
+            ...(scoreEdit ? { enabled: true, managed_by_automation: false } : {}),
+          }
+        : entry
+    )));
   };
 
   const uploadSimAvatar = async (entry: SimulatedCompetitor, file: File) => {
@@ -323,6 +395,105 @@ export default function AdminCompetitionsPage() {
     }
   };
 
+  const removeSimAvatar = async (entry: SimulatedCompetitor) => {
+    setAvatarBusy(entry.id);
+    try {
+      await removeAdminSimulatedCompetitorAvatar(entry.id);
+      updateSimEntry(entry.id, { avatar_url: null });
+      simDirtyIds.current.delete(entry.id);
+      showMessage('success', `${entry.display_name} profile picture removed.`);
+      if (selectedKey) await loadLeaders(selectedKey, true);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not remove profile picture');
+    } finally {
+      setAvatarBusy(null);
+    }
+  };
+
+  const addBulkAvatarFiles = (files: File[]) => {
+    const imageFiles = files.filter(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
+    const next = [...bulkAvatarFiles, ...imageFiles].slice(0, 100);
+    setBulkAvatarFiles(next);
+    if (files.length > imageFiles.length) {
+      showMessage('error', 'Only JPG, PNG, and WebP pictures are accepted.');
+    } else if (bulkAvatarFiles.length + imageFiles.length > 100) {
+      showMessage('error', 'A batch can contain at most 100 pictures.');
+    }
+  };
+
+  const assignBulkAvatars = async () => {
+    if (bulkAvatarFiles.length === 0) {
+      showMessage('error', 'Choose or paste at least one profile picture first.');
+      return;
+    }
+    setBulkAvatarBusy(true);
+    try {
+      const result = await uploadAndRandomlyAssignAdminSimulatedAvatars(bulkAvatarFiles);
+      showMessage('success', `Randomly assigned ${result.assigned.toLocaleString()} profile picture${result.assigned === 1 ? '' : 's'}.`);
+      setBulkAvatarFiles([]);
+      if (selectedKey) {
+        await Promise.all([
+          loadSimulated(selectedKey, simOffset, true, simSearchApplied),
+          loadLeaders(selectedKey, true),
+        ]);
+      }
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not randomly assign profile pictures');
+    } finally {
+      setBulkAvatarBusy(false);
+    }
+  };
+
+  const patchAutomation = (patch: Partial<SimulationAutomationSettings>) => {
+    setAutomation(prev => prev ? { ...prev, ...patch } : prev);
+  };
+
+  const saveAutomation = async () => {
+    if (!automation || !selectedKey) return;
+    setAutomationBusy(true);
+    try {
+      const exactDistribution = parseDistributionText(distributionText);
+      const saved = await updateAdminSimulationAutomation(selectedKey, {
+        ...automation,
+        exact_distribution: exactDistribution,
+      });
+      setAutomation(saved);
+      setDistributionText(distributionToText(saved.exact_distribution));
+      showMessage('success', 'Monthly competitor automation settings saved.');
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not save monthly automation settings');
+    } finally {
+      setAutomationBusy(false);
+    }
+  };
+
+  const applyAutomationPlan = async () => {
+    if (!automation || !selectedKey) return;
+    setPlanBusy(true);
+    try {
+      const exactDistribution = parseDistributionText(distributionText);
+      const saved = await updateAdminSimulationAutomation(selectedKey, {
+        ...automation,
+        exact_distribution: exactDistribution,
+      });
+      setAutomation(saved);
+      if (!saved.enabled) throw new Error('Turn monthly automation ON before applying a plan.');
+      const result = await generateAdminSimulationPlan(selectedKey);
+      const generated = Number(result.generated ?? 0);
+      showMessage('success', `Monthly plan generated for ${generated.toLocaleString()} managed competitor${generated === 1 ? '' : 's'}.`);
+      simDirtyIds.current.clear();
+      await Promise.all([
+        loadAutomation(selectedKey, true),
+        loadSimulated(selectedKey, 0, false, simSearchApplied),
+        loadLeaders(selectedKey, true),
+      ]);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not generate monthly automation plan');
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
   const saveSimEntry = async (entry: SimulatedCompetitor) => {
     if (!selectedKey) return;
     setSimBusy(entry.id);
@@ -334,7 +505,8 @@ export default function AdminCompetitionsPage() {
         increment_interval_seconds: entry.increment_interval_seconds,
         enabled: entry.enabled,
       });
-      showMessage('success', `${entry.display_name} simulation rule saved for this month.`);
+      simDirtyIds.current.delete(entry.id);
+      showMessage('success', `${entry.display_name} score rule saved for this month.`);
       await Promise.all([
         loadSimulated(selectedKey, simOffset, true, simSearchApplied),
         loadLeaders(selectedKey, true),
