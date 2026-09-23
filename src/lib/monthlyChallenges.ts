@@ -325,6 +325,7 @@ export interface CompetitionRecentActivity {
 export interface SimulatedCompetitor {
   id: string;
   display_name: string;
+  avatar_url: string | null;
   active: boolean;
   base_score: number;
   target_score: number | null;
@@ -523,6 +524,7 @@ export async function fetchAdminSimulatedCompetitors(
       ? row.entries.map((entry: any) => ({
           id: String(entry.id ?? ''),
           display_name: String(entry.display_name ?? 'AI challenger'),
+          avatar_url: entry.avatar_url ? String(entry.avatar_url) : null,
           active: Boolean(entry.active),
           base_score: n(entry.base_score),
           target_score: entry.target_score === null || entry.target_score === undefined ? null : n(entry.target_score),
@@ -533,6 +535,43 @@ export async function fetchAdminSimulatedCompetitors(
         }))
       : [],
   };
+}
+
+export async function uploadAdminSimulatedCompetitorAvatar(
+  competitorId: string,
+  file: File,
+): Promise<string> {
+  const allowedTypes: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+  const extension = allowedTypes[file.type];
+  if (!extension) throw new Error('Profile picture must be a JPG, PNG, or WebP image.');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Profile picture must be 5 MB or smaller.');
+
+  const objectPath = `challengers/${competitorId}/profile.${extension}`;
+  const { error: uploadError } = await supabase.storage
+    .from('competition-avatars')
+    .upload(objectPath, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: true,
+    });
+  if (uploadError) throw uploadError;
+
+  const { data: publicData } = supabase.storage
+    .from('competition-avatars')
+    .getPublicUrl(objectPath);
+  const avatarUrl = publicData.publicUrl;
+  if (!avatarUrl) throw new Error('Could not create the public profile-picture URL.');
+
+  const { data, error } = await supabase.rpc('admin_update_monthly_growth_simulated_competitor_avatar', {
+    p_competitor_id: competitorId,
+    p_avatar_url: avatarUrl,
+  });
+  if (error) throw error;
+  return String(data?.avatar_url ?? avatarUrl);
 }
 
 export async function updateAdminSimulatedScore(
