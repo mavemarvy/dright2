@@ -1,0 +1,1 @@
+-- Historical marker: the validated monthly simulation cron is consolidated in 20260923061250_challenge_ranking_automation_foundation_v2.sql.
