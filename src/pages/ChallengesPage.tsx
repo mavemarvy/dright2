@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
@@ -117,6 +117,11 @@ export default function ChallengesPage() {
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchMonthlyChallengeCatalog>> | null>(null);
   const [selectedKey, setSelectedKey] = useState('');
   const [entries, setEntries] = useState<MonthlyLeaderboardEntry[]>([]);
+  const [podiumEntries, setPodiumEntries] = useState<MonthlyLeaderboardEntry[]>([]);
+  const [viewer, setViewer] = useState<MonthlyLeaderboardEntry | null>(null);
+  const [viewerOffset, setViewerOffset] = useState(0);
+  const [boardOffset, setBoardOffset] = useState(0);
+  const viewerRowRef = useRef<HTMLDivElement | null>(null);
   const [total, setTotal] = useState(0);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [loadingBoard, setLoadingBoard] = useState(false);
@@ -156,15 +161,24 @@ export default function ChallengesPage() {
   useEffect(() => {
     if (!selected) {
       setEntries([]);
+      setPodiumEntries([]);
+      setViewer(null);
+      setViewerOffset(0);
+      setBoardOffset(0);
       setTotal(0);
       return;
     }
     let alive = true;
     setLoadingBoard(true);
+    setBoardOffset(0);
     void fetchMonthlyLeaderboard(selected.challenge_key, period, selected.display_limit, 0)
       .then(data => {
         if (!alive) return;
         setEntries(data.entries);
+        setPodiumEntries(data.entries.slice(0, 3));
+        setViewer(data.viewer);
+        setViewerOffset(data.viewer_offset);
+        setBoardOffset(data.offset);
         setTotal(data.total);
       })
       .finally(() => alive && setLoadingBoard(false));
@@ -182,14 +196,21 @@ export default function ChallengesPage() {
         void Promise.all([
           fetchMonthlyChallengeCatalog(period),
           fetchMonthlyLeaderboard(selected.challenge_key, period, selected.display_limit, 0),
-        ]).then(([nextCatalog, nextBoard]) => {
+          boardOffset > 0
+            ? fetchMonthlyLeaderboard(selected.challenge_key, period, selected.display_limit, boardOffset)
+            : Promise.resolve(null),
+        ]).then(([nextCatalog, topBoard, visibleBoard]) => {
           if (!alive) return;
           setCatalog(nextCatalog);
           const available = nextCatalog.challenges.filter(c => c.section === section);
           setSelectedKey(prev => available.some(ch => ch.challenge_key === prev) ? prev : (available[0]?.challenge_key ?? ''));
           if (nextCatalog.challenges.some(ch => ch.challenge_key === selected.challenge_key)) {
-            setEntries(nextBoard.entries);
-            setTotal(nextBoard.total);
+            const currentBoard = visibleBoard ?? topBoard;
+            setPodiumEntries(topBoard.entries.slice(0, 3));
+            setEntries(currentBoard.entries);
+            setViewer(currentBoard.viewer ?? topBoard.viewer);
+            setViewerOffset(currentBoard.viewer_offset ?? topBoard.viewer_offset);
+            setTotal(currentBoard.total);
           }
         }).catch(() => {
           // Keep the last good leaderboard visible; the next realtime/poll cycle retries.
@@ -209,7 +230,7 @@ export default function ChallengesPage() {
       if (debounceId) window.clearTimeout(debounceId);
       window.removeEventListener('focus', onFocus);
     };
-  }, [period, section, selected?.challenge_key, selected?.display_limit]);
+  }, [boardOffset, period, section, selected?.challenge_key, selected?.display_limit]);
 
   const sectionChallenges = useMemo(
     () => (catalog?.challenges ?? []).filter(c => c.section === section),
@@ -232,16 +253,55 @@ export default function ChallengesPage() {
   }, [catalog?.period_end, now, period]);
 
   const loadMore = async () => {
-    if (!selected || entries.length >= total) return;
+    if (!selected || boardOffset + entries.length >= total) return;
     setLoadingMore(true);
     try {
       const data = await fetchMonthlyLeaderboard(
         selected.challenge_key,
         period,
         selected.display_limit,
-        entries.length,
+        boardOffset + entries.length,
       );
       setEntries(prev => [...prev, ...data.entries]);
+      setViewer(data.viewer ?? viewer);
+      setViewerOffset(data.viewer_offset);
+      setTotal(data.total);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const showViewerPosition = async () => {
+    if (!selected || !viewer) return;
+    setLoadingMore(true);
+    try {
+      const data = await fetchMonthlyLeaderboard(
+        selected.challenge_key,
+        period,
+        selected.display_limit,
+        viewerOffset,
+      );
+      setEntries(data.entries);
+      setViewer(data.viewer ?? viewer);
+      setViewerOffset(data.viewer_offset);
+      setBoardOffset(data.offset);
+      setTotal(data.total);
+      window.setTimeout(() => viewerRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const showTopRanks = async () => {
+    if (!selected) return;
+    setLoadingMore(true);
+    try {
+      const data = await fetchMonthlyLeaderboard(selected.challenge_key, period, selected.display_limit, 0);
+      setEntries(data.entries);
+      setPodiumEntries(data.entries.slice(0, 3));
+      setViewer(data.viewer);
+      setViewerOffset(data.viewer_offset);
+      setBoardOffset(0);
       setTotal(data.total);
     } finally {
       setLoadingMore(false);
@@ -359,7 +419,7 @@ export default function ChallengesPage() {
                   {loadingBoard ? (
                     <div className="py-16 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-violet-200" /></div>
                   ) : (
-                    <Podium challenge={selected} entries={entries} />
+                    <Podium challenge={selected} entries={podiumEntries} />
                   )}
                 </div>
 
@@ -370,6 +430,30 @@ export default function ChallengesPage() {
                       <p className="text-xs text-slate-400">{total.toLocaleString()} participant{total === 1 ? '' : 's'}</p>
                     </div>
 
+                    {period === 'current' && viewer && (
+                      <div className="mb-4 rounded-2xl border border-violet-400/30 bg-violet-500/10 p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-300">Your current position</p>
+                          <p className="mt-1 text-xl font-black text-white">#{viewer.rank.toLocaleString()} <span className="text-sm font-bold text-slate-400">of {total.toLocaleString()}</span></p>
+                          <p className="text-xs text-slate-400 mt-1">{viewer.primary_metric.toLocaleString()} {selected.metric_label}</p>
+                        </div>
+                        <button
+                          onClick={() => void showViewerPosition()}
+                          disabled={loadingMore}
+                          className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
+                        >
+                          Show my position
+                        </button>
+                      </div>
+                    )}
+
+                    {boardOffset > 0 && (
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <p className="text-xs text-slate-500">Showing ranks #{(boardOffset + 1).toLocaleString()}–#{Math.min(boardOffset + entries.length, total).toLocaleString()}</p>
+                        <button onClick={() => void showTopRanks()} disabled={loadingMore} className="text-xs font-black text-violet-300 disabled:opacity-50">Back to top</button>
+                      </div>
+                    )}
+
                     {entries.length === 0 ? (
                       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-6 text-center text-sm text-slate-400">
                         No finalized results are available for this challenge and month.
@@ -377,17 +461,21 @@ export default function ChallengesPage() {
                     ) : (
                       <div className="space-y-2">
                         {entries.map(entry => {
-                          const topStyle = entry.is_ranked && entry.rank === 1
+                          const topStyle = entry.rank === 1
                             ? 'border-amber-300/70 bg-amber-300/[0.09] shadow-[0_0_26px_rgba(251,191,36,0.08)]'
-                            : entry.is_ranked && entry.rank === 2
+                            : entry.rank === 2
                               ? 'border-slate-300/25 bg-white/[0.055]'
-                              : entry.is_ranked && entry.rank === 3
+                              : entry.rank === 3
                                 ? 'border-orange-300/25 bg-orange-300/[0.04]'
                                 : 'border-white/[0.07] bg-white/[0.04]';
                           return (
-                            <div key={entry.user_id} className={`flex items-center gap-3 rounded-2xl border p-3.5 transition ${topStyle}`}>
-                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${entry.is_ranked && entry.rank === 1 ? 'bg-amber-300 text-slate-950' : entry.is_ranked && entry.rank === 2 ? 'bg-slate-300 text-slate-900' : entry.is_ranked && entry.rank === 3 ? 'bg-orange-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>
-                                {!entry.is_ranked ? '—' : entry.rank <= 3 ? (entry.rank === 1 ? <Crown className="w-4 h-4" /> : <Medal className="w-4 h-4" />) : entry.rank}
+                            <div
+                              key={entry.user_id}
+                              ref={viewer?.user_id === entry.user_id ? viewerRowRef : undefined}
+                              className={`flex items-center gap-3 rounded-2xl border p-3.5 transition ${topStyle} ${viewer?.user_id === entry.user_id ? 'ring-2 ring-violet-400/70' : ''}`}
+                            >
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${entry.rank === 1 ? 'bg-amber-300 text-slate-950' : entry.rank === 2 ? 'bg-slate-300 text-slate-900' : entry.rank === 3 ? 'bg-orange-300 text-slate-950' : 'bg-white/10 text-slate-300'}`}>
+                                {entry.rank <= 3 ? (entry.rank === 1 ? <Crown className="w-4 h-4" /> : <Medal className="w-4 h-4" />) : entry.rank}
                               </div>
                               <div className="w-10 h-10 rounded-full overflow-hidden bg-violet-500/25 shrink-0">
                                 <InitialAvatar entry={entry} />
@@ -395,8 +483,8 @@ export default function ChallengesPage() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <p className="font-bold text-sm truncate">{nameFor(entry)}</p>
-                                  {!entry.is_ranked && (
-                                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase text-slate-400">Unranked</span>
+                                  {viewer?.user_id === entry.user_id && (
+                                    <span className="rounded-full bg-violet-400/15 px-2 py-0.5 text-[9px] font-black uppercase text-violet-300">You</span>
                                   )}
                                 </div>
                                 <p className="text-xs text-slate-400 truncate">{metricText(selected, entry)}</p>
@@ -411,7 +499,7 @@ export default function ChallengesPage() {
                       </div>
                     )}
 
-                    {entries.length < total && (
+                    {boardOffset + entries.length < total && (
                       <button
                         onClick={loadMore}
                         disabled={loadingMore}
@@ -471,7 +559,7 @@ export default function ChallengesPage() {
         )}
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Monthly rankings refresh automatically. New participants can appear with zero activity until they record a qualifying action. Public history visibility is controlled by DRIGHT admins.
+          Every current participant receives a numbered position. Higher records rank above lower records; when records are equal, the participant who reached that record earlier stays ahead. Zero-score positions use a stable non-alphabetical monthly order.
         </p>
       </main>
     </div>
