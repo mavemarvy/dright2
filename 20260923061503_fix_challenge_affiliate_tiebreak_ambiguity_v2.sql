@@ -1,0 +1,1 @@
+-- Historical marker: the affiliate tie-break ambiguity fix is included in the consolidated final function definition.

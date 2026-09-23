@@ -1,0 +1,1 @@
+-- Historical marker: realtime signal updates use pulse_at/source_table in the consolidated final automation function.

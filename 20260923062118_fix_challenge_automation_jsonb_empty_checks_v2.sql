@@ -1,0 +1,1 @@
+-- Historical marker: JSONB empty-distribution checks are included in the consolidated final automation functions.
