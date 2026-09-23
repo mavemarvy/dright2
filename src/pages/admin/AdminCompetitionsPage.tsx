@@ -711,7 +711,7 @@ export default function AdminCompetitionsPage() {
         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h2 className="font-black text-gray-950 dark:text-white">Live competition dashboard</h2>
-            <p className="text-sm text-gray-500 mt-1">Recent real users now remain visible with zero activity as unranked participants. Qualifying activity moves them into ranked positions automatically.</p>
+            <p className="text-sm text-gray-500 mt-1">Every participant is numbered from #1 to the end of the board, including zero-score participants. Higher records move upward automatically, with earlier achievement time breaking equal-score ties.</p>
           </div>
           <select value={selectedKey} onChange={e => setSelectedKey(e.target.value)} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm font-bold">
             {settings.filter(s => s.enabled).map(s => <option key={s.challenge_key} value={s.challenge_key}>{s.title}</option>)}
@@ -729,19 +729,14 @@ export default function AdminCompetitionsPage() {
             <div className="space-y-2">
               {leaders.map(entry => (
                 <div key={entry.user_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 dark:bg-gray-950/60 p-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${entry.is_ranked && entry.rank === 1 ? 'bg-amber-300 text-gray-950' : entry.is_ranked && entry.rank === 2 ? 'bg-gray-300 text-gray-900' : entry.is_ranked && entry.rank === 3 ? 'bg-orange-300 text-gray-950' : 'bg-gray-200 dark:bg-gray-800'}`}>
-                    {!entry.is_ranked ? '—' : entry.rank === 1 ? <Crown className="w-4 h-4" /> : entry.rank <= 3 ? <Medal className="w-4 h-4" /> : entry.rank}
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${entry.rank === 1 ? 'bg-amber-300 text-gray-950' : entry.rank === 2 ? 'bg-gray-300 text-gray-900' : entry.rank === 3 ? 'bg-orange-300 text-gray-950' : 'bg-gray-200 dark:bg-gray-800'}`}>
+                    {entry.rank === 1 ? <Crown className="w-4 h-4" /> : entry.rank <= 3 ? <Medal className="w-4 h-4" /> : entry.rank}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-bold text-gray-950 dark:text-white truncate">{displayName(entry)}</p>
-                      {entry.is_simulated && <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-black text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"><Bot className="w-3 h-3" /> AI challenger</span>}
-                      {!entry.is_ranked && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">Unranked</span>}
-                    </div>
+                    <p className="font-bold text-gray-950 dark:text-white truncate">{displayName(entry)}</p>
                     <p className="text-xs text-gray-500">{entry.primary_metric.toLocaleString()} primary · {entry.secondary_metric.toLocaleString()} secondary</p>
-                    {!entry.is_simulated && entry.reward_rank > 0 && entry.reward_rank !== entry.rank && <p className="text-[10px] text-emerald-600">Real-user prize rank #{entry.reward_rank}</p>}
                   </div>
-                  <div className="text-xs font-bold text-gray-500">{entry.is_ranked ? `#${entry.rank}` : '0 score'}</div>
+                  <div className="text-xs font-bold text-gray-500">#{entry.rank}</div>
                 </div>
               ))}
               <p className="text-xs text-gray-400 pt-2">{leaderTotal.toLocaleString()} total participant{leaderTotal === 1 ? '' : 's'} in this board view.</p>
@@ -851,7 +846,7 @@ export default function AdminCompetitionsPage() {
               <div>
                 <h2 className="font-black text-gray-950 dark:text-white">AI challenger gamification</h2>
                 <p className="text-sm text-gray-500 mt-1 max-w-3xl">
-                  Optional simulated competitors can provide visible performance benchmarks. They are always labeled “AI challenger”, never presented as real people or real past winners, and never receive or block real-user prizes.
+                  Managed competitor profiles are configured only from this admin area. The public challenge board uses the normal participant layout, while prize payout eligibility remains restricted to real DRIGHT accounts.
                 </p>
               </div>
             </div>
@@ -870,7 +865,7 @@ export default function AdminCompetitionsPage() {
         <div className="p-5 space-y-5">
           <div className="rounded-2xl bg-cyan-50 dark:bg-cyan-950/20 p-4">
             <p className="text-xs font-black uppercase tracking-wide text-cyan-700 dark:text-cyan-300">Bulk profile import</p>
-            <p className="text-xs text-gray-500 mt-1">Paste one name per line or numbered CSV rows. Numbers such as “1,” through “10000,” are stripped automatically and are not stored with the name.</p>
+            <p className="text-xs text-gray-500 mt-1">Paste one name per line or numbered CSV rows. Row numbers are stripped, and dash/minus characters inside imported names are converted to normal spaces automatically.</p>
             <textarea
               rows={5}
               value={importText}
@@ -886,11 +881,170 @@ export default function AdminCompetitionsPage() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-cyan-200 dark:border-cyan-900 bg-white dark:bg-gray-950 p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-100 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300 flex items-center justify-center shrink-0">
+                <ImagePlus className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <p className="font-black text-gray-950 dark:text-white">Random profile-picture batch</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Choose or paste up to 100 JPG, PNG, or WebP pictures. DRIGHT uploads them and assigns each picture to a different active managed competitor at random, replacing the previous picture when needed.
+                </p>
+              </div>
+            </div>
+
+            <div
+              tabIndex={0}
+              onPaste={event => {
+                const pasted = Array.from(event.clipboardData.files);
+                if (pasted.length) {
+                  event.preventDefault();
+                  addBulkAvatarFiles(pasted);
+                }
+              }}
+              className="mt-3 rounded-xl border-2 border-dashed border-cyan-200 dark:border-cyan-900 p-4 text-center outline-none focus:border-cyan-500"
+            >
+              <p className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                {bulkAvatarFiles.length ? `${bulkAvatarFiles.length} picture${bulkAvatarFiles.length === 1 ? '' : 's'} ready` : 'Tap to select pictures or focus here and paste images'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Maximum 100 pictures per batch · 5 MB each</p>
+              <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-gray-900 dark:bg-white px-4 py-2 text-sm font-black text-white dark:text-gray-950">
+                <Upload className="w-4 h-4" /> Select pictures
+                <input
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  disabled={bulkAvatarBusy}
+                  onChange={event => {
+                    addBulkAvatarFiles(Array.from(event.target.files ?? []));
+                    event.currentTarget.value = '';
+                  }}
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              {bulkAvatarFiles.length > 0 && (
+                <button
+                  disabled={bulkAvatarBusy}
+                  onClick={() => setBulkAvatarFiles([])}
+                  className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold text-gray-500 disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                disabled={bulkAvatarBusy || bulkAvatarFiles.length === 0}
+                onClick={() => void assignBulkAvatars()}
+                className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
+              >
+                {bulkAvatarBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shuffle className="w-4 h-4" />}
+                Randomly assign {bulkAvatarFiles.length || ''} picture{bulkAvatarFiles.length === 1 ? '' : 's'}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50/60 dark:bg-violet-950/15 p-4">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-violet-600" />
+                  <p className="font-black text-gray-950 dark:text-white">Monthly randomized score automation</p>
+                </div>
+                <p className="text-xs text-gray-500 mt-1 max-w-3xl">
+                  Configure how many managed competitors can increase this month, their score range, unique top targets, optional exact score buckets, and whether last month’s top profiles may be selected again. A fresh randomized plan is created automatically at 00:10 UTC on the first day of every month.
+                </p>
+              </div>
+              {automation && (
+                <button
+                  role="switch"
+                  aria-checked={automation.enabled}
+                  onClick={() => patchAutomation({ enabled: !automation.enabled })}
+                  className={`relative w-14 h-8 rounded-full shrink-0 transition ${automation.enabled ? 'bg-violet-600' : 'bg-gray-300 dark:bg-gray-700'}`}
+                >
+                  <span className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${automation.enabled ? 'left-7' : 'left-1'}`} />
+                </button>
+              )}
+            </div>
+
+            {automationBusy && !automation ? (
+              <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-violet-500" /></div>
+            ) : automation && (
+              <>
+                <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                    Bots allowed to increase
+                    <input type="number" min={0} max={20000} value={automation.active_competitor_count} onChange={e => patchAutomation({ active_competitor_count: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                    Minimum month-end score
+                    <input type="number" min={0} value={automation.min_target} onChange={e => patchAutomation({ min_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                    Highest month-end score
+                    <input type="number" min={0} value={automation.max_target} onChange={e => patchAutomation({ max_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                    Unique top positions
+                    <input type="number" min={0} max={20} value={automation.top_target_count} onChange={e => patchAutomation({ top_target_count: Math.max(0, Math.min(20, Math.trunc(Number(e.target.value) || 0))) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                    Total month-end records (optional)
+                    <input
+                      type="number"
+                      min={0}
+                      value={automation.total_target_records ?? ''}
+                      placeholder="Auto-distribute"
+                      onChange={e => patchAutomation({ total_target_records: e.target.value === '' ? null : Math.max(0, Math.trunc(Number(e.target.value) || 0)) })}
+                      className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300">
+                    Allow previous top bots to win again
+                    <input type="checkbox" checked={automation.allow_repeat_winners} onChange={e => patchAutomation({ allow_repeat_winners: e.target.checked })} className="w-4 h-4" />
+                  </label>
+                </div>
+
+                <label className="block mt-3 text-xs font-bold text-gray-600 dark:text-gray-300">
+                  Exact score buckets (optional)
+                  <textarea
+                    rows={5}
+                    value={distributionText}
+                    onChange={e => setDistributionText(e.target.value)}
+                    placeholder={"0=2500\n1=1800\n2=1400\n3=900\n10=250"}
+                    className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm font-mono"
+                  />
+                  <span className="mt-1 block font-normal text-gray-500">
+                    Format: score=count. Example 0=2500 keeps 2,500 managed competitors at zero. Buckets are applied first; remaining selected profiles are randomized inside the min/max range.
+                  </span>
+                </label>
+
+                <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+                  <div className="rounded-xl bg-white dark:bg-gray-950 p-3"><span className="text-gray-500">Automated now</span><p className="font-black text-gray-950 dark:text-white mt-1">{automation.current_plan.automated_profiles.toLocaleString()}</p></div>
+                  <div className="rounded-xl bg-white dark:bg-gray-950 p-3"><span className="text-gray-500">Manual overrides</span><p className="font-black text-gray-950 dark:text-white mt-1">{automation.current_plan.manual_profiles.toLocaleString()}</p></div>
+                  <div className="rounded-xl bg-white dark:bg-gray-950 p-3"><span className="text-gray-500">Highest target</span><p className="font-black text-gray-950 dark:text-white mt-1">{automation.current_plan.highest_target?.toLocaleString() ?? '—'}</p></div>
+                  <div className="rounded-xl bg-white dark:bg-gray-950 p-3"><span className="text-gray-500">Zero targets</span><p className="font-black text-gray-950 dark:text-white mt-1">{automation.current_plan.zero_targets.toLocaleString()}</p></div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap justify-end gap-2">
+                  <button disabled={automationBusy || planBusy} onClick={() => void saveAutomation()} className="inline-flex items-center gap-2 rounded-xl border border-violet-300 dark:border-violet-800 px-4 py-2 text-sm font-black text-violet-700 dark:text-violet-300 disabled:opacity-50">
+                    {automationBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save automation
+                  </button>
+                  <button disabled={planBusy || automationBusy} onClick={() => void applyAutomationPlan()} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">
+                    {planBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shuffle className="w-4 h-4" />} Apply & reroll this month
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
               <div>
                 <p className="font-black text-gray-950 dark:text-white">Monthly score rules · {settings.find(s => s.challenge_key === selectedKey)?.title ?? selectedKey}</p>
-                <p className="text-xs text-gray-500 mt-1">Base score starts immediately. Increment amount is added every interval until the optional target score is reached.</p>
+                <p className="text-xs text-gray-500 mt-1">Manual edits are protected from the 15-second refresh. Changing a current score or month-end target automatically switches that profile to a manual override so the automation will not overwrite it this month.</p>
               </div>
               <p className="text-xs text-gray-400">{simTotal.toLocaleString()} imported AI challenger profile{simTotal === 1 ? '' : 's'}</p>
             </div>
@@ -952,23 +1106,37 @@ export default function AdminCompetitionsPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-black text-gray-950 dark:text-white truncate">{entry.display_name}</p>
                             <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-black text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"><Bot className="w-3 h-3" /> AI challenger</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${entry.managed_by_automation ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>
+                              {entry.managed_by_automation ? 'Automation' : 'Manual'}
+                            </span>
                           </div>
                           <p className="text-xs text-gray-500 mt-1">Effective score now: {entry.effective_score.toLocaleString()}</p>
-                          <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[11px] font-black text-gray-700 dark:text-gray-200">
-                            {avatarBusy === entry.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
-                            {entry.avatar_url ? 'Replace picture' : 'Upload picture'}
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp"
-                              className="hidden"
-                              disabled={avatarBusy === entry.id}
-                              onChange={e => {
-                                const file = e.target.files?.[0];
-                                e.currentTarget.value = '';
-                                if (file) void uploadSimAvatar(entry, file);
-                              }}
-                            />
-                          </label>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[11px] font-black text-gray-700 dark:text-gray-200">
+                              {avatarBusy === entry.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                              {entry.avatar_url ? 'Replace picture' : 'Upload picture'}
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="hidden"
+                                disabled={avatarBusy === entry.id}
+                                onChange={e => {
+                                  const file = e.target.files?.[0];
+                                  e.currentTarget.value = '';
+                                  if (file) void uploadSimAvatar(entry, file);
+                                }}
+                              />
+                            </label>
+                            {entry.avatar_url && (
+                              <button
+                                disabled={avatarBusy === entry.id}
+                                onClick={() => void removeSimAvatar(entry)}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-900 px-2.5 py-1.5 text-[11px] font-black text-red-600 dark:text-red-300 disabled:opacity-50"
+                              >
+                                <ImageMinus className="w-3.5 h-3.5" /> Remove picture
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <button
@@ -981,11 +1149,11 @@ export default function AdminCompetitionsPage() {
 
                     <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
                       <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                        Base score
+                        Current score
                         <input type="number" min={0} value={entry.base_score} onChange={e => updateSimEntry(entry.id, { base_score: Math.max(0, Number(e.target.value) || 0) })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm" />
                       </label>
                       <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                        Target score
+                        Month-end target
                         <input type="number" min={0} value={entry.target_score ?? ''} placeholder="No cap" onChange={e => updateSimEntry(entry.id, { target_score: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) })} className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm" />
                       </label>
                       <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
