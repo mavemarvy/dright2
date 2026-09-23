@@ -8,12 +8,14 @@ import {
   fetchAdminCompetitionDashboard,
   fetchAdminSimulatedCompetitors,
   fetchAdminSimulationAutomation,
+  fetchAdminSimulatedShowcase,
   fetchMonthlyLeaderboard,
   formatChallengeReward,
   generateAdminSimulationPlan,
   importAdminSimulatedCompetitors,
   removeAdminSimulatedCompetitorAvatar,
   reviewCompetitionAward,
+  saveAdminSimulatedShowcase,
   subscribeToCompetitionActivity,
   updateAdminCompetitionAutoPayout,
   updateAdminCompetitionHistoryVisibility,
@@ -92,6 +94,12 @@ function distributionToText(distribution: Record<string, number>): string {
     .join('\n');
 }
 
+function previousMonthValue(): string {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 function parseDistributionText(raw: string): Record<string, number> {
   const result: Record<string, number> = {};
   for (const original of raw.split(/\r?\n|,/)) {
@@ -113,6 +121,7 @@ export default function AdminCompetitionsPage() {
   const simDirtyIds = useRef(new Set<string>());
   const automationDirty = useRef(false);
   const [selectedKey, setSelectedKey] = useState('');
+  const [automationKey, setAutomationKey] = useState('');
   const [leaders, setLeaders] = useState<MonthlyLeaderboardEntry[]>([]);
   const [leaderTotal, setLeaderTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -139,6 +148,11 @@ export default function AdminCompetitionsPage() {
   const [automationBusy, setAutomationBusy] = useState(false);
   const [planBusy, setPlanBusy] = useState(false);
   const [distributionText, setDistributionText] = useState('');
+  const [showcaseMonth, setShowcaseMonth] = useState(previousMonthValue);
+  const [showcaseNames, setShowcaseNames] = useState<[string, string, string]>(['', '', '']);
+  const [showcaseScores, setShowcaseScores] = useState<[number, number, number]>([500, 200, 100]);
+  const [showcasePublic, setShowcasePublic] = useState(false);
+  const [showcaseBusy, setShowcaseBusy] = useState(false);
   const [simSearch, setSimSearch] = useState('');
   const [simSearchApplied, setSimSearchApplied] = useState('');
 
@@ -161,6 +175,7 @@ export default function AdminCompetitionsPage() {
         ));
       });
       setSelectedKey(prev => next.settings.some(s => s.challenge_key === prev) ? prev : (next.settings[0]?.challenge_key ?? ''));
+      setAutomationKey(prev => next.settings.some(s => s.challenge_key === prev) ? prev : (next.settings[0]?.challenge_key ?? ''));
       setLastUpdated(new Date());
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not load competition control center');
@@ -222,18 +237,49 @@ export default function AdminCompetitionsPage() {
     }
   }, []);
 
+  const loadShowcase = useCallback(async (key: string, month: string) => {
+    if (!key || !/^\d{4}-\d{2}$/.test(month)) return;
+    setShowcaseBusy(true);
+    try {
+      const data = await fetchAdminSimulatedShowcase(`${month}-01`, key);
+      const names: [string, string, string] = ['', '', ''];
+      const scores: [number, number, number] = [500, 200, 100];
+      let isPublic = false;
+      for (const entry of data.entries) {
+        if (entry.rank >= 1 && entry.rank <= 3) {
+          names[entry.rank - 1] = entry.full_name;
+          scores[entry.rank - 1] = entry.primary_metric;
+          isPublic = isPublic || entry.public_visible;
+        }
+      }
+      setShowcaseNames(names);
+      setShowcaseScores(scores);
+      setShowcasePublic(isPublic);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not load simulated history showcase');
+    } finally {
+      setShowcaseBusy(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
 
   useEffect(() => {
     if (selectedKey) {
-      simDirtyIds.current.clear();
       void loadLeaders(selectedKey);
-      void loadSimulated(selectedKey, 0, false, simSearchApplied);
-      void loadAutomation(selectedKey);
     }
-  }, [selectedKey, loadAutomation, loadLeaders, loadSimulated]);
+  }, [selectedKey, loadLeaders]);
+
+  useEffect(() => {
+    if (!automationKey) return;
+    automationDirty.current = false;
+    simDirtyIds.current.clear();
+    void loadAutomation(automationKey);
+    void loadSimulated(automationKey, 0, false, simSearchApplied);
+    void loadShowcase(automationKey, showcaseMonth);
+  }, [automationKey, showcaseMonth, loadAutomation, loadShowcase, loadSimulated]);
 
   useEffect(() => {
     let timer: number | null = null;
@@ -243,8 +289,10 @@ export default function AdminCompetitionsPage() {
         void loadDashboard(true);
         if (selectedKey) {
           void loadLeaders(selectedKey, true);
-          if (data?.simulation_settings.enabled) void loadSimulated(selectedKey, simOffset, true, simSearchApplied);
-          void loadAutomation(selectedKey, true);
+        }
+        if (automationKey) {
+          if (data?.simulation_settings.enabled) void loadSimulated(automationKey, simOffset, true, simSearchApplied);
+          void loadAutomation(automationKey, true);
         }
       }, 350);
     };
@@ -260,7 +308,7 @@ export default function AdminCompetitionsPage() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [data?.simulation_settings.enabled, loadAutomation, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset, simSearchApplied]);
+  }, [automationKey, data?.simulation_settings.enabled, loadAutomation, loadDashboard, loadLeaders, loadSimulated, selectedKey, simOffset, simSearchApplied]);
 
   const pendingAwards = useMemo(
     () => (data?.awards ?? []).filter(a => a.status === 'pending'),
@@ -336,7 +384,7 @@ export default function AdminCompetitionsPage() {
       await loadDashboard(true);
       if (selectedKey) {
         await loadLeaders(selectedKey, true);
-        await loadSimulated(selectedKey, 0, true, simSearchApplied);
+        await loadSimulated(automationKey, 0, true, simSearchApplied);
       }
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not update AI challenger mode');
@@ -356,7 +404,7 @@ export default function AdminCompetitionsPage() {
       const result = await importAdminSimulatedCompetitors(names);
       showMessage('success', `Imported ${result.inserted.toLocaleString()} new AI challenger profiles. Total: ${result.total.toLocaleString()}.`);
       setImportText('');
-      if (selectedKey) await loadSimulated(selectedKey, 0, false, simSearchApplied);
+      if (automationKey) await loadSimulated(automationKey, 0, false, simSearchApplied);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not import AI challenger profiles');
     } finally {
@@ -386,12 +434,11 @@ export default function AdminCompetitionsPage() {
       const avatarUrl = await uploadAdminSimulatedCompetitorAvatar(entry.id, file);
       updateSimEntry(entry.id, { avatar_url: avatarUrl });
       showMessage('success', `${entry.display_name} profile picture updated.`);
-      if (selectedKey) {
-        await Promise.all([
-          loadSimulated(selectedKey, simOffset, true, simSearchApplied),
-          loadLeaders(selectedKey, true),
-        ]);
+      if (automationKey) {
+        await loadSimulated(automationKey, simOffset, true, simSearchApplied);
       }
+      if (automationKey) await loadSimulated(automationKey, simOffset, true, simSearchApplied);
+      if (selectedKey) await loadLeaders(selectedKey, true);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not upload profile picture');
     } finally {
@@ -435,12 +482,8 @@ export default function AdminCompetitionsPage() {
       const result = await uploadAndRandomlyAssignAdminSimulatedAvatars(bulkAvatarFiles);
       showMessage('success', `Randomly assigned ${result.assigned.toLocaleString()} profile picture${result.assigned === 1 ? '' : 's'}.`);
       setBulkAvatarFiles([]);
-      if (selectedKey) {
-        await Promise.all([
-          loadSimulated(selectedKey, simOffset, true, simSearchApplied),
-          loadLeaders(selectedKey, true),
-        ]);
-      }
+      if (automationKey) await loadSimulated(automationKey, simOffset, true, simSearchApplied);
+      if (selectedKey) await loadLeaders(selectedKey, true);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not randomly assign profile pictures');
     } finally {
@@ -454,11 +497,11 @@ export default function AdminCompetitionsPage() {
   };
 
   const saveAutomation = async () => {
-    if (!automation || !selectedKey) return;
+    if (!automation || !automationKey) return;
     setAutomationBusy(true);
     try {
       const exactDistribution = parseDistributionText(distributionText);
-      const saved = await updateAdminSimulationAutomation(selectedKey, {
+      const saved = await updateAdminSimulationAutomation(automationKey, {
         ...automation,
         exact_distribution: exactDistribution,
       });
@@ -474,25 +517,25 @@ export default function AdminCompetitionsPage() {
   };
 
   const applyAutomationPlan = async () => {
-    if (!automation || !selectedKey) return;
+    if (!automation || !automationKey) return;
     setPlanBusy(true);
     try {
       const exactDistribution = parseDistributionText(distributionText);
-      const saved = await updateAdminSimulationAutomation(selectedKey, {
+      const saved = await updateAdminSimulationAutomation(automationKey, {
         ...automation,
         exact_distribution: exactDistribution,
       });
       automationDirty.current = false;
       setAutomation(saved);
       if (!saved.enabled) throw new Error('Turn monthly automation ON before applying a plan.');
-      const result = await generateAdminSimulationPlan(selectedKey);
+      const result = await generateAdminSimulationPlan(automationKey);
       const generated = Number(result.generated ?? 0);
       showMessage('success', `Monthly plan generated for ${generated.toLocaleString()} managed competitor${generated === 1 ? '' : 's'}.`);
       simDirtyIds.current.clear();
       await Promise.all([
-        loadAutomation(selectedKey, true),
-        loadSimulated(selectedKey, 0, false, simSearchApplied),
-        loadLeaders(selectedKey, true),
+        loadAutomation(automationKey, true),
+        loadSimulated(automationKey, 0, false, simSearchApplied),
+        selectedKey ? loadLeaders(selectedKey, true) : Promise.resolve(),
       ]);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not generate monthly automation plan');
@@ -501,11 +544,47 @@ export default function AdminCompetitionsPage() {
     }
   };
 
+  const saveShowcase = async () => {
+    if (!automationKey || !/^\d{4}-\d{2}$/.test(showcaseMonth)) return;
+    setShowcaseBusy(true);
+    try {
+      const saved = await saveAdminSimulatedShowcase(`${showcaseMonth}-01`, automationKey, {
+        first_name: showcaseNames[0],
+        first_score: showcaseScores[0],
+        second_name: showcaseNames[1],
+        second_score: showcaseScores[1],
+        third_name: showcaseNames[2],
+        third_score: showcaseScores[2],
+        public_visible: showcasePublic,
+      });
+      const names: [string, string, string] = ['', '', ''];
+      const scores: [number, number, number] = [500, 200, 100];
+      for (const entry of saved.entries) {
+        if (entry.rank >= 1 && entry.rank <= 3) {
+          names[entry.rank - 1] = entry.full_name;
+          scores[entry.rank - 1] = entry.primary_metric;
+        }
+      }
+      setShowcaseNames(names);
+      setShowcaseScores(scores);
+      showMessage(
+        'success',
+        showcasePublic
+          ? 'Simulated historical benchmark saved. Public history will clearly identify it as a simulated benchmark, not a verified prize result.'
+          : 'Simulated historical benchmark saved privately for admins.',
+      );
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Could not save simulated historical benchmark');
+    } finally {
+      setShowcaseBusy(false);
+    }
+  };
+
   const saveSimEntry = async (entry: SimulatedCompetitor) => {
-    if (!selectedKey) return;
+    if (!automationKey) return;
     setSimBusy(entry.id);
     try {
-      await updateAdminSimulatedScore(entry.id, selectedKey, {
+      await updateAdminSimulatedScore(entry.id, automationKey, {
         base_score: entry.base_score,
         target_score: entry.target_score,
         increment_amount: entry.increment_amount,
@@ -515,8 +594,8 @@ export default function AdminCompetitionsPage() {
       simDirtyIds.current.delete(entry.id);
       showMessage('success', `${entry.display_name} score rule saved for this month.`);
       await Promise.all([
-        loadSimulated(selectedKey, simOffset, true, simSearchApplied),
-        loadLeaders(selectedKey, true),
+        loadSimulated(automationKey, simOffset, true, simSearchApplied),
+        selectedKey ? loadLeaders(selectedKey, true) : Promise.resolve(),
       ]);
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Could not save AI challenger score rule');
@@ -953,6 +1032,22 @@ export default function AdminCompetitionsPage() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/40 p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-gray-500">Configure leaderboard separately</p>
+            <p className="text-xs text-gray-500 mt-1">Each monthly challenge has its own score distribution, top-three limits, manual overrides and history benchmark.</p>
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {settings.filter(s => s.enabled).map(setting => (
+                <button
+                  key={setting.challenge_key}
+                  onClick={() => setAutomationKey(setting.challenge_key)}
+                  className={`shrink-0 rounded-xl border px-3 py-2 text-xs font-black transition ${automationKey === setting.challenge_key ? 'border-violet-500 bg-violet-600 text-white' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300'}`}
+                >
+                  {setting.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="rounded-2xl border border-violet-200 dark:border-violet-900 bg-violet-50/60 dark:bg-violet-950/15 p-4">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
               <div>
@@ -980,36 +1075,64 @@ export default function AdminCompetitionsPage() {
               <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-violet-500" /></div>
             ) : automation && (
               <>
-                <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="mt-4 rounded-xl border border-violet-200/80 dark:border-violet-900 bg-white/70 dark:bg-gray-950/70 p-3">
+                  <p className="text-xs font-black text-violet-700 dark:text-violet-300">
+                    {settings.find(s => s.challenge_key === automationKey)?.title ?? automationKey}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Current scores are deliberately spread across many values. Higher distribution skew keeps more profiles around 0, 1 and 2 instead of moving everyone together.
+                  </p>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Bots allowed to increase
+                    Bots in this board
                     <input type="number" min={0} max={20000} value={automation.active_competitor_count} onChange={e => patchAutomation({ active_competitor_count: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Minimum month-end score
+                    Minimum non-top target
                     <input type="number" min={0} value={automation.min_target} onChange={e => patchAutomation({ min_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Highest month-end score
+                    General non-top max
                     <input type="number" min={0} value={automation.max_target} onChange={e => patchAutomation({ max_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Unique top positions
+                    Distribution skew (1–8)
+                    <input type="number" min={1} max={8} step={0.1} value={automation.distribution_curve} onChange={e => patchAutomation({ distribution_curve: Math.min(8, Math.max(1, Number(e.target.value) || 3.5)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                  </label>
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/15 p-3">
+                  <p className="text-xs font-black text-amber-800 dark:text-amber-300">Top-three month-end limits</p>
+                  <p className="text-[11px] text-gray-500 mt-1">These are independent targets for the three reserved top managed profiles. Their live score grows toward the limit during the month.</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                      #1 target
+                      <input type="number" min={0} value={automation.top_first_target} onChange={e => patchAutomation({ top_first_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-gray-950 px-2.5 py-2 text-sm" />
+                    </label>
+                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                      #2 target
+                      <input type="number" min={0} value={automation.top_second_target} onChange={e => patchAutomation({ top_second_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-gray-950 px-2.5 py-2 text-sm" />
+                    </label>
+                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                      #3 target
+                      <input type="number" min={0} value={automation.top_third_target} onChange={e => patchAutomation({ top_third_target: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-gray-950 px-2.5 py-2 text-sm" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                    Reserved top positions
                     <input type="number" min={0} max={20} value={automation.top_target_count} onChange={e => patchAutomation({ top_target_count: Math.max(0, Math.min(20, Math.trunc(Number(e.target.value) || 0))) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
                     Total month-end records (optional)
-                    <input
-                      type="number"
-                      min={0}
-                      value={automation.total_target_records ?? ''}
-                      placeholder="Auto-distribute"
-                      onChange={e => patchAutomation({ total_target_records: e.target.value === '' ? null : Math.max(0, Math.trunc(Number(e.target.value) || 0)) })}
-                      className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm"
-                    />
+                    <input type="number" min={0} value={automation.total_target_records ?? ''} placeholder="Auto-distribute" onChange={e => patchAutomation({ total_target_records: e.target.value === '' ? null : Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="flex items-center justify-between gap-3 rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Allow previous top bots to win again
+                    Allow previous top profiles again
                     <input type="checkbox" checked={automation.allow_repeat_winners} onChange={e => patchAutomation({ allow_repeat_winners: e.target.checked })} className="w-4 h-4" />
                   </label>
                 </div>
@@ -1050,10 +1173,63 @@ export default function AdminCompetitionsPage() {
             )}
           </div>
 
+          <div className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/15 p-4">
+            <div className="flex items-start gap-3">
+              <History className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-black text-gray-950 dark:text-white">Previous-month simulated benchmark</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Set three managed profiles and scores for a completed month. If you make it public, DRIGHT labels it “Simulated benchmark” so it is not presented as a verified prize-winner record.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid sm:grid-cols-2 gap-3">
+              <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                Completed month
+                <input type="month" max={previousMonthValue()} value={showcaseMonth} onChange={e => setShowcaseMonth(e.target.value)} className="mt-1 w-full rounded-xl border border-blue-200 dark:border-blue-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 dark:border-blue-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300">
+                Show this benchmark in public history
+                <input type="checkbox" checked={showcasePublic} onChange={e => setShowcasePublic(e.target.checked)} className="w-4 h-4" />
+              </label>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {[0, 1, 2].map(index => (
+                <div key={index} className="grid grid-cols-[42px_1fr_92px] gap-2 items-end">
+                  <div className={`h-10 rounded-xl flex items-center justify-center font-black text-sm ${index === 0 ? 'bg-amber-300 text-gray-950' : index === 1 ? 'bg-gray-200 text-gray-800' : 'bg-orange-200 text-orange-900'}`}>#{index + 1}</div>
+                  <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                    Exact managed profile name
+                    <input value={showcaseNames[index]} onChange={e => setShowcaseNames(prev => {
+                      const next = [...prev] as [string, string, string];
+                      next[index] = e.target.value;
+                      return next;
+                    })} placeholder="Search/copy an imported profile name" className="mt-1 w-full rounded-xl border border-blue-200 dark:border-blue-900 bg-white dark:bg-gray-950 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                    Score
+                    <input type="number" min={0} value={showcaseScores[index]} onChange={e => setShowcaseScores(prev => {
+                      const next = [...prev] as [number, number, number];
+                      next[index] = Math.max(0, Math.trunc(Number(e.target.value) || 0));
+                      return next;
+                    })} className="mt-1 w-full rounded-xl border border-blue-200 dark:border-blue-900 bg-white dark:bg-gray-950 px-2.5 py-2 text-sm" />
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button disabled={showcaseBusy} onClick={() => void saveShowcase()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">
+                {showcaseBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save benchmark
+              </button>
+            </div>
+          </div>
+
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
               <div>
-                <p className="font-black text-gray-950 dark:text-white">Monthly score rules · {settings.find(s => s.challenge_key === selectedKey)?.title ?? selectedKey}</p>
+                <p className="font-black text-gray-950 dark:text-white">Monthly score rules · {settings.find(s => s.challenge_key === automationKey)?.title ?? automationKey}</p>
                 <p className="text-xs text-gray-500 mt-1">Manual edits are protected from the 15-second refresh. Changing a current score or month-end target automatically switches that profile to a manual override so the automation will not overwrite it this month.</p>
               </div>
               <p className="text-xs text-gray-400">{simTotal.toLocaleString()} imported AI challenger profile{simTotal === 1 ? '' : 's'}</p>
@@ -1067,7 +1243,7 @@ export default function AdminCompetitionsPage() {
                   if (e.key === 'Enter') {
                     const next = simSearch.trim();
                     setSimSearchApplied(next);
-                    void loadSimulated(selectedKey, 0, false, next);
+                    void loadSimulated(automationKey, 0, false, next);
                   }
                 }}
                 placeholder="Search imported challenger by full name"
@@ -1077,7 +1253,7 @@ export default function AdminCompetitionsPage() {
                 onClick={() => {
                   const next = simSearch.trim();
                   setSimSearchApplied(next);
-                  void loadSimulated(selectedKey, 0, false, next);
+                  void loadSimulated(automationKey, 0, false, next);
                 }}
                 className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-black"
               >
@@ -1088,7 +1264,7 @@ export default function AdminCompetitionsPage() {
                   onClick={() => {
                     setSimSearch('');
                     setSimSearchApplied('');
-                    void loadSimulated(selectedKey, 0, false, '');
+                    void loadSimulated(automationKey, 0, false, '');
                   }}
                   className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-bold text-gray-500"
                 >
@@ -1191,9 +1367,9 @@ export default function AdminCompetitionsPage() {
                 ))}
 
                 <div className="flex items-center justify-between gap-3">
-                  <button disabled={simOffset <= 0 || simLoading} onClick={() => void loadSimulated(selectedKey, Math.max(0, simOffset - 50), false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Previous 50</button>
+                  <button disabled={simOffset <= 0 || simLoading} onClick={() => void loadSimulated(automationKey, Math.max(0, simOffset - 50), false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Previous 50</button>
                   <p className="text-xs text-gray-500">{simTotal === 0 ? 0 : simOffset + 1}–{Math.min(simOffset + 50, simTotal)} of {simTotal.toLocaleString()}</p>
-                  <button disabled={simOffset + 50 >= simTotal || simLoading} onClick={() => void loadSimulated(selectedKey, simOffset + 50, false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Next 50</button>
+                  <button disabled={simOffset + 50 >= simTotal || simLoading} onClick={() => void loadSimulated(automationKey, simOffset + 50, false, simSearchApplied)} className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-bold disabled:opacity-40">Next 50</button>
                 </div>
               </div>
             )}

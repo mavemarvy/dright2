@@ -1,0 +1,1 @@
+-- Production history marker: transparent simulated-history showcase schema and RPCs are consolidated in 20260923231149_challenge_natural_distribution_settings_v2.sql.

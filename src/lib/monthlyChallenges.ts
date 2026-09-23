@@ -61,6 +61,7 @@ export interface MonthlyLeaderboardResponse {
   entries: MonthlyLeaderboardEntry[];
   viewer: MonthlyLeaderboardEntry | null;
   viewer_offset: number;
+  history_source: 'verified' | 'simulated_benchmark';
 }
 
 export interface MonthlyChallengeAward {
@@ -175,6 +176,7 @@ export async function fetchMonthlyLeaderboard(
     entries: Array.isArray(row.entries) ? row.entries.map(normalizeEntry) : [],
     viewer: row.viewer && typeof row.viewer === 'object' ? normalizeEntry(row.viewer) : null,
     viewer_offset: Number(row.viewer_offset ?? 0),
+    history_source: row.history_source === 'simulated_benchmark' ? 'simulated_benchmark' : 'verified',
   };
 }
 
@@ -363,6 +365,10 @@ export interface SimulationAutomationSettings {
   min_target: number;
   max_target: number;
   top_target_count: number;
+  top_first_target: number;
+  top_second_target: number;
+  top_third_target: number;
+  distribution_curve: number;
   allow_repeat_winners: boolean;
   total_target_records: number | null;
   exact_distribution: Record<string, number>;
@@ -679,6 +685,10 @@ function normalizeAutomationSettings(row: any, challengeKey: string): Simulation
     min_target: Math.max(0, Math.trunc(Number(row?.min_target ?? 0))),
     max_target: Math.max(0, Math.trunc(Number(row?.max_target ?? 100))),
     top_target_count: Math.max(0, Math.trunc(Number(row?.top_target_count ?? 3))),
+    top_first_target: Math.max(0, Math.trunc(Number(row?.top_first_target ?? 500))),
+    top_second_target: Math.max(0, Math.trunc(Number(row?.top_second_target ?? 200))),
+    top_third_target: Math.max(0, Math.trunc(Number(row?.top_third_target ?? 100))),
+    distribution_curve: Math.min(8, Math.max(1, Number(row?.distribution_curve ?? 3.5))),
     allow_repeat_winners: Boolean(row?.allow_repeat_winners),
     total_target_records: row?.total_target_records === null || row?.total_target_records === undefined
       ? null
@@ -710,13 +720,17 @@ export async function updateAdminSimulationAutomation(
   challengeKey: string,
   settings: SimulationAutomationSettings,
 ): Promise<SimulationAutomationSettings> {
-  const { data, error } = await supabase.rpc('admin_update_monthly_growth_simulation_automation', {
+  const { data, error } = await supabase.rpc('admin_update_monthly_growth_simulation_automation_v2', {
     p_challenge_key: challengeKey,
     p_enabled: settings.enabled,
     p_active_competitor_count: Math.max(0, Math.trunc(settings.active_competitor_count)),
     p_min_target: Math.max(0, Math.trunc(settings.min_target)),
     p_max_target: Math.max(0, Math.trunc(settings.max_target)),
     p_top_target_count: Math.max(0, Math.trunc(settings.top_target_count)),
+    p_top_first_target: Math.max(0, Math.trunc(settings.top_first_target)),
+    p_top_second_target: Math.max(0, Math.trunc(settings.top_second_target)),
+    p_top_third_target: Math.max(0, Math.trunc(settings.top_third_target)),
+    p_distribution_curve: Math.min(8, Math.max(1, Number(settings.distribution_curve || 3.5))),
     p_allow_repeat_winners: settings.allow_repeat_winners,
     p_total_target_records: settings.total_target_records === null
       ? null
@@ -725,6 +739,89 @@ export async function updateAdminSimulationAutomation(
   });
   if (error) throw error;
   return normalizeAutomationSettings(data ?? {}, challengeKey);
+}
+
+export interface SimulatedShowcaseEntry {
+  rank: number;
+  competitor_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  primary_metric: number;
+  public_visible: boolean;
+}
+
+export interface SimulatedShowcase {
+  period_start: string;
+  challenge_key: string;
+  entries: SimulatedShowcaseEntry[];
+}
+
+export async function fetchAdminSimulatedShowcase(
+  periodStart: string,
+  challengeKey: string,
+): Promise<SimulatedShowcase> {
+  const { data, error } = await supabase.rpc('admin_get_monthly_growth_simulated_showcase', {
+    p_period_start: periodStart,
+    p_challenge_key: challengeKey,
+  });
+  if (error) throw error;
+  const row = data ?? {};
+  return {
+    period_start: String(row.period_start ?? periodStart),
+    challenge_key: String(row.challenge_key ?? challengeKey),
+    entries: Array.isArray(row.entries)
+      ? row.entries.map((entry: any) => ({
+          rank: Number(entry.rank ?? 0),
+          competitor_id: String(entry.competitor_id ?? ''),
+          full_name: String(entry.full_name ?? ''),
+          avatar_url: entry.avatar_url ? String(entry.avatar_url) : null,
+          primary_metric: n(entry.primary_metric),
+          public_visible: Boolean(entry.public_visible),
+        }))
+      : [],
+  };
+}
+
+export async function saveAdminSimulatedShowcase(
+  periodStart: string,
+  challengeKey: string,
+  values: {
+    first_name: string;
+    first_score: number;
+    second_name: string;
+    second_score: number;
+    third_name: string;
+    third_score: number;
+    public_visible: boolean;
+  },
+): Promise<SimulatedShowcase> {
+  const { data, error } = await supabase.rpc('admin_set_monthly_growth_simulated_showcase', {
+    p_period_start: periodStart,
+    p_challenge_key: challengeKey,
+    p_first_name: values.first_name.trim() || null,
+    p_first_score: Math.max(0, values.first_score),
+    p_second_name: values.second_name.trim() || null,
+    p_second_score: Math.max(0, values.second_score),
+    p_third_name: values.third_name.trim() || null,
+    p_third_score: Math.max(0, values.third_score),
+    p_public_visible: values.public_visible,
+  });
+  if (error) throw error;
+  const row = data ?? {};
+  return {
+    period_start: String(row.period_start ?? periodStart),
+    challenge_key: String(row.challenge_key ?? challengeKey),
+    entries: Array.isArray(row.entries)
+      ? row.entries.map((entry: any) => ({
+          rank: Number(entry.rank ?? 0),
+          competitor_id: String(entry.competitor_id ?? ''),
+          full_name: String(entry.full_name ?? ''),
+          avatar_url: entry.avatar_url ? String(entry.avatar_url) : null,
+          primary_metric: n(entry.primary_metric),
+          public_visible: Boolean(entry.public_visible),
+        }))
+      : [],
+  };
 }
 
 export async function generateAdminSimulationPlan(

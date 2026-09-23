@@ -1,0 +1,1 @@
+-- Production history marker: the completed natural-distribution definitions are consolidated in 20260923231149_challenge_natural_distribution_settings_v2.sql.

@@ -121,6 +121,7 @@ export default function ChallengesPage() {
   const [viewer, setViewer] = useState<MonthlyLeaderboardEntry | null>(null);
   const [viewerOffset, setViewerOffset] = useState(0);
   const [boardOffset, setBoardOffset] = useState(0);
+  const [historySource, setHistorySource] = useState<'verified' | 'simulated_benchmark'>('verified');
   const viewerRowRef = useRef<HTMLDivElement | null>(null);
   const [total, setTotal] = useState(0);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
@@ -165,6 +166,7 @@ export default function ChallengesPage() {
       setViewer(null);
       setViewerOffset(0);
       setBoardOffset(0);
+      setHistorySource('verified');
       setTotal(0);
       return;
     }
@@ -179,6 +181,7 @@ export default function ChallengesPage() {
         setViewer(data.viewer);
         setViewerOffset(data.viewer_offset);
         setBoardOffset(data.offset);
+        setHistorySource(data.history_source);
         setTotal(data.total);
       })
       .finally(() => alive && setLoadingBoard(false));
@@ -210,6 +213,7 @@ export default function ChallengesPage() {
             setEntries(currentBoard.entries);
             setViewer(currentBoard.viewer ?? topBoard.viewer);
             setViewerOffset(currentBoard.viewer_offset ?? topBoard.viewer_offset);
+            setHistorySource(currentBoard.history_source);
             setTotal(currentBoard.total);
           }
         }).catch(() => {
@@ -265,6 +269,7 @@ export default function ChallengesPage() {
       setEntries(prev => [...prev, ...data.entries]);
       setViewer(data.viewer ?? viewer);
       setViewerOffset(data.viewer_offset);
+      setHistorySource(data.history_source);
       setTotal(data.total);
     } finally {
       setLoadingMore(false);
@@ -285,6 +290,7 @@ export default function ChallengesPage() {
       setViewer(data.viewer ?? viewer);
       setViewerOffset(data.viewer_offset);
       setBoardOffset(data.offset);
+      setHistorySource(data.history_source);
       setTotal(data.total);
       window.setTimeout(() => viewerRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
     } finally {
@@ -302,6 +308,7 @@ export default function ChallengesPage() {
       setViewer(data.viewer);
       setViewerOffset(data.viewer_offset);
       setBoardOffset(0);
+      setHistorySource(data.history_source);
       setTotal(data.total);
     } finally {
       setLoadingMore(false);
@@ -392,10 +399,19 @@ export default function ChallengesPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.2em] font-black text-violet-200">
-                        {period === 'current' ? 'Live monthly leaderboard' : `${periodLabel} results`}
+                        {period === 'current'
+                          ? 'Live monthly leaderboard'
+                          : historySource === 'simulated_benchmark'
+                            ? `${periodLabel} simulated benchmark`
+                            : `${periodLabel} results`}
                       </p>
                       <h2 className="text-2xl sm:text-3xl font-black mt-1">{selected.title}</h2>
                       {selected.description && <p className="text-sm text-violet-100/80 mt-2 max-w-2xl">{selected.description}</p>}
+                      {period !== 'current' && historySource === 'simulated_benchmark' && (
+                        <div className="mt-3 max-w-2xl rounded-xl border border-amber-300/40 bg-amber-300/10 px-3 py-2.5 text-xs text-amber-100">
+                          <span className="font-black">Simulated benchmark:</span> these entries use managed demonstration profiles and are not verified prize winners or verified historical sales.
+                        </div>
+                      )}
                     </div>
                     {period === 'current' && (
                       <div className="shrink-0 rounded-2xl bg-black/20 border border-white/10 px-3 py-2 text-right">
@@ -426,7 +442,7 @@ export default function ChallengesPage() {
                 {!loadingBoard && (
                   <div className="bg-slate-950/75 border-t border-white/10 px-3 sm:px-6 py-5">
                     <div className="flex items-center justify-between mb-3 px-1">
-                      <p className="font-black text-sm">{period === 'current' ? 'Participants & ranking' : `${periodLabel} winners & ranking`}</p>
+                      <p className="font-black text-sm">{period === 'current' ? 'Participants & ranking' : historySource === 'simulated_benchmark' ? `${periodLabel} benchmark ranking` : `${periodLabel} winners & ranking`}</p>
                       <p className="text-xs text-slate-400">{total.toLocaleString()} participant{total === 1 ? '' : 's'}</p>
                     </div>
 

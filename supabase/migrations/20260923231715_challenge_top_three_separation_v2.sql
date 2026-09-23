@@ -1,0 +1,1 @@
+-- Production history marker: top-three score separation and non-top cap logic are consolidated in 20260923231149_challenge_natural_distribution_settings_v2.sql.
