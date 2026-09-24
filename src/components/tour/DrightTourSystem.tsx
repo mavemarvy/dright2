@@ -25,14 +25,25 @@ type SpotlightRect = {
 
 type TourStatus = 'started' | 'completed' | 'skipped';
 
+type GuidedTourRolloutSettings = {
+  audience_mode: 'new_users_only' | 'all_users_test';
+  test_generation: number;
+  new_user_rollout_at: string;
+  updated_at?: string | null;
+};
+
 const SAFE_AUTOSTART_PATH = '/';
 const LOCAL_PREFIX = 'dright-tour-progress';
-// Existing DRIGHT accounts are not forced through a new onboarding experience.
-// Accounts created after the tour rollout can receive the one-time Basics tour.
-const AUTO_TOUR_ROLLOUT_AT = Date.parse('2026-09-24T14:30:00Z');
+const FALLBACK_AUTO_TOUR_ROLLOUT_AT = '2026-09-24T14:30:00Z';
 
-function localKey(userId: string, tour: TourDefinition) {
-  return `${LOCAL_PREFIX}:${userId}:${tour.key}:v${tour.version}`;
+const DEFAULT_ROLLOUT_SETTINGS: GuidedTourRolloutSettings = {
+  audience_mode: 'new_users_only',
+  test_generation: 0,
+  new_user_rollout_at: FALLBACK_AUTO_TOUR_ROLLOUT_AT,
+};
+
+function localKey(userId: string, tour: TourDefinition, progressKey: string = tour.key) {
+  return `${LOCAL_PREFIX}:${userId}:${progressKey}:v${tour.version}`;
 }
 
 function getVisibleTarget(selector?: string): HTMLElement | null {
@@ -67,11 +78,12 @@ async function saveProgress(
   tour: TourDefinition,
   status: TourStatus,
   currentStep: number,
+  progressKey: string = tour.key,
 ) {
   const now = new Date().toISOString();
   const payload = {
     user_id: userId,
-    tour_key: tour.key,
+    tour_key: progressKey,
     tour_version: tour.version,
     status,
     current_step: currentStep,
@@ -92,7 +104,7 @@ async function saveProgress(
   }
 
   try {
-    window.localStorage.setItem(localKey(userId, tour), JSON.stringify({
+    window.localStorage.setItem(localKey(userId, tour, progressKey), JSON.stringify({
       status,
       current_step: currentStep,
       updated_at: now,
@@ -102,13 +114,17 @@ async function saveProgress(
   }
 }
 
-async function hasFinishedTour(userId: string, tour: TourDefinition): Promise<boolean> {
+async function hasFinishedTour(
+  userId: string,
+  tour: TourDefinition,
+  progressKey: string = tour.key,
+): Promise<boolean> {
   try {
     const { data, error } = await supabase
       .from('user_tour_progress')
       .select('status')
       .eq('user_id', userId)
-      .eq('tour_key', tour.key)
+      .eq('tour_key', progressKey)
       .eq('tour_version', tour.version)
       .maybeSingle();
 
@@ -120,7 +136,7 @@ async function hasFinishedTour(userId: string, tour: TourDefinition): Promise<bo
   }
 
   try {
-    const raw = window.localStorage.getItem(localKey(userId, tour));
+    const raw = window.localStorage.getItem(localKey(userId, tour, progressKey));
     if (!raw) return false;
     const stored = JSON.parse(raw) as { status?: string };
     return stored.status === 'completed' || stored.status === 'skipped';
@@ -133,14 +149,17 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const [activeKey, setActiveKey] = useState<TourKey | null>(null);
+  const [activeProgressKey, setActiveProgressKey] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null);
+  const [rolloutSettings, setRolloutSettings] = useState<GuidedTourRolloutSettings>(DEFAULT_ROLLOUT_SETTINGS);
+  const [rolloutReady, setRolloutReady] = useState(false);
   const autoCheckedFor = useRef<string | null>(null);
 
   const tour = activeKey ? TOUR_DEFINITIONS[activeKey] : null;
   const step = tour?.steps[stepIndex] ?? null;
 
-  const beginTour = useCallback((tourKey: TourKey) => {
+  const beginTour = useCallback((tourKey: TourKey, progressKey: string = tourKey) => {
     const nextTour = TOUR_DEFINITIONS[tourKey];
     if (!nextTour) return;
 
@@ -153,6 +172,7 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
         // Session storage is best-effort only.
       }
       setActiveKey(null);
+      setActiveProgressKey(null);
       setSpotlight(null);
       navigate(nextTour.startPath);
       return;
@@ -164,9 +184,10 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
       // Session storage is best-effort only.
     }
     setActiveKey(tourKey);
+    setActiveProgressKey(progressKey);
     setStepIndex(0);
     setSpotlight(null);
-    if (userId) void saveProgress(userId, nextTour, 'started', 0);
+    if (userId) void saveProgress(userId, nextTour, 'started', 0, progressKey);
   }, [location.pathname, navigate, userId]);
 
   useEffect(() => {
@@ -189,26 +210,103 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
   }, [activeKey, beginTour, location.pathname, userCreatedAt, userId]);
 
   useEffect(() => {
-    if (!userId || !userCreatedAt || location.pathname !== SAFE_AUTOSTART_PATH || activeKey) return;
-    const createdAt = Date.parse(userCreatedAt);
-    if (!Number.isFinite(createdAt) || createdAt < AUTO_TOUR_ROLLOUT_AT) return;
-    const marker = `${userId}:basics:v${TOUR_DEFINITIONS.basics.version}`;
+    if (!userId) {
+      setRolloutSettings(DEFAULT_ROLLOUT_SETTINGS);
+      setRolloutReady(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRollout = async () => {
+      const { data, error } = await supabase
+        .from('guided_tour_settings')
+        .select('audience_mode,test_generation,new_user_rollout_at,updated_at')
+        .eq('singleton', true)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error || !data) {
+        setRolloutSettings(DEFAULT_ROLLOUT_SETTINGS);
+      } else {
+        setRolloutSettings({
+          audience_mode: data.audience_mode === 'all_users_test' ? 'all_users_test' : 'new_users_only',
+          test_generation: Math.max(0, Number(data.test_generation || 0)),
+          new_user_rollout_at: data.new_user_rollout_at || FALLBACK_AUTO_TOUR_ROLLOUT_AT,
+          updated_at: data.updated_at || null,
+        });
+      }
+      setRolloutReady(true);
+    };
+
+    void loadRollout();
+
+    const channel = supabase
+      .channel(`guided-tour-rollout-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'guided_tour_settings' },
+        () => {
+          void loadRollout();
+        },
+      )
+      .subscribe();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void loadRollout();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId || !rolloutReady || location.pathname !== SAFE_AUTOSTART_PATH || activeKey) return;
+
+    const isAllUsersTest = rolloutSettings.audience_mode === 'all_users_test';
+    let progressKey = 'basics';
+
+    if (isAllUsersTest) {
+      progressKey = `basics_test_${Math.max(1, rolloutSettings.test_generation)}`;
+    } else {
+      if (!userCreatedAt) return;
+      const createdAt = Date.parse(userCreatedAt);
+      const rolloutAt = Date.parse(rolloutSettings.new_user_rollout_at || FALLBACK_AUTO_TOUR_ROLLOUT_AT);
+      if (!Number.isFinite(createdAt) || !Number.isFinite(rolloutAt) || createdAt < rolloutAt) return;
+    }
+
+    const marker = `${userId}:${progressKey}:v${TOUR_DEFINITIONS.basics.version}`;
     if (autoCheckedFor.current === marker) return;
     autoCheckedFor.current = marker;
 
     let cancelled = false;
     const timer = window.setTimeout(async () => {
-      const finished = await hasFinishedTour(userId, TOUR_DEFINITIONS.basics);
+      const finished = await hasFinishedTour(userId, TOUR_DEFINITIONS.basics, progressKey);
       if (!cancelled && !finished && location.pathname === SAFE_AUTOSTART_PATH) {
-        beginTour('basics');
+        beginTour('basics', progressKey);
       }
-    }, 900);
+    }, isAllUsersTest ? 350 : 900);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeKey, beginTour, location.pathname, userCreatedAt, userId]);
+  }, [
+    activeKey,
+    beginTour,
+    location.pathname,
+    rolloutReady,
+    rolloutSettings.audience_mode,
+    rolloutSettings.new_user_rollout_at,
+    rolloutSettings.test_generation,
+    userCreatedAt,
+    userId,
+  ]);
 
   useEffect(() => {
     if (!tour || !step) return;
@@ -262,14 +360,21 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
     if (!tour) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (userId) void saveProgress(userId, tour, 'skipped', stepIndex);
+        const progressKey = activeProgressKey || tour.key;
+        if (userId) {
+          void saveProgress(userId, tour, 'skipped', stepIndex, progressKey);
+          if (tour.key === 'basics' && progressKey !== tour.key) {
+            void saveProgress(userId, tour, 'skipped', stepIndex, tour.key);
+          }
+        }
         setActiveKey(null);
+        setActiveProgressKey(null);
         setSpotlight(null);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [stepIndex, tour, userId]);
+  }, [activeProgressKey, stepIndex, tour, userId]);
 
   const cardStyle = useMemo(() => {
     if (!spotlight || step?.placement === 'center') return undefined;
@@ -293,8 +398,15 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
   const isLast = stepIndex === tour.steps.length - 1;
 
   const close = (status: 'completed' | 'skipped') => {
-    if (userId) void saveProgress(userId, tour, status, stepIndex);
+    const progressKey = activeProgressKey || tour.key;
+    if (userId) {
+      void saveProgress(userId, tour, status, stepIndex, progressKey);
+      if (tour.key === 'basics' && progressKey !== tour.key) {
+        void saveProgress(userId, tour, status, stepIndex, tour.key);
+      }
+    }
     setActiveKey(null);
+    setActiveProgressKey(null);
     setSpotlight(null);
   };
 
@@ -305,13 +417,13 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
     }
     const nextIndex = stepIndex + 1;
     setStepIndex(nextIndex);
-    if (userId) void saveProgress(userId, tour, 'started', nextIndex);
+    if (userId) void saveProgress(userId, tour, 'started', nextIndex, activeProgressKey || tour.key);
   };
 
   const previous = () => {
     const nextIndex = Math.max(0, stepIndex - 1);
     setStepIndex(nextIndex);
-    if (userId) void saveProgress(userId, tour, 'started', nextIndex);
+    if (userId) void saveProgress(userId, tour, 'started', nextIndex, activeProgressKey || tour.key);
   };
 
   const backdrop = 'rgba(2, 6, 23, 0.72)';
