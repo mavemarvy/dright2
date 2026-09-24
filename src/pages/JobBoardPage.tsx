@@ -717,8 +717,8 @@ export default function JobBoardPage() {
               className="mt-10 bg-gradient-to-br from-primary-600 to-indigo-700 rounded-2xl p-6 text-white text-center"
             >
               <Briefcase className="w-8 h-8 mx-auto mb-3 text-primary-200" />
-              <h3 className="text-lg font-bold mb-1">Hiring? Post a Job for Free</h3>
-              <p className="text-primary-200 text-sm mb-4">Reach thousands of qualified candidates. Job postings are completely free.</p>
+              <h3 className="text-lg font-bold mb-1">Hiring? Post a Job</h3>
+              <p className="text-primary-200 text-sm mb-4">Reach qualified candidates. Employer posting is included during your professional-access trial and with active platform access.</p>
               <button
                 data-tour="jobs-post"
                 onClick={() => navigate('/post-job')}
