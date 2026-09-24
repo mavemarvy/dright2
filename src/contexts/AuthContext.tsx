@@ -5,7 +5,7 @@ import { getAffiliateCookie } from '../lib/affiliate';
 import { emitEvent } from '../lib/notificationEvents';
 import type { StoreTheme } from '../lib/storeThemes';
 import { logger, ErrorCategory } from '../lib/logger';
-import { getDeviceFingerprint, getBrowserName, getRedirectPath } from '../lib/authSecurity';
+import { getDeviceFingerprint, getPersistentDeviceId, getBrowserName, getRedirectPath } from '../lib/authSecurity';
 import { resumePendingSignupOnboarding } from '../lib/onboarding';
 import { claimPendingDrightStarterPurchase, getDrightStarterSignupEligibility } from '../lib/drightStarter';
 
@@ -71,6 +71,43 @@ function generateUsername(email: string, userId: string): string {
   return `${local}_${userId.replace(/-/g, '').slice(0, 8)}`.slice(0, 30);
 }
 
+
+type DevicePolicyCheck = { allowed: boolean; reason: string; error?: string };
+
+function makeDevicePolicyError(message: string, status = 403): AuthError {
+  return { message, name: 'DeviceAccountLimit', status } as AuthError;
+}
+
+async function preflightCurrentDeviceForSignup(): Promise<DevicePolicyCheck> {
+  const deviceId = getPersistentDeviceId();
+  const fingerprint = getDeviceFingerprint();
+  const { data, error } = await supabase.rpc('preflight_signup_device', {
+    p_device_id: deviceId,
+    p_fingerprint: fingerprint,
+  });
+  if (error) return { allowed: false, reason: 'device_check_failed', error: error.message };
+  const result = (data ?? {}) as { allowed?: boolean; reason?: string };
+  return {
+    allowed: result.allowed === true,
+    reason: String(result.reason ?? 'device_check_failed'),
+  };
+}
+
+async function claimOrVerifyCurrentDevice(): Promise<DevicePolicyCheck> {
+  const deviceId = getPersistentDeviceId();
+  const fingerprint = getDeviceFingerprint();
+  const { data, error } = await supabase.rpc('claim_current_device', {
+    p_device_id: deviceId,
+    p_fingerprint: fingerprint,
+  });
+  if (error) return { allowed: false, reason: 'device_check_failed', error: error.message };
+  const result = (data ?? {}) as { allowed?: boolean; reason?: string };
+  return {
+    allowed: result.allowed === true,
+    reason: String(result.reason ?? 'device_check_failed'),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null); const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true); const [profile, setProfile] = useState<Profile | null>(null);
@@ -129,6 +166,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession(); setSession(session); setUser(session?.user ?? null);
       if (session?.user) {
+        const deviceCheck = await claimOrVerifyCurrentDevice();
+        if (!deviceCheck.allowed) {
+          await supabase.auth.signOut({ scope: 'local' });
+          setSession(null); setUser(null); setProfile(null); setLoading(false);
+          return;
+        }
         await createMissingProfile(session.user);
         await fetchProfile(session.user.id);
         await resumeOnboarding();
@@ -141,6 +184,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void (async () => {
         setSession(authSession); setUser(authSession?.user ?? null);
         if (authSession?.user) {
+          if (event === 'SIGNED_IN') {
+            const deviceCheck = await claimOrVerifyCurrentDevice();
+            if (!deviceCheck.allowed) {
+              await supabase.auth.signOut({ scope: 'local' });
+              setSession(null); setUser(null); setProfile(null); setLoading(false);
+              return;
+            }
+          }
           await createMissingProfile(authSession.user);
           await fetchProfile(authSession.user.id);
           await resumeOnboarding();
@@ -229,6 +280,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string, phone?: string, asAdmin?: boolean, location?: string, preferredCurrency?: string, starterReference?: string) => {
     const normalizedEmail = email.trim().toLowerCase();
+    const deviceId = getPersistentDeviceId();
+    const deviceFingerprint = getDeviceFingerprint();
+    const deviceCheck = await preflightCurrentDeviceForSignup();
+    if (!deviceCheck.allowed) {
+      const message = deviceCheck.reason === 'device_already_has_account'
+        ? 'A DRIGHT account already exists on this device. Use the existing account instead of creating another one.'
+        : 'DRIGHT could not verify this device for account creation. Please try again.';
+      return { error: makeDevicePolicyError(message, deviceCheck.reason === 'device_already_has_account' ? 409 : 503) };
+    }
     const normalizedStarterReference = starterReference?.trim() || '';
     if (normalizedStarterReference) {
       const eligibility = await getDrightStarterSignupEligibility(normalizedStarterReference, normalizedEmail);
@@ -254,14 +314,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           preferred_currency: preferredCurrency || 'USD',
           wants_admin: asAdmin || false,
           signup_referral_code: refCode || null,
+          signup_device_id: deviceId,
+          signup_device_fingerprint: deviceFingerprint,
         },
       },
     });
-    if (!error && data.user && data.session) {
+    if (error) {
+      const message = /DEVICE_ALREADY_REGISTERED|DEVICE_ID_REQUIRED|Database error saving new user/i.test(error.message)
+        ? 'This device is already registered to a DRIGHT account, or its device identity could not be verified.'
+        : error.message;
+      return { error: message === error.message ? error : makeDevicePolicyError(message, 409) };
+    }
+    if (data.user && data.session) {
+      const bound = await claimOrVerifyCurrentDevice();
+      if (!bound.allowed) {
+        await supabase.auth.signOut({ scope: 'local' });
+        return { error: makeDevicePolicyError('This device is already registered to another DRIGHT account.', 409) };
+      }
       const result = await createProfile(data.user.id, normalizedEmail, fullName, phone, asAdmin, location, preferredCurrency);
       if (result.error) return { error: result.error as unknown as AuthError };
     }
-    return { error };
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
@@ -276,6 +349,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await logAuthActivity('failed_login', false, error.message);
       logger.warn(ErrorCategory.AUTH, 'Failed login attempt', { email: normalizedEmail, error: error.message });
       return { error };
+    }
+    const deviceCheck = await claimOrVerifyCurrentDevice();
+    if (!deviceCheck.allowed) {
+      await supabase.auth.signOut({ scope: 'local' });
+      return {
+        error: makeDevicePolicyError(
+          deviceCheck.reason === 'device_belongs_to_another_account'
+            ? 'This device is already linked to another DRIGHT account. Sign in with the account already registered on this device.'
+            : 'DRIGHT could not verify this device. Please try again.',
+          deviceCheck.reason === 'device_belongs_to_another_account' ? 403 : 503,
+        ),
+      };
     }
     if (data.user) { await createMissingProfile(data.user); await fetchProfile(data.user.id); await resumeOnboarding(); }
     try { await supabase.rpc('record_login_attempt', { p_email: normalizedEmail, p_success: true, p_user_agent: navigator.userAgent }); } catch { /* non-critical */ }
