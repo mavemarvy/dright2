@@ -617,7 +617,7 @@ export default function MarketPage() {
   }, [displayProducts.length, marketHasMore, marketPersonalized, usingMarketplaceV2]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+    <div data-tour="marketplace-page" className="max-w-7xl mx-auto px-4 md:px-8 py-6">
       <SeoHead
         title="Marketplace"
         description="Browse digital products, courses, services, and jobs on Dright. Find software, templates, e-books, and more from creators worldwide."
@@ -665,10 +665,10 @@ export default function MarketPage() {
       )}
 
       <HeroBanner onBrowseCategories={() => setShowCategorySection(s => !s)} />
-      <div className="mt-6">
+      <div data-tour="marketplace-search" className="mt-6">
         <SmartSearch onSearch={handleSearch} showMarketplaceDiscovery={showSearchDiscovery} />
       </div>
-      <div className="mt-3">
+      <div data-tour="marketplace-filters" className="mt-3">
         <AdvancedFilterBar
           filters={filters}
           onFilterChange={setFilters}
@@ -710,7 +710,7 @@ export default function MarketPage() {
         </div>
       )}
 
-      <div className="mt-8" id="marketplace-products">
+      <div data-tour="marketplace-listings" className="mt-8" id="marketplace-products">
         {filters.sortBy === 'trending' && !starterAffiliateProgress?.marketplace_limited && <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />}
 
         <div className="flex items-center justify-between mb-4 mt-4">
@@ -727,7 +727,7 @@ export default function MarketPage() {
               <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 text-primary-600 shadow-sm' : 'text-gray-400'}`} aria-label={t('gridView')}><LayoutGrid className="w-4 h-4" /></button>
               <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 text-primary-600 shadow-sm' : 'text-gray-400'}`} aria-label={t('listView')}><List className="w-4 h-4" /></button>
             </div>
-            <Link to="/upload-product" className="flex items-center gap-2 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors shadow-md shadow-primary-600/20 min-h-[48px]"><Plus className="w-5 h-5" /><span className="hidden sm:inline">{t('postAd')}</span></Link>
+            <Link data-tour="marketplace-post-ad" to="/upload-product" className="flex items-center gap-2 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors shadow-md shadow-primary-600/20 min-h-[48px]"><Plus className="w-5 h-5" /><span className="hidden sm:inline">{t('postAd')}</span></Link>
           </div>
         </div>
 
