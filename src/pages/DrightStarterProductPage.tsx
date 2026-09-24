@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ElementType } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight, BadgeCheck, Check, Copy, Gift, Loader2, LockKeyhole,
-  Rocket, ShieldCheck, Sparkles, Star, UserPlus, Users, WalletCards,
+  Rocket, ShieldCheck, Sparkles, Star, Trophy, UserPlus, Users, WalletCards,
 } from 'lucide-react';
 import { DrightMark } from '../components/DrightBrand';
 import TurnstileWidget from '../components/TurnstileWidget';
@@ -229,6 +229,12 @@ export default function DrightStarterProductPage() {
                       Open affiliate access
                     </Link>
                   ) : null}
+                  <Link
+                    to="/challenges?section=affiliate&challenge=starter_affiliate"
+                    className="mt-3 min-h-[44px] px-4 rounded-xl border border-blue-300/30 bg-blue-400/10 text-blue-100 font-black inline-flex items-center gap-2"
+                  >
+                    <Trophy className="w-4 h-4" /> View Starter Affiliate Leaderboard
+                  </Link>
                 </div>
               </div>
 
