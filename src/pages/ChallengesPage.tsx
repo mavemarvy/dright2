@@ -345,7 +345,7 @@ export default function ChallengesPage() {
         canonical="/challenges"
       />
 
-      <section className="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 px-4 py-12 sm:py-16">
+      <section data-tour="challenges-hero" className="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 px-4 py-12 sm:py-16">
         <div className="max-w-5xl mx-auto text-center">
           <Trophy className="w-14 h-14 mx-auto mb-4 text-white/90" />
           <h1 className="text-3xl sm:text-4xl font-black">DRIGHT Challenges</h1>
@@ -380,7 +380,7 @@ export default function ChallengesPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2 mb-5">
+        <div data-tour="challenges-selector" className="grid grid-cols-2 gap-2 mb-5">
           {(['referral', 'affiliate'] as MonthlyChallengeSection[]).map(item => (
             <button
               key={item}
@@ -413,6 +413,7 @@ export default function ChallengesPage() {
 
             {selected && (
               <motion.section
+                data-tour="challenges-podium"
                 key={`${selected.challenge_key}-${period}`}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -463,7 +464,7 @@ export default function ChallengesPage() {
                 </div>
 
                 {!loadingBoard && (
-                  <div className="bg-slate-950/75 border-t border-white/10 px-3 sm:px-6 py-5">
+                  <div data-tour="challenges-ranking" className="bg-slate-950/75 border-t border-white/10 px-3 sm:px-6 py-5">
                     <div className="flex items-center justify-between mb-3 px-1">
                       <p className="font-black text-sm">{period === 'current' ? 'Participants & ranking' : historySource === 'simulated_benchmark' ? `${periodLabel} benchmark ranking` : `${periodLabel} winners & ranking`}</p>
                       <p className="text-xs text-slate-400">{total.toLocaleString()} participant{total === 1 ? '' : 's'}</p>

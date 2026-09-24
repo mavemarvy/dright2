@@ -294,6 +294,7 @@ export default function ProfilePage() {
 
       {/* Balance Card */}
       <motion.div
+        data-tour="profile-balance"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-gradient-to-br from-success to-green-600 rounded-2xl p-6 text-white mb-6 shadow-lg"
@@ -354,6 +355,7 @@ export default function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08 }}
         className="grid grid-cols-3 gap-3 mb-6"
+        data-tour="profile-social"
       >
         <Link to={`/followers/${user?.id}`} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-center hover:shadow-md transition-shadow">
           <Users className="w-5 h-5 text-indigo-500 mx-auto mb-1" />
@@ -380,6 +382,7 @@ export default function ProfilePage() {
         className="mb-6"
       >
         <Link
+          data-tour="profile-settings"
           to="/settings"
           className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
         >
@@ -424,6 +427,7 @@ export default function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
         className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6"
+        data-tour="profile-card"
       >
         {/* Profile Header */}
         <div className="bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 p-6">

@@ -10,6 +10,7 @@ import SupportCenterPanel from '../components/support/SupportCenterPanel';
 import TelegramSupportLink from '../components/support/TelegramSupportLink';
 import { useHelpCategories, usePublishedHelpArticles, usePublishedFaqs, useSupportDepartments } from '../lib/contentHooks';
 import type { HelpArticle, FaqItem } from '../lib/contentTypes';
+import GuidedToursPanel from '../components/tour/GuidedToursPanel';
 
 const ICON_MAP: Record<string, typeof HelpCircle> = {
   HelpCircle, Rocket: HelpCircle, User: HelpCircle, ShoppingCart: HelpCircle,
@@ -71,6 +72,8 @@ export default function HelpCenterPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-12">
+        <GuidedToursPanel />
+
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Categories</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
           {categories.map(cat => {

@@ -206,14 +206,14 @@ export default function BuyerDashboardPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+    <div data-tour="orders-page" className="p-4 md:p-8 max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
         <p className="text-gray-500 mt-1">Track your purchases, downloads, and service orders</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6">
+      <div data-tour="orders-tabs" className="flex gap-2 mb-6">
         {([
           { value: 'active', label: 'Active', count: activeOrders.length },
           { value: 'completed', label: 'Completed', count: completedOrders.length },
@@ -250,7 +250,7 @@ export default function BuyerDashboardPage() {
       )}
 
       {/* Orders list */}
-      <div className="space-y-4">
+      <div data-tour="orders-list" className="space-y-4">
         {displayOrders.map((order, idx) => {
           const statusCfg = getStatusConfig(order.status);
           const StatusIcon = statusCfg.icon;
