@@ -53,6 +53,15 @@ export default function PlatformFeatureGate({ featureKey, children, title }: Pro
           Your free professional-access period has ended for this feature. Pay the monthly DRIGHT platform fee to continue using this professional tool.
         </p>
 
+        {status?.admin_paywall_preview && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left">
+            <p className="text-xs font-black uppercase tracking-wide text-amber-800">Admin test preview</p>
+            <p className="mt-1 text-xs text-amber-700">
+              This paywall is being simulated for your admin account. No real user's trial, Starter access grant, subscription or payment record has been changed.
+            </p>
+          </div>
+        )}
+
         <div className="mt-5 rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-left">
           <div className="flex items-start gap-3">
             <ShoppingBag className="w-5 h-5 text-emerald-600 mt-0.5" />
