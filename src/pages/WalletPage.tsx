@@ -81,7 +81,7 @@ export default function WalletPage() {
   ] : [];
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div data-tour="wallet-page" className="p-4 md:p-8 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
@@ -93,10 +93,10 @@ export default function WalletPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => navigate('/wallet/fund')} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+          <button data-tour="wallet-fund" onClick={() => navigate('/wallet/fund')} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
             <Plus className="w-4 h-4" /> Fund Wallet
           </button>
-          <button onClick={() => navigate('/wallet/withdraw')} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">
+          <button data-tour="wallet-withdraw" onClick={() => navigate('/wallet/withdraw')} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">
             <WithdrawIcon className="w-4 h-4" /> Withdraw
           </button>
           <button onClick={load} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
@@ -113,7 +113,7 @@ export default function WalletPage() {
       )}
 
       {/* Balance cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div data-tour="wallet-balances" className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {balances.map(b => (
           <div key={b.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${b.color}`}>
@@ -194,7 +194,7 @@ export default function WalletPage() {
       )}
 
       {/* Transaction history */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
+      <div data-tour="wallet-history" className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-gray-900 dark:text-white">Transaction History</h2>
           <div className="flex items-center gap-3">
