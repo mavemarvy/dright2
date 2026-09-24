@@ -1,5 +1,6 @@
 export type TourKey =
   | 'basics'
+  | 'dashboard'
   | 'marketplace'
   | 'social'
   | 'news'
@@ -83,6 +84,14 @@ function pageTour(
 }
 
 export const TOUR_DEFINITIONS: Record<TourKey, TourDefinition> = {
+  dashboard: pageTour(
+    'dashboard',
+    'Dashboard',
+    'Learn where your main DRIGHT overview and dashboard navigation live.',
+    '/',
+    'The Dashboard is your starting point for account shortcuts, activity, performance and quick access to the rest of DRIGHT.',
+    'dashboard',
+  ),
   basics: {
     key: 'basics',
     version: 1,
