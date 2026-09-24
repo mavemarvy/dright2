@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const icons: Partial<Record<TourKey, string>> = {
   basics: '🧭',
+  dashboard: '🏠',
   marketplace: '🛍️',
   social: '👥',
   news: '📰',
