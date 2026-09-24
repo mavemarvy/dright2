@@ -315,6 +315,19 @@ export default function AdminCompetitionsPage() {
     [data?.awards],
   );
 
+  const dispatchWindow = useMemo(() => {
+    if (!data?.current_period_end) return null;
+    const endMs = new Date(data.current_period_end).getTime();
+    const remainingMs = Math.max(0, endMs - Date.now());
+    const remainingHours = remainingMs / 3_600_000;
+    return {
+      end: new Date(data.current_period_end),
+      remainingHours,
+      remainingDays: remainingHours / 24,
+    };
+  }, [data?.current_period_end, lastUpdated]);
+
+
   const patchSetting = (key: string, patch: Partial<MonthlyChallengeDefinition>) => {
     dirtyKeys.current.add(key);
     setSettings(prev => prev.map(item => item.challenge_key === key ? { ...item, ...patch } : item));
@@ -508,9 +521,25 @@ export default function AdminCompetitionsPage() {
       automationDirty.current = false;
       setAutomation(saved);
       setDistributionText(distributionToText(saved.exact_distribution));
-      showMessage('success', 'Monthly competitor automation settings saved.');
+
+      if (saved.enabled) {
+        const result = await generateAdminSimulationPlan(automationKey);
+        const generated = Number(result.generated ?? 0);
+        simDirtyIds.current.clear();
+        showMessage(
+          'success',
+          `Saved and applied now. ${generated.toLocaleString()} AI competitor plan${generated === 1 ? '' : 's'} were recalculated and randomly paced toward the month-end targets.`,
+        );
+        await Promise.all([
+          loadAutomation(automationKey, true),
+          loadSimulated(automationKey, 0, false, simSearchApplied),
+          selectedKey ? loadLeaders(selectedKey, true) : Promise.resolve(),
+        ]);
+      } else {
+        showMessage('success', 'Monthly competitor automation settings saved. Automation is currently off, so no live plan was regenerated.');
+      }
     } catch (error) {
-      showMessage('error', error instanceof Error ? error.message : 'Could not save monthly automation settings');
+      showMessage('error', error instanceof Error ? error.message : 'Could not save and apply monthly automation settings');
     } finally {
       setAutomationBusy(false);
     }
@@ -1105,7 +1134,7 @@ export default function AdminCompetitionsPage() {
 
                 <div className="mt-3 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/15 p-3">
                   <p className="text-xs font-black text-amber-800 dark:text-amber-300">Top-three month-end limits</p>
-                  <p className="text-[11px] text-gray-500 mt-1">These are independent targets for the three reserved top managed profiles. Their live score grows toward the limit during the month.</p>
+                  <p className="text-[11px] text-gray-500 mt-1">These are independent month-end targets for the top managed profiles. Saving recalculates the live plan immediately; score increments and timing are randomized so the targets are approached naturally before the month closes.</p>
                   <div className="mt-3 grid grid-cols-3 gap-2">
                     <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300">
                       #1 target
@@ -1128,8 +1157,9 @@ export default function AdminCompetitionsPage() {
                     <input type="number" min={0} max={20} value={automation.top_target_count} onChange={e => patchAutomation({ top_target_count: Math.max(0, Math.min(20, Math.trunc(Number(e.target.value) || 0))) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
                   </label>
                   <label className="text-xs font-bold text-gray-600 dark:text-gray-300">
-                    Total month-end records (optional)
+                    Total month-end score sum (optional)
                     <input type="number" min={0} value={automation.total_target_records ?? ''} placeholder="Auto-distribute" onChange={e => patchAutomation({ total_target_records: e.target.value === '' ? null : Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="mt-1 w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-sm" />
+                    <span className="mt-1 block font-normal text-gray-500">This is the combined month-end score budget, not the number of AI competitors.</span>
                   </label>
                   <label className="flex items-center justify-between gap-3 rounded-xl border border-violet-200 dark:border-violet-900 bg-white dark:bg-gray-950 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300">
                     Allow previous top profiles again
@@ -1161,12 +1191,31 @@ export default function AdminCompetitionsPage() {
                   <div className="rounded-xl bg-white dark:bg-gray-950 p-3"><span className="text-gray-500">Zero targets</span><p className="font-black text-gray-950 dark:text-white mt-1">{automation.current_plan.zero_targets.toLocaleString()}</p></div>
                 </div>
 
+                <div className="mt-4 rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/70 dark:bg-emerald-950/15 p-3">
+                  <div className="flex items-start gap-2">
+                    <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
+                    <div className="text-xs text-gray-600 dark:text-gray-300">
+                      <p className="font-black text-emerald-800 dark:text-emerald-300">Dispatch pacing: randomized automatically to month end</p>
+                      <p className="mt-1">
+                        Each managed profile receives its own score increment and interval. When you change the targets and save, DRIGHT now rebuilds this month immediately and calculates the pace from the remaining time.
+                        {dispatchWindow ? ` About ${dispatchWindow.remainingDays.toFixed(2)} days remain in this competition month.` : ''}
+                      </p>
+                      <p className="mt-1">
+                        Requested AI quantity: <strong>{automation.active_competitor_count.toLocaleString()}</strong> · Current managed profiles: <strong>{automation.current_plan.automated_profiles.toLocaleString()}</strong>.
+                        {automation.active_competitor_count > automation.current_plan.automated_profiles && automation.current_plan.automated_profiles > 0
+                          ? ' If these stay different after applying, the plan is capped by the number of available imported profiles or manual overrides.'
+                          : ''}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
                   <button disabled={automationBusy || planBusy} onClick={() => void saveAutomation()} className="inline-flex items-center gap-2 rounded-xl border border-violet-300 dark:border-violet-800 px-4 py-2 text-sm font-black text-violet-700 dark:text-violet-300 disabled:opacity-50">
-                    {automationBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save automation
+                    {automationBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save & apply now
                   </button>
                   <button disabled={planBusy || automationBusy} onClick={() => void applyAutomationPlan()} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">
-                    {planBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shuffle className="w-4 h-4" />} Apply & reroll this month
+                    {planBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shuffle className="w-4 h-4" />} Reroll this month
                   </button>
                 </div>
               </>
