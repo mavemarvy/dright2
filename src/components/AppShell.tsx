@@ -297,6 +297,7 @@ export default function AppShell() {
             const featureKey = USER_NAV_FEATURE_BY_PATH[item.path as keyof typeof USER_NAV_FEATURE_BY_PATH];
             return !featureKey || canSeeFeature(featureKey);
           }).map(item => {
+            const featureKey = USER_NAV_FEATURE_BY_PATH[item.path as keyof typeof USER_NAV_FEATURE_BY_PATH];
             const isActive = item.path === '/' ? location.pathname === '/' : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (
               <NavLink key={item.path} to={item.path} data-tour={featureKey ? `nav-${featureKey}` : undefined} className="flex flex-col items-center py-1.5 px-3 min-w-[60px] min-h-[56px]" aria-label={navLabel(item, t)}>
