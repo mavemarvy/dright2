@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, Copy, ExternalLink, Rocket, Star, Target, WalletCards } from 'lucide-react';
+import { BadgeCheck, Copy, ExternalLink, Rocket, Star, Target, Trophy, WalletCards } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { canUsePlatformFeature } from '../lib/platformAccess';
 import {
@@ -113,7 +113,7 @@ export default function DrightStarterProductCard({ className = '' }: { className
                   ? `${progress.unlock_label} unlocked`
                   : `${progress.remaining_sales} verified sale${progress.remaining_sales === 1 ? '' : 's'} remaining`}
               </span>
-              <Link to="/challenges" className="font-bold text-white hover:underline">
+              <Link to="/challenges?section=affiliate&challenge=starter_affiliate" className="font-bold text-white hover:underline">
                 View challenge
               </Link>
             </div>
@@ -152,6 +152,12 @@ export default function DrightStarterProductCard({ className = '' }: { className
             </Link>
           )}
         </div>
+        <Link
+          to="/challenges?section=affiliate&challenge=starter_affiliate"
+          className="mt-3 min-h-[42px] inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-300/30 bg-violet-500/10 px-4 text-sm font-bold text-violet-100 hover:bg-violet-500/20"
+        >
+          <Trophy className="w-4 h-4" /> View Starter Affiliate Leaderboard
+        </Link>
       </div>
     </section>
   );

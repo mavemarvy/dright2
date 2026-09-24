@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ReferralProgramAnalytics } from '../components/analytics/EntityPerformance';
 import { ReferralIntelligenceDashboard } from '../components/analytics/AdvancedAnalytics';
@@ -21,6 +22,7 @@ import {
   Crown,
   Ban,
   Gift,
+  Trophy,
 } from 'lucide-react';
 import {
   BUYER_WINDOW_DAYS,
@@ -266,6 +268,20 @@ export default function ReferPage() {
               <a href={shareUrls.x} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity">
                 <Send className="w-4 h-4" /> X
               </a>
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Link
+                to="/challenges?section=referral&challenge=top_referrer"
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 text-sm font-bold text-primary-700 hover:bg-primary-100"
+              >
+                <Trophy className="w-4 h-4" /> Top Referrer Leaderboard
+              </Link>
+              <Link
+                to="/challenges?section=referral&challenge=top_buyer_referrer"
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
+              >
+                <Trophy className="w-4 h-4" /> Buyer Referrer Leaderboard
+              </Link>
             </div>
           </motion.div>
 

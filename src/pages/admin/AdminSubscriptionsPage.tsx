@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, Loader2, Save, ShieldCheck, Users } from 'lucide-react';
+import { AlertTriangle, CreditCard, Loader2, Save, ShieldCheck, Users } from 'lucide-react';
 import AdminListingCapacitySettings from '../../components/admin/AdminListingCapacitySettings';
 import {
   getAdminSubscriptionCatalog,
   getAdminPlatformAccessPolicy,
+  setAdminPaywallPreview,
   updateAdminPlatformAccessPolicy,
   updateAdminSubscriptionPlan,
   type AdminSubscriptionCatalog,
@@ -32,6 +33,7 @@ export default function AdminSubscriptionsPage() {
   const [policy, setPolicy] = useState<PlatformAccessAdminPolicy | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingPolicy, setSavingPolicy] = useState(false);
+  const [savingPreview, setSavingPreview] = useState(false);
   const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -89,6 +91,25 @@ export default function AdminSubscriptionsPage() {
     }
   };
 
+  const togglePaywallPreview = async () => {
+    if (!policy || savingPreview) return;
+    const nextEnabled = !Boolean(policy.settings.admin_paywall_preview);
+    setSavingPreview(true);
+    setMessage(null);
+    try {
+      await setAdminPaywallPreview(nextEnabled);
+      const nextPolicy = await getAdminPlatformAccessPolicy();
+      setPolicy(nextPolicy);
+      setMessage(nextEnabled
+        ? 'Admin paywall preview is ON. Open the normal DRIGHT user interface to test an expired professional-access trial.'
+        : 'Admin paywall preview is OFF. Normal admin bypass and real user trial timing are restored.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to update admin paywall preview.');
+    } finally {
+      setSavingPreview(false);
+    }
+  };
+
   if (loading) {
     return <div className="min-h-[60vh] flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-primary-600" /></div>;
   }
@@ -111,6 +132,44 @@ export default function AdminSubscriptionsPage() {
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
           {message}
         </div>
+      )}
+
+      {policy && (
+        <section className="rounded-2xl border border-amber-300/70 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/20 p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-700 dark:text-amber-300" />
+            </div>
+            <div className="flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-black text-gray-900 dark:text-white">Expired-trial paywall preview</h2>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                  policy.settings.admin_paywall_preview
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                }`}>
+                  {policy.settings.admin_paywall_preview ? 'Admin test ON' : 'Admin test OFF'}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                Use this only to verify what an expired professional-access user sees. When ON, admin accounts using the normal DRIGHT user interface are treated as having no remaining trial or active platform subscription for gated seller, referral, affiliate, job and creator actions.
+              </p>
+              <p className="mt-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                This does not shorten, delete or overwrite any real user's 30-day trial, DRIGHT Starter access grant, subscription, or payment record.
+              </p>
+            </div>
+            <div className="shrink-0 flex flex-col items-start lg:items-end gap-2">
+              <Toggle
+                value={Boolean(policy.settings.admin_paywall_preview)}
+                disabled={savingPreview}
+                onChange={() => void togglePaywallPreview()}
+              />
+              <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                {savingPreview ? 'Saving…' : policy.settings.admin_paywall_preview ? 'Simulating expired access' : 'Use real access state'}
+              </span>
+            </div>
+          </div>
+        </section>
       )}
 
       {policy && (

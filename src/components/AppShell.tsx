@@ -105,6 +105,8 @@ function NavItem({ item, collapsed, onClick, t }: {
   onClick?: () => void;
   t: (key: TranslationKey) => string;
 }) {
+  const featureKey = USER_NAV_FEATURE_BY_PATH[item.path as keyof typeof USER_NAV_FEATURE_BY_PATH];
+
   return (
     <NavLink
       to={item.path}
@@ -117,7 +119,7 @@ function NavItem({ item, collapsed, onClick, t }: {
         }`
       }
       title={collapsed ? navLabel(item, t) : undefined}
-      data-tour={item.path === '/' ? 'nav-dashboard' : item.path === '/market' ? 'nav-market' : item.path === '/social' ? 'nav-social' : item.path === '/news' ? 'nav-news' : undefined}
+      data-tour={featureKey ? `nav-${featureKey}` : undefined}
     >
       {({ isActive }) => (
         <>
@@ -295,9 +297,10 @@ export default function AppShell() {
             const featureKey = USER_NAV_FEATURE_BY_PATH[item.path as keyof typeof USER_NAV_FEATURE_BY_PATH];
             return !featureKey || canSeeFeature(featureKey);
           }).map(item => {
+            const featureKey = USER_NAV_FEATURE_BY_PATH[item.path as keyof typeof USER_NAV_FEATURE_BY_PATH];
             const isActive = item.path === '/' ? location.pathname === '/' : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (
-              <NavLink key={item.path} to={item.path} data-tour={item.path === '/' ? 'nav-dashboard' : item.path === '/market' ? 'nav-market' : item.path === '/social' ? 'nav-social' : item.path === '/news' ? 'nav-news' : undefined} className="flex flex-col items-center py-1.5 px-3 min-w-[60px] min-h-[56px]" aria-label={navLabel(item, t)}>
+              <NavLink key={item.path} to={item.path} data-tour={featureKey ? `nav-${featureKey}` : undefined} className="flex flex-col items-center py-1.5 px-3 min-w-[60px] min-h-[56px]" aria-label={navLabel(item, t)}>
                 <div className="relative flex items-center justify-center"><MetallicNavIcon icon={item.icon} active={isActive} />{isActive && <motion.div layoutId="bottomNavIndicator" className="absolute -bottom-1.5 w-1 h-1 bg-slate-800 dark:bg-slate-200 rounded-full" />}</div>
                 <span className={`text-xs mt-1 font-medium ${isActive ? 'text-slate-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>{navLabel(item, t)}</span>
               </NavLink>

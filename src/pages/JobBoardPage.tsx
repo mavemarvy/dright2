@@ -5,7 +5,7 @@ import {
   Search, Briefcase, MapPin, DollarSign, Clock, Building2, Filter,
   X, SlidersHorizontal, Bookmark, BookmarkCheck,
   TrendingUp, ArrowUpDown, LayoutGrid, List,
-  Megaphone, Star, AlertCircle,
+  Megaphone, Star, AlertCircle, Trophy,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatSalaryRange } from '../lib/currency';
@@ -185,6 +185,12 @@ function JobCard({ job, saved, onToggleSave }: { job: Job; saved: boolean; onTog
         className="block w-full text-center bg-primary-50 hover:bg-primary-600 text-primary-700 hover:text-white font-medium rounded-xl py-2 text-sm transition-all"
       >
         View Details
+      </Link>
+      <Link
+        to="/challenges?section=affiliate&challenge=top_affiliate"
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 py-2 text-xs font-bold text-violet-700 hover:bg-violet-100 transition-colors"
+      >
+        <Trophy className="w-3.5 h-3.5" /> View Affiliate Leaderboard
       </Link>
     </motion.div>
   );
@@ -466,7 +472,7 @@ export default function JobBoardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero */}
-      <div className="bg-gradient-to-br from-primary-700 via-primary-600 to-indigo-700 py-12 px-4">
+      <div data-tour="jobs-hero" className="bg-gradient-to-br from-primary-700 via-primary-600 to-indigo-700 py-12 px-4">
         <div className="max-w-6xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Find Your Next Opportunity</h1>
@@ -503,7 +509,7 @@ export default function JobBoardPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex gap-8">
           {/* Desktop Sidebar */}
-          <aside className="hidden lg:block w-64 shrink-0">
+          <aside data-tour="jobs-filters" className="hidden lg:block w-64 shrink-0">
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm sticky top-4">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -536,6 +542,7 @@ export default function JobBoardPage() {
               <div className="flex items-center gap-2">
                 {/* Mobile filter button */}
                 <button
+                  data-tour="jobs-filters"
                   onClick={() => setFilterDrawerOpen(true)}
                   className="lg:hidden flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                 >
@@ -579,6 +586,7 @@ export default function JobBoardPage() {
                 </div>
 
                 <Link
+                  data-tour="jobs-post"
                   to="/post-job"
                   className="hidden sm:inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl px-4 py-2 text-sm transition-colors"
                 >
@@ -620,7 +628,8 @@ export default function JobBoardPage() {
               </div>
             )}
 
-            <SponsoredPlacementCard placement="jobs" variant="compact" className="mb-5" />
+            <div data-tour="jobs-results">
+              <SponsoredPlacementCard placement="jobs" variant="compact" className="mb-5" />
 
             {loading ? (
               <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-3'}>
@@ -684,12 +693,21 @@ export default function JobBoardPage() {
                         <Link to={`/jobs/${job.id}`} className="bg-primary-50 hover:bg-primary-600 text-primary-700 hover:text-white text-xs font-medium rounded-xl px-3 py-2 transition-all whitespace-nowrap">
                           View
                         </Link>
+                        <Link
+                          to="/challenges?section=affiliate&challenge=top_affiliate"
+                          className="bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold rounded-xl px-3 py-2 transition-all whitespace-nowrap inline-flex items-center gap-1"
+                          aria-label="View affiliate leaderboard"
+                        >
+                          <Trophy className="w-3.5 h-3.5" /> Rank
+                        </Link>
                       </div>
                     </motion.div>
                   ))}
                 </AnimatePresence>
               </motion.div>
             )}
+
+            </div>
 
             {/* Post CTA */}
             <motion.div
@@ -699,9 +717,10 @@ export default function JobBoardPage() {
               className="mt-10 bg-gradient-to-br from-primary-600 to-indigo-700 rounded-2xl p-6 text-white text-center"
             >
               <Briefcase className="w-8 h-8 mx-auto mb-3 text-primary-200" />
-              <h3 className="text-lg font-bold mb-1">Hiring? Post a Job for Free</h3>
-              <p className="text-primary-200 text-sm mb-4">Reach thousands of qualified candidates. Job postings are completely free.</p>
+              <h3 className="text-lg font-bold mb-1">Hiring? Post a Job</h3>
+              <p className="text-primary-200 text-sm mb-4">Reach qualified candidates. Employer posting is included during your professional-access trial and with active platform access.</p>
               <button
+                data-tour="jobs-post"
                 onClick={() => navigate('/post-job')}
                 className="bg-white text-primary-700 font-semibold rounded-xl px-6 py-2.5 hover:bg-primary-50 transition-colors"
               >
