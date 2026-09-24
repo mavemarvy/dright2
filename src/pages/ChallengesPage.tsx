@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Trophy, Clock, Loader2, Target, Crown, Medal, Users, ShoppingCart,
-  Store, Share2, Rocket, History, ChevronDown,
+  Store, Share2, Rocket, History, ChevronDown, ArrowRight,
 } from 'lucide-react';
 import SeoHead from '../components/SeoHead';
 import {
@@ -34,6 +34,46 @@ const CHALLENGE_ICONS: Record<string, typeof Trophy> = {
 function nameFor(entry: MonthlyLeaderboardEntry): string {
   return entry.full_name || entry.username || 'DRIGHT User';
 }
+function challengeAction(challenge: MonthlyChallengeDefinition): {
+  description: string;
+  label: string;
+  to: string;
+} {
+  switch (challenge.challenge_key) {
+    case 'starter_affiliate':
+      return {
+        description: 'Increase your rank by sharing your DRIGHT Starter Product affiliate link. Each verified Starter purchase attributed to you increases your Starter-sales record.',
+        label: 'Open DRIGHT Starter Product',
+        to: '/dright/starter',
+      };
+    case 'top_affiliate':
+      return {
+        description: 'Increase your rank by sharing affiliate-enabled DRIGHT listings. Verified marketplace orders attributed to your affiliate link count toward this leaderboard.',
+        label: 'Find products to affiliate',
+        to: '/market',
+      };
+    case 'top_buyer_referrer':
+      return {
+        description: 'Increase your rank by inviting new DRIGHT users who go on to complete a verified purchase during the month.',
+        label: 'Open referral tools',
+        to: '/refer',
+      };
+    case 'top_seller':
+      return {
+        description: 'Increase your rank by completing verified sales on DRIGHT. Create and manage listings so buyers can purchase from you.',
+        label: 'List a product or service',
+        to: '/upload-product',
+      };
+    case 'top_referrer':
+    default:
+      return {
+        description: 'Increase your rank by inviting new DRIGHT users with your personal referral link. Each qualifying direct referral increases your record.',
+        label: 'Copy & share your referral link',
+        to: '/refer',
+      };
+  }
+}
+
 
 function metricText(challenge: MonthlyChallengeDefinition, entry: MonthlyLeaderboardEntry): string {
   const p = Number(entry.primary_metric || 0);
@@ -107,10 +147,13 @@ function Podium({
 }
 
 export default function ChallengesPage() {
+  const [searchParams] = useSearchParams();
+  const requestedSection = searchParams.get('section') === 'affiliate' ? 'affiliate' : 'referral';
+  const requestedChallenge = searchParams.get('challenge')?.trim() || '';
   const [period, setPeriod] = useState<MonthlyChallengePeriod>('current');
-  const [section, setSection] = useState<MonthlyChallengeSection>('referral');
+  const [section, setSection] = useState<MonthlyChallengeSection>(requestedSection);
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchMonthlyChallengeCatalog>> | null>(null);
-  const [selectedKey, setSelectedKey] = useState('');
+  const [selectedKey, setSelectedKey] = useState(requestedChallenge);
   const [entries, setEntries] = useState<MonthlyLeaderboardEntry[]>([]);
   const [podiumEntries, setPodiumEntries] = useState<MonthlyLeaderboardEntry[]>([]);
   const [viewer, setViewer] = useState<MonthlyLeaderboardEntry | null>(null);
@@ -130,6 +173,14 @@ export default function ChallengesPage() {
   useEffect(() => {
     void getMyDrightStarterAffiliateProgress().then(setStarterProgress);
   }, []);
+
+  useEffect(() => {
+    const nextSection: MonthlyChallengeSection = searchParams.get('section') === 'affiliate' ? 'affiliate' : 'referral';
+    const nextChallenge = searchParams.get('challenge')?.trim() || '';
+    setSection(nextSection);
+    if (nextChallenge) setSelectedKey(nextChallenge);
+  }, [searchParams]);
+
 
   useEffect(() => {
     if (period !== 'current') return;
@@ -154,6 +205,11 @@ export default function ChallengesPage() {
   const selected = useMemo(
     () => catalog?.challenges.find(c => c.challenge_key === selectedKey) ?? null,
     [catalog, selectedKey],
+  );
+
+  const selectedAction = useMemo(
+    () => selected ? challengeAction(selected) : null,
+    [selected],
   );
 
   useEffect(() => {
@@ -431,6 +487,20 @@ export default function ChallengesPage() {
                       </p>
                       <h2 className="text-2xl sm:text-3xl font-black mt-1">{selected.title}</h2>
                       {selected.description && <p className="text-sm text-violet-100/80 mt-2 max-w-2xl">{selected.description}</p>}
+                      {period === 'current' && selectedAction && (
+                        <div className="mt-4 max-w-2xl rounded-2xl border border-white/15 bg-black/20 p-3.5 sm:flex sm:items-center sm:justify-between sm:gap-4">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-200">How to increase your rank</p>
+                            <p className="mt-1 text-xs sm:text-sm leading-5 text-violet-100/90">{selectedAction.description}</p>
+                          </div>
+                          <Link
+                            to={selectedAction.to}
+                            className="mt-3 sm:mt-0 inline-flex min-h-[42px] shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 text-xs font-black text-slate-950 hover:bg-amber-200"
+                          >
+                            {selectedAction.label} <ArrowRight className="w-4 h-4" />
+                          </Link>
+                        </div>
+                      )}
                       {period !== 'current' && historySource === 'simulated_benchmark' && (
                         <div className="mt-3 max-w-2xl rounded-xl border border-amber-300/40 bg-amber-300/10 px-3 py-2.5 text-xs text-amber-100">
                           <span className="font-black">Simulated benchmark:</span> these entries use managed demonstration profiles and are not verified prize winners or verified historical sales.
