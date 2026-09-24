@@ -287,7 +287,7 @@ export default function AppShell() {
       </main>
 
       {!immersiveSocial && <ChatSystem />}
-      {!immersiveSocial && <DrightTourSystem userId={user?.id} />}
+      {!immersiveSocial && <DrightTourSystem userId={user?.id} userCreatedAt={user?.created_at} />}
 
       {!immersiveSocial && <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/96 dark:bg-gray-800/98 backdrop-blur border-t border-gray-200 dark:border-gray-700 z-40 shadow-lg safe-area-bottom" aria-label="Main navigation">
         <div className="flex justify-around items-center py-2">
