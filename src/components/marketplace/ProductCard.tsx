@@ -399,6 +399,7 @@ export default function ProductCard({
               {copiedId === product.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </button>
           )}
+        </div>
         <Link
           to={affiliateLeaderboardHref}
           className="mt-2 min-h-[38px] w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/20 px-3 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/40 transition-colors"
@@ -406,7 +407,6 @@ export default function ProductCard({
           <Trophy className="w-3.5 h-3.5" />
           {isDrightStarter ? 'Starter Affiliate Leaderboard' : 'View Affiliate Leaderboard'}
         </Link>
-        </div>
       </div>
     </motion.div>
   );
