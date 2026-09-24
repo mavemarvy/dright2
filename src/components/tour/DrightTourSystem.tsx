@@ -208,7 +208,7 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeKey, beginTour, location.pathname, userId]);
+  }, [activeKey, beginTour, location.pathname, userCreatedAt, userId]);
 
   useEffect(() => {
     if (!tour || !step) return;
