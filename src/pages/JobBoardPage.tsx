@@ -472,7 +472,7 @@ export default function JobBoardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero */}
-      <div className="bg-gradient-to-br from-primary-700 via-primary-600 to-indigo-700 py-12 px-4">
+      <div data-tour="jobs-hero" className="bg-gradient-to-br from-primary-700 via-primary-600 to-indigo-700 py-12 px-4">
         <div className="max-w-6xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Find Your Next Opportunity</h1>
@@ -509,7 +509,7 @@ export default function JobBoardPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex gap-8">
           {/* Desktop Sidebar */}
-          <aside className="hidden lg:block w-64 shrink-0">
+          <aside data-tour="jobs-filters" className="hidden lg:block w-64 shrink-0">
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm sticky top-4">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -542,6 +542,7 @@ export default function JobBoardPage() {
               <div className="flex items-center gap-2">
                 {/* Mobile filter button */}
                 <button
+                  data-tour="jobs-filters"
                   onClick={() => setFilterDrawerOpen(true)}
                   className="lg:hidden flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                 >
@@ -585,6 +586,7 @@ export default function JobBoardPage() {
                 </div>
 
                 <Link
+                  data-tour="jobs-post"
                   to="/post-job"
                   className="hidden sm:inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl px-4 py-2 text-sm transition-colors"
                 >
@@ -626,7 +628,8 @@ export default function JobBoardPage() {
               </div>
             )}
 
-            <SponsoredPlacementCard placement="jobs" variant="compact" className="mb-5" />
+            <div data-tour="jobs-results">
+              <SponsoredPlacementCard placement="jobs" variant="compact" className="mb-5" />
 
             {loading ? (
               <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'space-y-3'}>
@@ -704,6 +707,8 @@ export default function JobBoardPage() {
               </motion.div>
             )}
 
+            </div>
+
             {/* Post CTA */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -715,6 +720,7 @@ export default function JobBoardPage() {
               <h3 className="text-lg font-bold mb-1">Hiring? Post a Job for Free</h3>
               <p className="text-primary-200 text-sm mb-4">Reach thousands of qualified candidates. Job postings are completely free.</p>
               <button
+                data-tour="jobs-post"
                 onClick={() => navigate('/post-job')}
                 className="bg-white text-primary-700 font-semibold rounded-xl px-6 py-2.5 hover:bg-primary-50 transition-colors"
               >
