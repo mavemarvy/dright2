@@ -2,10 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Check, Compass } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { TOUR_DEFINITIONS, type TourDefinition, type TourKey } from '../../tours/tourDefinitions';
+import {
+  PENDING_TOUR_STORAGE_KEY,
+  TOUR_DEFINITIONS,
+  type TourDefinition,
+  type TourKey,
+} from '../../tours/tourDefinitions';
 
 type Props = {
   userId?: string | null;
+  userCreatedAt?: string | null;
 };
 
 type SpotlightRect = {
@@ -21,6 +27,9 @@ type TourStatus = 'started' | 'completed' | 'skipped';
 
 const SAFE_AUTOSTART_PATH = '/';
 const LOCAL_PREFIX = 'dright-tour-progress';
+// Existing DRIGHT accounts are not forced through a new onboarding experience.
+// Accounts created after the tour rollout can receive the one-time Basics tour.
+const AUTO_TOUR_ROLLOUT_AT = Date.parse('2026-09-24T14:30:00Z');
 
 function localKey(userId: string, tour: TourDefinition) {
   return `${LOCAL_PREFIX}:${userId}:${tour.key}:v${tour.version}`;
@@ -120,7 +129,7 @@ async function hasFinishedTour(userId: string, tour: TourDefinition): Promise<bo
   }
 }
 
-export default function DrightTourSystem({ userId }: Props) {
+export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const [activeKey, setActiveKey] = useState<TourKey | null>(null);
@@ -135,13 +144,28 @@ export default function DrightTourSystem({ userId }: Props) {
     const nextTour = TOUR_DEFINITIONS[tourKey];
     if (!nextTour) return;
 
+    // Keep a manually selected tour queued while React Router switches between
+    // public/protected route shells. The new AppShell instance resumes it.
+    if (location.pathname !== nextTour.startPath) {
+      try {
+        window.sessionStorage.setItem(PENDING_TOUR_STORAGE_KEY, tourKey);
+      } catch {
+        // Session storage is best-effort only.
+      }
+      setActiveKey(null);
+      setSpotlight(null);
+      navigate(nextTour.startPath);
+      return;
+    }
+
+    try {
+      window.sessionStorage.removeItem(PENDING_TOUR_STORAGE_KEY);
+    } catch {
+      // Session storage is best-effort only.
+    }
     setActiveKey(tourKey);
     setStepIndex(0);
     setSpotlight(null);
-
-    if (location.pathname !== nextTour.startPath) {
-      navigate(nextTour.startPath);
-    }
     if (userId) void saveProgress(userId, nextTour, 'started', 0);
   }, [location.pathname, navigate, userId]);
 
@@ -155,7 +179,19 @@ export default function DrightTourSystem({ userId }: Props) {
   }, [beginTour]);
 
   useEffect(() => {
-    if (!userId || location.pathname !== SAFE_AUTOSTART_PATH || activeKey) return;
+    if (!userId || activeKey) return;
+    try {
+      const pending = window.sessionStorage.getItem(PENDING_TOUR_STORAGE_KEY) as TourKey | null;
+      if (pending && TOUR_DEFINITIONS[pending]) beginTour(pending);
+    } catch {
+      // Session storage is best-effort only.
+    }
+  }, [activeKey, beginTour, location.pathname, userCreatedAt, userId]);
+
+  useEffect(() => {
+    if (!userId || !userCreatedAt || location.pathname !== SAFE_AUTOSTART_PATH || activeKey) return;
+    const createdAt = Date.parse(userCreatedAt);
+    if (!Number.isFinite(createdAt) || createdAt < AUTO_TOUR_ROLLOUT_AT) return;
     const marker = `${userId}:basics:v${TOUR_DEFINITIONS.basics.version}`;
     if (autoCheckedFor.current === marker) return;
     autoCheckedFor.current = marker;
@@ -291,6 +327,11 @@ export default function DrightTourSystem({ userId }: Props) {
           <div
             className="fixed rounded-2xl ring-4 ring-white/90 shadow-[0_0_0_2px_rgba(99,102,241,0.8),0_0_40px_rgba(99,102,241,0.45)] transition-all duration-200"
             style={{ top: spotlight.top, left: spotlight.left, width: spotlight.width, height: spotlight.height }}
+          />
+          <div
+            className="fixed pointer-events-auto rounded-2xl"
+            style={{ top: spotlight.top, left: spotlight.left, width: spotlight.width, height: spotlight.height }}
+            aria-hidden="true"
           />
         </>
       ) : (
