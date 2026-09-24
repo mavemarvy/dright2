@@ -187,7 +187,7 @@ export default function ReferPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+    <div data-tour="referral-page" className="p-4 md:p-8 max-w-7xl mx-auto">
       {/* 1. Hero Banner */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -224,6 +224,7 @@ export default function ReferPage() {
         <div className="lg:col-span-8 space-y-6">
           {/* 2. Referral Link Card */}
           <motion.div
+            data-tour="referral-link"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -269,7 +270,7 @@ export default function ReferPage() {
           </motion.div>
 
           {/* 3. Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div data-tour="referral-overview" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={Gift} label="Direct Bonus" value="10%" tint="bg-primary-100 text-primary-700" />
             <StatCard icon={Users} label="Network Bonus" value="5% + 1%" tint="bg-success-muted text-success" />
             <StatCard icon={Clock} label="Buyer Window" value={`${BUYER_WINDOW_DAYS} days`} tint="bg-warning-muted text-warning" />
@@ -278,6 +279,7 @@ export default function ReferPage() {
 
           {/* 4. Monthly Target Card */}
           <motion.div
+            data-tour="referral-target"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
@@ -320,6 +322,7 @@ export default function ReferPage() {
 
           {/* 5. 3-Level Referral Tree */}
           <motion.div
+            data-tour="referral-tree"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
