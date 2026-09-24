@@ -50,7 +50,7 @@ export default function PlatformFeatureGate({ featureKey, children, title }: Pro
           {title || 'DRIGHT Platform Subscription Required'}
         </h1>
         <p className="text-sm text-gray-500 mt-2">
-          Your free professional-access period has ended for this feature. Subscribe monthly to continue using this role tool.
+          Your free professional-access period has ended for this feature. Pay the monthly DRIGHT platform fee to continue using this professional tool.
         </p>
 
         <div className="mt-5 rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-left">
@@ -65,12 +65,16 @@ export default function PlatformFeatureGate({ featureKey, children, title }: Pro
           </div>
         </div>
 
+        <p className="mt-4 text-xs text-gray-500">
+          At checkout you can use your DRIGHT wallet when eligible, or any payment provider currently enabled by DRIGHT.
+        </p>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
           <Link
             to={subscribeHref}
             className="py-3 px-4 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold"
           >
-            View Platform Subscription
+            Pay Platform Fee to Continue
           </Link>
           <Link
             to="/market"
