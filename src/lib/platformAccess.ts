@@ -218,6 +218,14 @@ export async function updateAdminPlatformAccessPolicy(
   if (!next) throw new Error('Unable to reload platform access policy');
   return next;
 }
+export async function setAdminPaywallPreview(enabled: boolean): Promise<boolean> {
+  const { data, error } = await supabase.rpc('admin_set_platform_paywall_preview', {
+    p_enabled: enabled,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 
 
 export interface AdminSubscriptionPlan {
