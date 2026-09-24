@@ -328,14 +328,37 @@ export const TOUR_DEFINITIONS: Record<TourKey, TourDefinition> = {
     'Sales shows the seller-side activity and records available for the products or services you sell through DRIGHT.',
     'sales',
   ),
-  job_board: pageTour(
-    'job_board',
-    'Job Board',
-    'Learn how to browse DRIGHT jobs and reach employer actions.',
-    '/jobs',
-    'Use the Job Board to search and filter opportunities, open job details and apply. Employers can use the posting flow when their account has access.',
-    'job_board',
-  ),
+  job_board: {
+    key: 'job_board',
+    version: 1,
+    title: 'Job Board',
+    description: 'Learn how to search jobs, filter opportunities and reach employer tools.',
+    duration: '2 min',
+    startPath: '/jobs',
+    steps: [
+      {
+        title: 'DRIGHT Job Board',
+        body: 'Browse active job opportunities, open a role for full details and apply without losing your place in DRIGHT.',
+        target: '[data-tour="jobs-hero"]',
+        route: '/jobs',
+      },
+      {
+        title: 'Search and filter',
+        body: 'Narrow jobs by keywords, location, category, work setup, career level, salary and date posted.',
+        target: '[data-tour="jobs-filters"]',
+      },
+      {
+        title: 'Job results',
+        body: 'Open any job for its full description. Job items also include a shortcut to the affiliate leaderboard so you can review DRIGHT affiliate rankings.',
+        target: '[data-tour="jobs-results"]',
+      },
+      {
+        title: 'Post a job',
+        body: 'Employers can start a job listing here. When a professional-access trial has ended, DRIGHT will ask for the platform fee before the posting tool opens.',
+        target: '[data-tour="jobs-post"]',
+      },
+    ],
+  },
   referral: {
     key: 'referral',
     version: 1,
