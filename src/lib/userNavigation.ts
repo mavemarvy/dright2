@@ -5,6 +5,7 @@ export const USER_NAV_FEATURE_BY_PATH = {
   '/news': 'news',
   '/promote': 'promote',
   '/profile': 'profile',
+  '/subscriptions': 'subscriptions',
   '/wallet': 'wallet',
   '/my-orders': 'my_orders',
   '/wishlist': 'saved_items',
@@ -44,6 +45,7 @@ export function getUserNavigationFeatureForPath(pathname: string): UserNavigatio
   if (normalized === '/promote') return 'promote';
 
   if (normalized === '/profile') return 'profile';
+  if (normalized === '/subscriptions' || normalized === '/subscriptions/checkout') return 'subscriptions';
   if (normalized === '/wallet' || normalized.startsWith('/wallet/')) return 'wallet';
   if (normalized === '/my-orders') return 'my_orders';
   if (normalized === '/wishlist' || normalized === '/collections' || normalized === '/compare') return 'saved_items';
