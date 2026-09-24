@@ -2,14 +2,36 @@ import { Compass, Play, RotateCcw } from 'lucide-react';
 import { TOUR_LIST, startDrightTour, type TourKey } from '../../tours/tourDefinitions';
 import { useAuth } from '../../contexts/AuthContext';
 
-const icons: Record<TourKey, string> = {
+const icons: Partial<Record<TourKey, string>> = {
   basics: '🧭',
   marketplace: '🛍️',
-  wallet: '💳',
-  referral: '🔗',
-  challenges: '🏆',
-  orders: '📦',
+  social: '👥',
+  news: '📰',
+  promote: '🚀',
   profile: '👤',
+  subscriptions: '💳',
+  wallet: '👛',
+  orders: '📦',
+  saved_items: '❤️',
+  messages: '💬',
+  my_store: '🏪',
+  post_ad: '➕',
+  my_drafts: '📝',
+  sales: '📈',
+  job_board: '💼',
+  referral: '🔗',
+  campaigns: '📣',
+  creator_campaigns: '🎯',
+  rewards: '🎁',
+  communities: '🌐',
+  notifications: '🔔',
+  activity_feed: '⚡',
+  challenges: '🏆',
+  announcements: '📢',
+  help_support: '❓',
+  tutorials: '🎓',
+  terms_policies: '📜',
+  settings: '⚙️',
 };
 
 export default function GuidedToursPanel() {
@@ -40,7 +62,7 @@ export default function GuidedToursPanel() {
           >
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-lg shrink-0" aria-hidden="true">
-                {icons[tour.key]}
+                {icons[tour.key] ?? '🧭'}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
