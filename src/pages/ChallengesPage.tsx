@@ -37,13 +37,8 @@ function nameFor(entry: MonthlyLeaderboardEntry): string {
 
 function metricText(challenge: MonthlyChallengeDefinition, entry: MonthlyLeaderboardEntry): string {
   const p = Number(entry.primary_metric || 0);
-  const s = Number(entry.secondary_metric || 0);
   if (challenge.challenge_key === 'top_seller') {
-    return `${p.toLocaleString()} sale${p === 1 ? '' : 's'} · ${s.toLocaleString()} approved upload${s === 1 ? '' : 's'}`;
-  }
-  if (challenge.challenge_key === 'top_affiliate' || challenge.challenge_key === 'starter_affiliate') {
-    const earned = Number(entry.detail?.affiliate_earnings ?? s ?? 0);
-    return `${p.toLocaleString()} ${challenge.metric_label} · ${earned.toLocaleString()} commission value`;
+    return `${p.toLocaleString()} sale${p === 1 ? '' : 's'}`;
   }
   return `${p.toLocaleString()} ${challenge.metric_label}`;
 }
@@ -123,6 +118,8 @@ export default function ChallengesPage() {
   const [boardOffset, setBoardOffset] = useState(0);
   const [historySource, setHistorySource] = useState<'verified' | 'simulated_benchmark'>('verified');
   const viewerRowRef = useRef<HTMLDivElement | null>(null);
+  const [viewerRowVisible, setViewerRowVisible] = useState(false);
+  const [viewerBannerDismissed, setViewerBannerDismissed] = useState(false);
   const [total, setTotal] = useState(0);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [loadingBoard, setLoadingBoard] = useState(false);
@@ -158,6 +155,11 @@ export default function ChallengesPage() {
     () => catalog?.challenges.find(c => c.challenge_key === selectedKey) ?? null,
     [catalog, selectedKey],
   );
+
+  useEffect(() => {
+    setViewerBannerDismissed(false);
+    setViewerRowVisible(false);
+  }, [selectedKey, period]);
 
   useEffect(() => {
     if (!selected) {
@@ -235,6 +237,24 @@ export default function ChallengesPage() {
       window.removeEventListener('focus', onFocus);
     };
   }, [boardOffset, period, section, selected?.challenge_key, selected?.display_limit]);
+
+  useEffect(() => {
+    setViewerRowVisible(false);
+    const node = viewerRowRef.current;
+    if (!node || period !== 'current' || !viewer) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const visible = Boolean(entry?.isIntersecting);
+        setViewerRowVisible(visible);
+        if (visible) setViewerBannerDismissed(true);
+      },
+      { threshold: 0.55, rootMargin: '-72px 0px -112px 0px' },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [entries, boardOffset, period, selectedKey, viewer?.user_id]);
 
   const sectionChallenges = useMemo(
     () => (catalog?.challenges ?? []).filter(c => c.section === section),
@@ -334,28 +354,29 @@ export default function ChallengesPage() {
       </section>
 
       <main className="max-w-5xl mx-auto px-4 py-8 sm:py-10">
-        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-900 border border-white/10 mb-4">
-          <button
-            onClick={() => setPeriod('current')}
-            className={`rounded-xl py-3 text-sm font-black transition ${period === 'current' ? 'bg-white text-slate-950' : 'text-slate-300'}`}
-          >
-            Current Month
-          </button>
-          <div className="relative">
-            <History className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <select
-              value={period === 'current' ? '' : period}
-              onChange={e => {
-                if (e.target.value) setPeriod(e.target.value as MonthlyChallengePeriod);
-              }}
-              disabled={historyPeriods.length === 0}
-              className={`w-full h-full min-h-[44px] rounded-xl border-0 pl-9 pr-8 text-sm font-black outline-none ${period !== 'current' ? 'bg-white text-slate-950' : 'bg-transparent text-slate-300'} disabled:opacity-50`}
+        {historyPeriods.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-900 border border-white/10 mb-4">
+            <button
+              onClick={() => setPeriod('current')}
+              className={`rounded-xl py-3 text-sm font-black transition ${period === 'current' ? 'bg-white text-slate-950' : 'text-slate-300'}`}
             >
-              <option value="" disabled>{historyPeriods.length ? 'Previous results' : 'History hidden'}</option>
-              {historyPeriods.map(item => <option key={item.period} value={item.period}>{item.label}</option>)}
-            </select>
+              Current Month
+            </button>
+            <div className="relative">
+              <History className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <select
+                value={period === 'current' ? '' : period}
+                onChange={e => {
+                  if (e.target.value) setPeriod(e.target.value as MonthlyChallengePeriod);
+                }}
+                className={`w-full h-full min-h-[44px] rounded-xl border-0 pl-9 pr-8 text-sm font-black outline-none ${period !== 'current' ? 'bg-white text-slate-950' : 'bg-transparent text-slate-300'}`}
+              >
+                <option value="" disabled>Previous results</option>
+                {historyPeriods.map(item => <option key={item.period} value={item.period}>{item.label}</option>)}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 mb-5">
           {(['referral', 'affiliate'] as MonthlyChallengeSection[]).map(item => (
@@ -446,22 +467,6 @@ export default function ChallengesPage() {
                       <p className="text-xs text-slate-400">{total.toLocaleString()} participant{total === 1 ? '' : 's'}</p>
                     </div>
 
-                    {period === 'current' && viewer && (
-                      <div className="mb-4 rounded-2xl border border-violet-400/30 bg-violet-500/10 p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-300">Your current position</p>
-                          <p className="mt-1 text-xl font-black text-white">#{viewer.rank.toLocaleString()} <span className="text-sm font-bold text-slate-400">of {total.toLocaleString()}</span></p>
-                          <p className="text-xs text-slate-400 mt-1">{viewer.primary_metric.toLocaleString()} {selected.metric_label}</p>
-                        </div>
-                        <button
-                          onClick={() => void showViewerPosition()}
-                          disabled={loadingMore}
-                          className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
-                        >
-                          Show my position
-                        </button>
-                      </div>
-                    )}
 
                     {boardOffset > 0 && (
                       <div className="mb-3 flex items-center justify-between gap-3">
@@ -530,6 +535,28 @@ export default function ChallengesPage() {
               </motion.section>
             )}
           </>
+        )}
+
+        {period === 'current' && selected && viewer && !viewerRowVisible && !viewerBannerDismissed && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-[85] px-3 sm:bottom-5">
+            <div className="pointer-events-auto mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-violet-300/50 bg-slate-900/95 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500 text-sm font-black text-white">
+                #{viewer.rank.toLocaleString()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Your position</p>
+                <p className="truncate text-sm font-black text-white">{nameFor(viewer)}</p>
+                <p className="truncate text-xs text-slate-400">{metricText(selected, viewer)} · rank {viewer.rank.toLocaleString()} of {total.toLocaleString()}</p>
+              </div>
+              <button
+                onClick={() => void showViewerPosition()}
+                disabled={loadingMore}
+                className="shrink-0 rounded-xl bg-violet-500 px-3 py-2 text-xs font-black text-white disabled:opacity-60"
+              >
+                {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : 'View'}
+              </button>
+            </div>
+          </div>
         )}
 
         {starterProgress?.enabled && starterProgress.applies && (
