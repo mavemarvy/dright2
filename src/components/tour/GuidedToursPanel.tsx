@@ -1,5 +1,6 @@
 import { Compass, Play, RotateCcw } from 'lucide-react';
 import { TOUR_LIST, startDrightTour, type TourKey } from '../../tours/tourDefinitions';
+import { useAuth } from '../../contexts/AuthContext';
 
 const icons: Record<TourKey, string> = {
   basics: '🧭',
@@ -12,6 +13,9 @@ const icons: Record<TourKey, string> = {
 };
 
 export default function GuidedToursPanel() {
+  const { user } = useAuth();
+  if (!user) return null;
+
   return (
     <section className="mb-12" aria-labelledby="guided-tours-title">
       <div className="flex items-start gap-3 mb-5">
