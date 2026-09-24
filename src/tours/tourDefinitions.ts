@@ -259,7 +259,13 @@ export const TOUR_DEFINITIONS: Record<TourKey, TourDefinition> = {
 };
 
 export const TOUR_LIST = Object.values(TOUR_DEFINITIONS);
+export const PENDING_TOUR_STORAGE_KEY = 'dright:pending-guided-tour';
 
 export function startDrightTour(tourKey: TourKey) {
+  try {
+    window.sessionStorage.setItem(PENDING_TOUR_STORAGE_KEY, tourKey);
+  } catch {
+    // Session storage is optional; the in-page event still starts the tour.
+  }
   window.dispatchEvent(new CustomEvent('dright:start-tour', { detail: { tourKey } }));
 }
