@@ -70,7 +70,7 @@ export const TOUR_DEFINITIONS: Record<TourKey, TourDefinition> = {
       },
       {
         title: 'Your account',
-        body: 'Your profile area gives you access to your identity, account settings and other personal controls. You can replay any tour later from Help Center.',
+        body: 'Your identity appears here. Open the full menu for Profile and Settings. You can replay any tour later from Help Center.',
         target: '[data-tour="profile-control"]',
       },
     ],
