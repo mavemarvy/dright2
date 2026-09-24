@@ -151,14 +151,13 @@ export default function DrightStarterProductCard({ className = '' }: { className
               <ExternalLink className="w-4 h-4" /> Sign in to affiliate
             </Link>
           )}
+        </div>
         <Link
           to="/challenges?section=affiliate&challenge=starter_affiliate"
           className="mt-3 min-h-[42px] inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-300/30 bg-violet-500/10 px-4 text-sm font-bold text-violet-100 hover:bg-violet-500/20"
         >
           <Trophy className="w-4 h-4" /> View Starter Affiliate Leaderboard
         </Link>
-
-        </div>
       </div>
     </section>
   );
