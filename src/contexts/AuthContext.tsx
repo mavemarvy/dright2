@@ -187,8 +187,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (event === 'SIGNED_IN') {
             const deviceCheck = await claimOrVerifyCurrentDevice();
             if (!deviceCheck.allowed) {
-              await supabase.auth.signOut({ scope: 'local' });
               setSession(null); setUser(null); setProfile(null); setLoading(false);
+              window.setTimeout(() => { void supabase.auth.signOut({ scope: 'local' }); }, 0);
               return;
             }
           }
