@@ -6,7 +6,7 @@ import {
   Store, Package, Plus, Edit2, Trash2, Eye, EyeOff, Users,
   Loader2, AlertCircle, Check, X, Clock, Search, ChevronDown,
   DollarSign, Percent, Sparkles, Download, Video, Shield, Star,
-  Image as ImageIcon, Upload, MapPin,
+  Image as ImageIcon, Upload, MapPin, Trophy,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -429,13 +429,22 @@ export default function StorePage() {
             </p>
           </div>
         </div>
-        <Link
-          to="/upload-product"
-          className="flex items-center gap-2 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors shadow-md shadow-primary-600/20 min-h-[48px]"
-        >
-          <Plus className="w-5 h-5" />
-          <span>{t('postAd')}</span>
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Link
+            to="/challenges?section=referral&challenge=top_seller"
+            className="flex items-center justify-center gap-2 px-4 py-3 border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-xl font-semibold transition-colors min-h-[48px]"
+          >
+            <Trophy className="w-5 h-5" />
+            <span>Top Seller Leaderboard</span>
+          </Link>
+          <Link
+            to="/upload-product"
+            className="flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors shadow-md shadow-primary-600/20 min-h-[48px]"
+          >
+            <Plus className="w-5 h-5" />
+            <span>{t('postAd')}</span>
+          </Link>
+        </div>
       </div>
 
       {(isAccountLocked || isAccountBanned) && (
