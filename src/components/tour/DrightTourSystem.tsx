@@ -42,7 +42,7 @@ const DEFAULT_ROLLOUT_SETTINGS: GuidedTourRolloutSettings = {
   new_user_rollout_at: FALLBACK_AUTO_TOUR_ROLLOUT_AT,
 };
 
-function localKey(userId: string, tour: TourDefinition, progressKey = tour.key) {
+function localKey(userId: string, tour: TourDefinition, progressKey: string = tour.key) {
   return `${LOCAL_PREFIX}:${userId}:${progressKey}:v${tour.version}`;
 }
 
@@ -78,7 +78,7 @@ async function saveProgress(
   tour: TourDefinition,
   status: TourStatus,
   currentStep: number,
-  progressKey = tour.key,
+  progressKey: string = tour.key,
 ) {
   const now = new Date().toISOString();
   const payload = {
@@ -117,7 +117,7 @@ async function saveProgress(
 async function hasFinishedTour(
   userId: string,
   tour: TourDefinition,
-  progressKey = tour.key,
+  progressKey: string = tour.key,
 ): Promise<boolean> {
   try {
     const { data, error } = await supabase
@@ -159,7 +159,7 @@ export default function DrightTourSystem({ userId, userCreatedAt }: Props) {
   const tour = activeKey ? TOUR_DEFINITIONS[activeKey] : null;
   const step = tour?.steps[stepIndex] ?? null;
 
-  const beginTour = useCallback((tourKey: TourKey, progressKey = tourKey) => {
+  const beginTour = useCallback((tourKey: TourKey, progressKey: string = tourKey) => {
     const nextTour = TOUR_DEFINITIONS[tourKey];
     if (!nextTour) return;
 
