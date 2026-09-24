@@ -181,7 +181,7 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { profile, signOut, isAdmin } = useAuth();
+  const { user, profile, signOut, isAdmin } = useAuth();
   const { t } = useLanguage();
   const { prefs: uiPrefs } = useUIPreferences();
   const { isVisible: isFeatureVisible } = useNavigationVisibility();
