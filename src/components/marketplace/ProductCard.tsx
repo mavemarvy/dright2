@@ -5,7 +5,7 @@ import {
   Heart, Share2, Eye, Star, Download,
   Zap, Package, Copy, Check, MessageSquare, ShoppingBag,
   BadgeCheck, Clock, Briefcase, Images,
-  Sparkles,
+  Sparkles, Trophy,
 } from 'lucide-react';
 import { getProductBadges, type ProductBadge } from '../../lib/marketplace';
 import { ProfileLink } from '../Social';
@@ -126,6 +126,9 @@ export default function ProductCard({
   const isDrightStarter = product.sku === 'DRIGHT-STARTER-ACCESS'
     || specs.system_product_kind === 'dright_starter_access';
   const productHref = isDrightStarter ? '/dright/starter' : `/product/${product.id}`;
+  const affiliateLeaderboardHref = isDrightStarter
+    ? '/challenges?section=affiliate&challenge=starter_affiliate'
+    : '/challenges?section=affiliate&challenge=top_affiliate';
   const displayPrice = getBuyerFacingPrice(product);
   const displayOldPrice = product.old_price ? getBuyerFacingPrice(product, product.old_price) : null;
   const sourceCurrency = isDrightStarter
@@ -396,6 +399,13 @@ export default function ProductCard({
               {copiedId === product.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </button>
           )}
+        <Link
+          to={affiliateLeaderboardHref}
+          className="mt-2 min-h-[38px] w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/20 px-3 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/40 transition-colors"
+        >
+          <Trophy className="w-3.5 h-3.5" />
+          {isDrightStarter ? 'Starter Affiliate Leaderboard' : 'View Affiliate Leaderboard'}
+        </Link>
         </div>
       </div>
     </motion.div>
