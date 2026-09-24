@@ -1201,8 +1201,10 @@ export default function AdminCompetitionsPage() {
                         {dispatchWindow ? ` About ${dispatchWindow.remainingDays.toFixed(2)} days remain in this competition month.` : ''}
                       </p>
                       <p className="mt-1">
-                        Requested AI quantity: <strong>{automation.active_competitor_count.toLocaleString()}</strong> · Imported profiles available: <strong>{simTotal.toLocaleString()}</strong>.
-                        {automation.active_competitor_count > simTotal && simTotal > 0 ? ' The live plan is capped by the number of imported profiles.' : ''}
+                        Requested AI quantity: <strong>{automation.active_competitor_count.toLocaleString()}</strong> · Current managed profiles: <strong>{automation.current_plan.automated_profiles.toLocaleString()}</strong>.
+                        {automation.active_competitor_count > automation.current_plan.automated_profiles && automation.current_plan.automated_profiles > 0
+                          ? ' If these stay different after applying, the plan is capped by the number of available imported profiles or manual overrides.'
+                          : ''}
                       </p>
                     </div>
                   </div>
