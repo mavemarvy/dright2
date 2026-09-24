@@ -38,6 +38,7 @@ export interface PlatformAccessStatus {
   cancel_at_period_end?: boolean;
   requires_subscription?: boolean;
   plan_id?: string | null;
+  admin_paywall_preview?: boolean;
   access_state: PlatformAccessState;
 }
 
@@ -73,6 +74,7 @@ export interface PlatformAccessAdminPolicy {
     policy_started_at: string;
     updated_at: string;
     updated_by: string | null;
+    admin_paywall_preview: boolean;
   };
   roles: PlatformAccessRoleRule[];
   features: PlatformAccessFeatureRule[];
@@ -126,6 +128,7 @@ export async function getMyPlatformAccess(): Promise<PlatformAccessStatus | null
     cancel_at_period_end: Boolean(row.cancel_at_period_end),
     requires_subscription: Boolean(row.requires_subscription),
     plan_id: row.plan_id ? String(row.plan_id) : null,
+    admin_paywall_preview: Boolean(row.admin_paywall_preview),
     access_state: String(row.access_state ?? 'buyer_free') as PlatformAccessState,
   };
 }
@@ -195,6 +198,7 @@ export async function updateAdminPlatformAccessPolicy(
       trial_enabled: policy.settings.trial_enabled,
       trial_days: Number(policy.settings.trial_days || 0),
       grace_period_days: Number(policy.settings.grace_period_days || 0),
+      admin_paywall_preview: Boolean(policy.settings.admin_paywall_preview),
     },
     p_roles: policy.roles.map(role => ({
       role_key: role.role_key,
