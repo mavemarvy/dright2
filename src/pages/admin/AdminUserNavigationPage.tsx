@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, ExternalLink, Loader2, PanelLeft, ShieldCheck, Users, Shield } from 'lucide-react';
+import { Compass, Eye, EyeOff, ExternalLink, Loader2, PanelLeft, ShieldCheck, Users, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigationVisibility } from '../../contexts/NavigationVisibilityContext';
 
@@ -17,22 +17,36 @@ interface NavigationRow {
 
 type Audience = 'users' | 'admins';
 
+interface GuidedTourSettings {
+  audience_mode: 'new_users_only' | 'all_users_test';
+  test_generation: number;
+  new_user_rollout_at: string;
+  updated_at: string;
+}
+
 export default function AdminUserNavigationPage() {
   const [rows, setRows] = useState<NavigationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [canManage, setCanManage] = useState(false);
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
+  const [tourSettings, setTourSettings] = useState<GuidedTourSettings | null>(null);
+  const [tourSaving, setTourSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { refresh: refreshGlobalVisibility } = useNavigationVisibility();
 
   const load = async () => {
     setLoading(true);
-    const [rowsResult, permissionResult] = await Promise.all([
+    const [rowsResult, permissionResult, tourSettingsResult] = await Promise.all([
       supabase
         .from('user_navigation_visibility')
         .select('feature_key,label,route,nav_group,visible,visible_to_admins,feature_scope,sort_order,updated_at')
         .order('sort_order', { ascending: true }),
       supabase.rpc('has_dright_permission', { p_module: 'site_settings', p_action: 'manage' }),
+      supabase
+        .from('guided_tour_settings')
+        .select('audience_mode,test_generation,new_user_rollout_at,updated_at')
+        .eq('singleton', true)
+        .maybeSingle(),
     ]);
 
     if (rowsResult.error) {
@@ -44,6 +58,18 @@ export default function AdminUserNavigationPage() {
     }
 
     setCanManage(permissionResult.data === true);
+
+    if (!tourSettingsResult.error && tourSettingsResult.data) {
+      setTourSettings({
+        audience_mode: tourSettingsResult.data.audience_mode === 'all_users_test' ? 'all_users_test' : 'new_users_only',
+        test_generation: Math.max(0, Number(tourSettingsResult.data.test_generation || 0)),
+        new_user_rollout_at: tourSettingsResult.data.new_user_rollout_at,
+        updated_at: tourSettingsResult.data.updated_at,
+      });
+    } else {
+      setTourSettings(null);
+    }
+
     setLoading(false);
   };
 
@@ -55,6 +81,13 @@ export default function AdminUserNavigationPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'user_navigation_visibility' },
+        () => {
+          void load();
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'guided_tour_settings' },
         () => {
           void load();
         },
@@ -116,6 +149,27 @@ export default function AdminUserNavigationPage() {
         next.delete(savingKey);
         return next;
       });
+    }
+  };
+
+  const toggleTourTestMode = async () => {
+    if (!canManage || tourSaving || !tourSettings) return;
+
+    const nextEnabled = tourSettings.audience_mode !== 'all_users_test';
+    setTourSaving(true);
+    setError(null);
+
+    try {
+      const { error: rpcError } = await supabase.rpc('set_guided_tour_test_mode', {
+        p_enabled: nextEnabled,
+      });
+      if (rpcError) throw rpcError;
+      await load();
+    } catch (toggleError) {
+      console.error('Guided tour rollout update failed:', toggleError);
+      setError('Failed to update the guided tour rollout mode. Please try again.');
+    } finally {
+      setTourSaving(false);
     }
   };
 
@@ -196,6 +250,67 @@ export default function AdminUserNavigationPage() {
           </p>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-indigo-200 dark:border-indigo-900/40 bg-white dark:bg-gray-800 shadow-sm overflow-hidden">
+        <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+            <Compass className="w-5 h-5" />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-bold text-gray-900 dark:text-gray-100">Guided Tour Rollout</h2>
+              <span className={`text-[10px] uppercase tracking-wide font-bold rounded-full px-2 py-1 ${
+                tourSettings?.audience_mode === 'all_users_test'
+                  ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300'
+                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+              }`}>
+                {tourSettings?.audience_mode === 'all_users_test' ? 'All users test mode' : 'New users only'}
+              </span>
+            </div>
+
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+              Turn this on temporarily to make the DRIGHT Basics tour appear for old, recent and new signed-in users when they reach the Dashboard.
+              Each time test mode is switched on from off, a new test round starts so users who already completed an earlier round can verify it again.
+            </p>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Turning it off returns DRIGHT to the normal rollout: only accounts created after the guided-tour launch receive automatic onboarding.
+              Admin pages are never covered by the user tour.
+              {tourSettings?.audience_mode === 'all_users_test' && (
+                <span className="font-semibold text-indigo-600 dark:text-indigo-300"> Current test round: #{tourSettings.test_generation}.</span>
+              )}
+            </p>
+          </div>
+
+          <div className="md:text-right shrink-0">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={tourSettings?.audience_mode === 'all_users_test'}
+              aria-label="Show DRIGHT Basics guided tour to all users for testing"
+              disabled={!canManage || tourSaving || !tourSettings}
+              onClick={() => void toggleTourTestMode()}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                tourSettings?.audience_mode === 'all_users_test'
+                  ? 'bg-indigo-600'
+                  : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              {tourSaving ? (
+                <Loader2 className="w-4 h-4 text-white animate-spin mx-auto" />
+              ) : (
+                <span className={`inline-block h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                  tourSettings?.audience_mode === 'all_users_test' ? 'translate-x-7' : 'translate-x-1'
+                }`} />
+              )}
+            </button>
+            <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-1">
+              {tourSettings?.audience_mode === 'all_users_test' ? 'ON — testing everyone' : 'OFF — new users only'}
+            </p>
+          </div>
+        </div>
+      </section>
 
       {!canManage && (
         <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-700 dark:text-red-300">
