@@ -2,6 +2,76 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabase';
 import { logger, ErrorCategory } from './logger';
 
+// ─── Persistent browser/device identity ────────────────────────────────────────
+
+const DEVICE_ID_KEY = 'dright_device_id_v1';
+const DEVICE_COOKIE = 'dright_device_id';
+
+function isValidDeviceId(value: string | null | undefined): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{20,160}$/.test(value);
+}
+
+function readDeviceCookie(): string | null {
+  try {
+    const match = document.cookie
+      .split(';')
+      .map(part => part.trim())
+      .find(part => part.startsWith(`${DEVICE_COOKIE}=`));
+    return match ? decodeURIComponent(match.slice(DEVICE_COOKIE.length + 1)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDeviceCookie(value: string): void {
+  try {
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    const domain = window.location.hostname === 'dright.store' || window.location.hostname.endsWith('.dright.store')
+      ? '; Domain=.dright.store'
+      : '';
+    document.cookie = `${DEVICE_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=315360000; SameSite=Lax${secure}${domain}`;
+  } catch { /* cookie storage may be unavailable */ }
+}
+
+function generateDeviceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '');
+  }
+  const random = new Uint8Array(24);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(random);
+    return Array.from(random, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`.replace(/[^A-Za-z0-9_-]/g, '').padEnd(24, '0');
+}
+
+/**
+ * First-party installation identifier used for DRIGHT's one-account-per-device
+ * policy. It is stored in both localStorage and a first-party .dright.store
+ * cookie so the root and www origins share the same identity.
+ */
+export function getPersistentDeviceId(): string {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 'server-device-unavailable';
+
+  const cookieValue = readDeviceCookie();
+  if (isValidDeviceId(cookieValue)) {
+    try { window.localStorage.setItem(DEVICE_ID_KEY, cookieValue); } catch { /* storage unavailable */ }
+    return cookieValue;
+  }
+
+  let stored: string | null = null;
+  try { stored = window.localStorage.getItem(DEVICE_ID_KEY); } catch { /* storage unavailable */ }
+  if (isValidDeviceId(stored)) {
+    writeDeviceCookie(stored);
+    return stored;
+  }
+
+  const created = generateDeviceId();
+  try { window.localStorage.setItem(DEVICE_ID_KEY, created); } catch { /* storage unavailable */ }
+  writeDeviceCookie(created);
+  return created;
+}
+
 // ─── Device fingerprinting ────────────────────────────────────────────────────
 
 export function getDeviceFingerprint(): string {
