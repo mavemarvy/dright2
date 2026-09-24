@@ -23,6 +23,7 @@ import { CompactPromoStrip } from './promotion/PromotionSurfaces';
 import LanguageSwitcher from './LanguageSwitcher';
 import { DrightBrand, MetallicNavIcon } from './DrightBrand';
 import ErrorBoundary from './ErrorBoundary';
+import DrightTourSystem from './tour/DrightTourSystem';
 
 type NavEntry = {
   path: string;
@@ -116,6 +117,7 @@ function NavItem({ item, collapsed, onClick, t }: {
         }`
       }
       title={collapsed ? navLabel(item, t) : undefined}
+      data-tour={item.path === '/' ? 'nav-dashboard' : item.path === '/market' ? 'nav-market' : item.path === '/social' ? 'nav-social' : item.path === '/news' ? 'nav-news' : undefined}
     >
       {({ isActive }) => (
         <>
@@ -200,7 +202,7 @@ export default function AppShell() {
 
   return (
     <div className={`min-h-screen ${immersiveSocial ? 'bg-black' : 'bg-surface-muted'}`}>
-      {!immersiveSocial && <aside className={`hidden md:flex md:flex-col ${sidebarWidth} md:fixed md:inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-300`}>
+      {!immersiveSocial && <aside data-tour="navigation-menu" className={`hidden md:flex md:flex-col ${sidebarWidth} md:fixed md:inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-300`}>
         <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-4 py-4 border-b border-gray-100 dark:border-gray-700`}>
           <DrightBrand size={collapsed ? 38 : 46} compact={collapsed} />
           {!collapsed && <button onClick={() => setCollapsed(true)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Collapse sidebar"><ChevronLeft className="w-5 h-5" /></button>}
@@ -231,7 +233,7 @@ export default function AppShell() {
 
         <div className="border-t border-gray-100 dark:border-gray-700 p-3">
           {!collapsed && (
-            <div className="flex items-center gap-3 px-1 py-2 mb-2">
+            <div data-tour="profile-control" className="flex items-center gap-3 px-1 py-2 mb-2">
               <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0 ring-1 ring-slate-200">
                 {profile?.avatar_url ? <img src={profile.avatar_url} alt={profile?.full_name || 'User'} className="w-full h-full object-cover" /> : <span className="text-primary-700 font-semibold text-sm">{getInitials()}</span>}
               </div>
@@ -249,9 +251,9 @@ export default function AppShell() {
 
       {!immersiveSocial && <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 shadow-sm safe-area-top">
         <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 min-h-[56px]">
-          <button onClick={() => setSidebarOpen(true)} className="p-2.5 -ml-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Open menu"><Menu className="w-6 h-6" /></button>
+          <button data-tour="navigation-menu" onClick={() => setSidebarOpen(true)} className="p-2.5 -ml-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Open menu"><Menu className="w-6 h-6" /></button>
           <DrightBrand size={31} />
-          <div className="flex items-center gap-1 sm:gap-2"><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0 ring-1 ring-slate-200">{profile?.avatar_url ? <img src={profile.avatar_url} alt={profile?.full_name || 'User'} className="w-full h-full object-cover" /> : <span className="text-primary-700 font-semibold text-sm">{getInitials()}</span>}</div></div>
+          <div className="flex items-center gap-1 sm:gap-2"><LanguageSwitcher variant="compact" />{uiPrefs.showNotificationButton && <NotificationBar />}<ThemeToggle variant="default" /><div data-tour="profile-control" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center overflow-hidden bg-primary-100 shrink-0 ring-1 ring-slate-200">{profile?.avatar_url ? <img src={profile.avatar_url} alt={profile?.full_name || 'User'} className="w-full h-full object-cover" /> : <span className="text-primary-700 font-semibold text-sm">{getInitials()}</span>}</div></div>
         </div>
       </header>}
 
@@ -285,6 +287,7 @@ export default function AppShell() {
       </main>
 
       {!immersiveSocial && <ChatSystem />}
+      {!immersiveSocial && <DrightTourSystem userId={user?.id} />}
 
       {!immersiveSocial && <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/96 dark:bg-gray-800/98 backdrop-blur border-t border-gray-200 dark:border-gray-700 z-40 shadow-lg safe-area-bottom" aria-label="Main navigation">
         <div className="flex justify-around items-center py-2">
@@ -294,7 +297,7 @@ export default function AppShell() {
           }).map(item => {
             const isActive = item.path === '/' ? location.pathname === '/' : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (
-              <NavLink key={item.path} to={item.path} className="flex flex-col items-center py-1.5 px-3 min-w-[60px] min-h-[56px]" aria-label={navLabel(item, t)}>
+              <NavLink key={item.path} to={item.path} data-tour={item.path === '/' ? 'nav-dashboard' : item.path === '/market' ? 'nav-market' : item.path === '/social' ? 'nav-social' : item.path === '/news' ? 'nav-news' : undefined} className="flex flex-col items-center py-1.5 px-3 min-w-[60px] min-h-[56px]" aria-label={navLabel(item, t)}>
                 <div className="relative flex items-center justify-center"><MetallicNavIcon icon={item.icon} active={isActive} />{isActive && <motion.div layoutId="bottomNavIndicator" className="absolute -bottom-1.5 w-1 h-1 bg-slate-800 dark:bg-slate-200 rounded-full" />}</div>
                 <span className={`text-xs mt-1 font-medium ${isActive ? 'text-slate-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>{navLabel(item, t)}</span>
               </NavLink>
