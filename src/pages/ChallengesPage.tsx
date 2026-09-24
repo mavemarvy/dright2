@@ -267,6 +267,8 @@ export default function ChallengesPage() {
     : historyPeriods.find(item => item.period === period)?.label
       ?? (catalog?.period_start ? new Date(`${catalog.period_start}T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'History');
 
+  const viewerIsPreview = Boolean(viewer?.detail?.preview_only);
+
   const countdown = useMemo(() => {
     if (period !== 'current' || !catalog?.period_end) return '';
     const ms = Math.max(0, new Date(`${catalog.period_end}T00:00:00Z`).getTime() - now);
@@ -538,23 +540,30 @@ export default function ChallengesPage() {
         )}
 
         {period === 'current' && selected && viewer && !viewerRowVisible && !viewerBannerDismissed && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-[85] px-3 sm:bottom-5">
-            <div className="pointer-events-auto mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-violet-300/50 bg-slate-900/95 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500 text-sm font-black text-white">
+          <div
+            className="pointer-events-none fixed inset-x-0 z-[120] px-3"
+            style={{ bottom: 'calc(5.75rem + env(safe-area-inset-bottom))' }}
+          >
+            <div className="pointer-events-auto mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-violet-300/60 bg-slate-900/95 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl">
+              <div className="flex h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500 px-2 text-sm font-black text-white">
                 #{viewer.rank.toLocaleString()}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Your position</p>
                 <p className="truncate text-sm font-black text-white">{nameFor(viewer)}</p>
-                <p className="truncate text-xs text-slate-400">{metricText(selected, viewer)} · rank {viewer.rank.toLocaleString()} of {total.toLocaleString()}</p>
+                <p className="truncate text-xs text-slate-300">
+                  Rank #{viewer.rank.toLocaleString()} · {metricText(selected, viewer)}
+                </p>
               </div>
-              <button
-                onClick={() => void showViewerPosition()}
-                disabled={loadingMore}
-                className="shrink-0 rounded-xl bg-violet-500 px-3 py-2 text-xs font-black text-white disabled:opacity-60"
-              >
-                {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : 'View'}
-              </button>
+              {!viewerIsPreview && (
+                <button
+                  onClick={() => void showViewerPosition()}
+                  disabled={loadingMore}
+                  className="shrink-0 rounded-xl bg-violet-500 px-3 py-2 text-xs font-black text-white disabled:opacity-60"
+                >
+                  {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : 'View'}
+                </button>
+              )}
             </div>
           </div>
         )}
