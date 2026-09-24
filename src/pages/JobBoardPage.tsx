@@ -5,7 +5,7 @@ import {
   Search, Briefcase, MapPin, DollarSign, Clock, Building2, Filter,
   X, SlidersHorizontal, Bookmark, BookmarkCheck,
   TrendingUp, ArrowUpDown, LayoutGrid, List,
-  Megaphone, Star, AlertCircle,
+  Megaphone, Star, AlertCircle, Trophy,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatSalaryRange } from '../lib/currency';
@@ -185,6 +185,12 @@ function JobCard({ job, saved, onToggleSave }: { job: Job; saved: boolean; onTog
         className="block w-full text-center bg-primary-50 hover:bg-primary-600 text-primary-700 hover:text-white font-medium rounded-xl py-2 text-sm transition-all"
       >
         View Details
+      </Link>
+      <Link
+        to="/challenges?section=affiliate&challenge=top_affiliate"
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 py-2 text-xs font-bold text-violet-700 hover:bg-violet-100 transition-colors"
+      >
+        <Trophy className="w-3.5 h-3.5" /> View Affiliate Leaderboard
       </Link>
     </motion.div>
   );
@@ -683,6 +689,13 @@ export default function JobBoardPage() {
                         </button>
                         <Link to={`/jobs/${job.id}`} className="bg-primary-50 hover:bg-primary-600 text-primary-700 hover:text-white text-xs font-medium rounded-xl px-3 py-2 transition-all whitespace-nowrap">
                           View
+                        </Link>
+                        <Link
+                          to="/challenges?section=affiliate&challenge=top_affiliate"
+                          className="bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold rounded-xl px-3 py-2 transition-all whitespace-nowrap inline-flex items-center gap-1"
+                          aria-label="View affiliate leaderboard"
+                        >
+                          <Trophy className="w-3.5 h-3.5" /> Rank
                         </Link>
                       </div>
                     </motion.div>
