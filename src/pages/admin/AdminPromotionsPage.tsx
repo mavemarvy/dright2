@@ -356,7 +356,7 @@ function DistributionEditor() {
 
       <section className="rounded-2xl border border-gray-100 bg-white p-5">
         <h2 className="font-bold text-gray-900">Placement percentage add-ons</h2>
-        <p className="mt-1 text-xs text-gray-500">Each selected placement adds this percentage of the advertiser's media budget. With ten placements at 1% and a $5 media budget, the placement add-on is $0.50 and the subtotal is $5.50 before any configured platform fee or tax.</p>
+        <p className="mt-1 text-xs text-gray-500">Each selected placement adds this percentage of the advertiser's media budget. With ten placements at 1% and a media budget of 5.00, the placement add-on is 0.50 and the subtotal is 5.50 before any configured platform fee or tax.</p>
         <div className="mt-4 space-y-2">
           {config.placements.map(item => (
             <div key={item.code} className="grid gap-3 rounded-2xl border border-gray-200 p-3 sm:grid-cols-[minmax(0,1fr)_120px_90px] sm:items-center">
