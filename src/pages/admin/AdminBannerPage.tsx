@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import FlyerRotationSettings from '../../components/admin/FlyerRotationSettings';
 import {
   useAllBanners, useAllBannerAnalytics, useBannerLinks,
   createBanner, updateBanner, duplicateBanner, softDeleteBanner, reorderBanners,
@@ -104,6 +105,8 @@ export default function AdminBannerPage() {
           <Plus className="w-4 h-4" /> New Banner
         </button>
       </div>
+
+      <FlyerRotationSettings />
 
       {/* Tabs */}
       <div className="flex items-center gap-1 mb-6 border-b border-gray-200 dark:border-gray-700">
