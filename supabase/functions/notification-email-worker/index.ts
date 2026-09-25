@@ -9,7 +9,28 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const resendApiKey = Deno.env.get("RESEND_API_KEY") || "";
-const resendFrom = Deno.env.get("RESEND_FROM_EMAIL") || "support@dright.store";
+function senderForRow(row: OutboxRow): string {
+  const category = String(row.category || "").toLowerCase();
+  const type = String(row.notification_type || "").toLowerCase();
+
+  if (category === "support" || type.includes("support_ticket") || type.includes("customer_support")) {
+    return "DRIGHT Support <support@dright.store>";
+  }
+  if (category === "security" || type.includes("security") || type.includes("verification") || type.includes("password")) {
+    return "DRIGHT Security <security@dright.store>";
+  }
+  if (category === "wallet" || category === "orders" || type.includes("withdrawal") || type.includes("payment") || type.includes("payout")) {
+    return "DRIGHT Payments <payments@dright.store>";
+  }
+  if (category === "affiliate" || category === "referrals" || type.includes("affiliate") || type.includes("referral")) {
+    return "DRIGHT Affiliates <affiliates@dright.store>";
+  }
+  if (["marketplace", "store", "jobs", "services", "promotions"].includes(category)) {
+    return "DRIGHT Marketplace <marketplace@dright.store>";
+  }
+
+  return "DRIGHT Notifications <notifications@dright.store>";
+}
 const appUrl = (Deno.env.get("APP_URL") || "https://dright.store").replace(/\/$/, "");
 
 const db = createClient(supabaseUrl, serviceRoleKey, {
@@ -78,9 +99,15 @@ function buildEmail(row: OutboxRow) {
   const label = escapeHtml(categoryLabel(row.category));
   const manage = `${appUrl}/settings?tab=notifications`;
 
-  const footer = critical || transactional
-    ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is an important transactional or security message from DRIGHT.</p>`
-    : `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You can change email notification preferences in <a href="${manage}" style="color:#2563eb">DRIGHT Settings</a>.</p>`;
+  const marketing = meta.marketing_email === true;
+  const manageMarketing = typeof meta.manage_preferences_url === "string"
+    ? String(meta.manage_preferences_url)
+    : `${appUrl}/settings?tab=privacy`;
+  const footer = marketing
+    ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You received this promotional email because marketing email is enabled for your DRIGHT account. <a href="${escapeHtml(manageMarketing)}" style="color:#2563eb">Manage marketing preferences</a>.</p>`
+    : critical || transactional
+      ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is an important transactional or security message from DRIGHT.</p>`
+      : `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You can change email notification preferences in <a href="${manage}" style="color:#2563eb">DRIGHT Settings</a>.</p>`;
 
   return {
     subject: `DRIGHT — ${row.subject}`,
@@ -132,6 +159,18 @@ async function markRetry(row: OutboxRow, error: string) {
       },
     }).eq("notification_id", row.notification_id).eq("channel", "email");
   }
+
+  const externalDeliveryId = typeof row.metadata?.external_delivery_id === "string"
+    ? String(row.metadata.external_delivery_id)
+    : null;
+  if (terminal && externalDeliveryId) {
+    await db.from("promotion_external_deliveries").update({
+      status: "failed",
+      provider: "resend",
+      metadata: { ...(row.metadata || {}), last_error: error.slice(0, 500) },
+      updated_at: new Date().toISOString(),
+    }).eq("id", externalDeliveryId);
+  }
 }
 
 async function processOne(id: string) {
@@ -181,7 +220,7 @@ async function processOne(id: string) {
   }
 
   const email = buildEmail(row);
-  const from = resendFrom.includes("<") ? resendFrom : `DRIGHT <${resendFrom}>`;
+  const from = senderForRow(row);
 
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -229,6 +268,21 @@ async function processOne(id: string) {
           provider_message_id: messageId,
         },
       }).eq("notification_id", row.notification_id).eq("channel", "email");
+    }
+
+    const externalDeliveryId = typeof row.metadata?.external_delivery_id === "string"
+      ? String(row.metadata.external_delivery_id)
+      : null;
+    if (externalDeliveryId) {
+      await db.from("promotion_external_deliveries").update({
+        status: "sent",
+        provider: "resend",
+        provider_message_id: messageId,
+        delivered_count: 1,
+        audience_size_snapshot: 1,
+        sent_at: sentAt,
+        updated_at: sentAt,
+      }).eq("id", externalDeliveryId);
     }
 
     await db.from("email_logs").insert({
