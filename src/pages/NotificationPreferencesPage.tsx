@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Bell, Moon, Clock, VolumeX, Mail, Smartphone, MessageSquare,
@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useNotificationPreferences, useNotificationMutes, ALL_CATEGORIES,
   type DeliveryChannel } from '../lib/notificationPreferences';
+import { getPromotionEmailSubscription, setPromotionEmailSubscription } from '../lib/universalPromotion';
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -55,6 +56,43 @@ export default function NotificationPreferencesPage() {
   const { prefs, loading, update, toggleCategory, setDeliveryChannel } = useNotificationPreferences(user?.id || null);
   const { mutes, unmute } = useNotificationMutes(user?.id || null);
   const [savedToast] = useState(false);
+  const [promotionEmailSubscribed, setPromotionEmailSubscribedState] = useState(false);
+  const [promotionEmailLoading, setPromotionEmailLoading] = useState(true);
+  const [promotionEmailError, setPromotionEmailError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) {
+      setPromotionEmailLoading(false);
+      return;
+    }
+    setPromotionEmailLoading(true);
+    getPromotionEmailSubscription()
+      .then(result => {
+        if (!cancelled) setPromotionEmailSubscribedState(Boolean(result?.subscribed));
+      })
+      .catch(() => {
+        if (!cancelled) setPromotionEmailError('Unable to load promotional email preference.');
+      })
+      .finally(() => {
+        if (!cancelled) setPromotionEmailLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const togglePromotionEmail = async (enabled: boolean) => {
+    if (promotionEmailLoading) return;
+    setPromotionEmailLoading(true);
+    setPromotionEmailError('');
+    try {
+      const result = await setPromotionEmailSubscription(enabled);
+      setPromotionEmailSubscribedState(Boolean(result?.subscribed));
+    } catch {
+      setPromotionEmailError('Unable to update promotional email preference.');
+    } finally {
+      setPromotionEmailLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -169,7 +207,7 @@ export default function NotificationPreferencesPage() {
             <div className="space-y-3">
               {([
                 { key: 'in_app' as DeliveryChannel, label: 'In-App', icon: Bell, available: true },
-                { key: 'email' as DeliveryChannel, label: 'Email', icon: Mail, available: false },
+                { key: 'email' as DeliveryChannel, label: 'Email', icon: Mail, available: true },
                 { key: 'push' as DeliveryChannel, label: 'Push Notifications', icon: Smartphone, available: false },
                 { key: 'sms' as DeliveryChannel, label: 'SMS', icon: MessageSquare, available: false },
               ]).map(ch => (
@@ -189,6 +227,29 @@ export default function NotificationPreferencesPage() {
                 </div>
               ))}
             </div>
+          </SettingCard>
+        </div>
+
+        {/* Promotional Email Consent */}
+        <div className="mb-4">
+          <SettingCard
+            icon={Mail}
+            title="Promotional Emails"
+            description="Choose whether DRIGHT may send sponsored product, profile, service, course, job, store, campaign, and community promotions to your email."
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Receive DRIGHT promotional emails</p>
+                <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Off by default. Turning this on records your consent and you can turn it off again at any time.</p>
+                {promotionEmailError && <p className="mt-2 text-xs font-medium text-red-500">{promotionEmailError}</p>}
+              </div>
+              <Toggle
+                checked={promotionEmailSubscribed}
+                onChange={togglePromotionEmail}
+                label="Toggle promotional emails"
+              />
+            </div>
+            {promotionEmailLoading && <p className="mt-3 text-xs text-gray-400">Updating promotional email preference…</p>}
           </SettingCard>
         </div>
 
