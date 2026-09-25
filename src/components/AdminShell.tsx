@@ -5,7 +5,7 @@ import {
   Settings, Megaphone, Palette, Headphones, AlertTriangle, Star, Lock, Gavel, Receipt,
   MapPin, Users as UsersIcon, Store, Bell, Settings2, TrendingUp, Ticket, Gift, BarChart3,
   ShieldAlert, History, Brain, ArrowLeft, Image, ShieldCheck, Wallet, FileText, CreditCard,
-  Webhook, BarChart4, FileEdit, ImageIcon, Layers, Plug, Share2, LifeBuoy, Award, Trophy,
+  Webhook, BarChart4, FileEdit, ImageIcon, Layers, Plug, Share2, LifeBuoy, Award, Trophy, SlidersHorizontal,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth, ADMIN_ROLE_LABELS, type AdminRole } from '../contexts/AuthContext';
