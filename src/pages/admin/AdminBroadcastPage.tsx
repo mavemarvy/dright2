@@ -54,6 +54,7 @@ type BroadcastSettings = {
   private_broadcasts_enabled: boolean;
   news_broadcasts_enabled: boolean;
   promotion_broadcasts_enabled: boolean;
+  recommendation_broadcasts_enabled: boolean;
 };
 
 type BroadcastState = {
@@ -385,6 +386,7 @@ function SettingsTab({
     private_broadcasts_enabled: true,
     news_broadcasts_enabled: true,
     promotion_broadcasts_enabled: true,
+    recommendation_broadcasts_enabled: true,
   }, [settings]);
   const [form, setForm] = useState(initial);
 
@@ -400,6 +402,7 @@ function SettingsTab({
       <Toggle label="Private bot broadcasts" checked={form.private_broadcasts_enabled} onChange={value => setForm(current => ({ ...current, private_broadcasts_enabled: value }))} />
       <Toggle label="News broadcasts" checked={form.news_broadcasts_enabled} onChange={value => setForm(current => ({ ...current, news_broadcasts_enabled: value }))} />
       <Toggle label="Promotion broadcasts" checked={form.promotion_broadcasts_enabled} onChange={value => setForm(current => ({ ...current, promotion_broadcasts_enabled: value }))} />
+      <Toggle label="Recommendation broadcasts" checked={form.recommendation_broadcasts_enabled} onChange={value => setForm(current => ({ ...current, recommendation_broadcasts_enabled: value }))} />
     </div>
 
     <label className="mt-4 block text-sm font-bold text-gray-700 dark:text-gray-200">Welcome auto-delete seconds
