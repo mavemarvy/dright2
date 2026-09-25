@@ -20,6 +20,8 @@ import {
   createUniversalPromotionCampaign,
   fetchPromotableAssets,
   fetchPromotionConfiguration,
+  fetchPromotionExternalAnalytics,
+  type PromotionExternalAnalytics,
   fetchUniversalCampaigns,
   goalsForAssets,
   initializePromotionPayment,
@@ -255,16 +257,16 @@ export default function PromotePage() {
               <div className="grid gap-2 sm:grid-cols-2">{goals.map(item => <button key={item.value} onClick={() => { setGoal(item.value); resetQuote(); }} className={`rounded-2xl border p-3 text-left ${goal === item.value ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700'}`}><Target className="h-4 w-4 text-primary-600" /><p className="mt-2 text-sm font-bold text-gray-900 dark:text-white">{item.label}</p><p className="mt-1 text-xs text-gray-500">{item.description}</p></button>)}</div>
             </Panel>
 
-            <Panel number="3" title="Choose Normal, Plus or Platinum" subtitle="More inventory increases potential reach, but never bypasses relevance, caps or quality rules.">
-              <div className="grid gap-3 md:grid-cols-3">{tiers.map(item => <button key={item.code} onClick={() => { setTier(item.code); setSelectedPlacements([]); resetQuote(); }} className={`rounded-2xl border-2 p-4 text-left ${tier === item.code ? `${TIER_STYLE[item.code]} bg-primary-50/60 dark:bg-gray-950` : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950'}`}><div className="flex items-center justify-between"><b className="text-gray-900 dark:text-white">{item.name}</b>{tier === item.code && <Check className="h-4 w-4 text-primary-600" />}</div><p className="mt-2 text-xs leading-5 text-gray-500">{item.description}</p><p className="mt-3 text-[10px] font-semibold text-gray-400">Reach multiplier ×{Number(item.reach_multiplier).toFixed(2)}</p></button>)}</div>
+            <Panel number="3" title="Choose Normal, Premium or Platinum" subtitle="Premium has 5× delivery weight and pacing versus Normal; Platinum has 5× Premium. Admin can change these multipliers.">
+              <div className="grid gap-3 md:grid-cols-3">{tiers.map(item => <button key={item.code} onClick={() => { setTier(item.code); setSelectedPlacements([]); resetQuote(); }} className={`rounded-2xl border-2 p-4 text-left ${tier === item.code ? `${TIER_STYLE[item.code]} bg-primary-50/60 dark:bg-gray-950` : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950'}`}><div className="flex items-center justify-between"><b className="text-gray-900 dark:text-white">{item.name}</b>{tier === item.code && <Check className="h-4 w-4 text-primary-600" />}</div><p className="mt-2 text-xs leading-5 text-gray-500">{item.description}</p><p className="mt-3 text-[10px] font-semibold text-gray-400">Delivery ×{Number(item.reach_multiplier).toFixed(2)} · pace ×{Number(item.spend_pace_multiplier || 1).toFixed(2)}</p></button>)}</div>
             </Panel>
 
             <Panel number="4" title="Choose placements" subtitle="DRIGHT only exposes placements compatible with the selected tier and every selected asset.">
               <div className="grid gap-2 sm:grid-cols-2">{eligiblePlacements.map(item => {
                 const checked = selectedPlacements.includes(item.code);
-                return <label key={item.code} className={`flex cursor-pointer gap-3 rounded-2xl border p-3 ${checked ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700'}`}><input type="checkbox" checked={checked} onChange={() => { setSelectedPlacements(current => checked ? current.filter(code => code !== item.code) : [...current, item.code]); resetQuote(); }} className="mt-1 accent-primary-600" /><div><p className="text-sm font-bold text-gray-900 dark:text-white">{item.name}{item.premium ? ' · Premium' : ''}</p><p className="mt-1 text-xs text-gray-500">{item.description}</p><p className="mt-1 text-[10px] text-gray-400">Frequency cap {item.frequency_cap} / {item.frequency_window_hours}h · density interval {item.density_organic_interval}</p></div></label>;
+                return <label key={item.code} className={`flex cursor-pointer gap-3 rounded-2xl border p-3 ${checked ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700'}`}><input type="checkbox" checked={checked} onChange={() => { setSelectedPlacements(current => checked ? current.filter(code => code !== item.code) : [...current, item.code]); resetQuote(); }} className="mt-1 accent-primary-600" /><div><p className="text-sm font-bold text-gray-900 dark:text-white">{item.name}</p><p className="mt-1 text-xs text-gray-500">{item.description}</p><p className="mt-1 text-[10px] font-semibold text-primary-600">+{Number(item.surcharge_percent || 0).toFixed(2)}% of media budget</p><p className="mt-1 text-[10px] text-gray-400">Frequency cap {item.frequency_cap} / {item.frequency_window_hours}h · density interval {item.density_organic_interval}</p></div></label>;
               })}</div>
-              <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-gray-500"><span className="rounded-full bg-gray-100 px-3 py-1 dark:bg-gray-800">Community Ads unavailable until Community ownership exists</span><span className="rounded-full bg-gray-100 px-3 py-1 dark:bg-gray-800">Email Ads unavailable until compliant marketing consent exists</span></div>
+              <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-gray-500"><span className="rounded-full bg-gray-100 px-3 py-1 dark:bg-gray-800">Email promotion sends only to users who allow DRIGHT marketing email.</span><span className="rounded-full bg-gray-100 px-3 py-1 dark:bg-gray-800">Community Ads are available for communities you own.</span></div>
             </Panel>
 
             <Panel number="5" title="Audience & creative" subtitle="Target safely, then preview how your own asset will look in every selected placement.">
@@ -347,7 +349,50 @@ function Mine({ campaigns, onLifecycle }: { campaigns: UniversalCampaign[]; onLi
 }
 
 function CampaignCard({ campaign }: { campaign: UniversalCampaign }) {
-  return <article className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className="rounded-full bg-primary-50 px-2 py-1 text-[10px] font-black uppercase text-primary-600 dark:bg-primary-950">{campaign.tier_code}</span><p className="mt-2 font-black capitalize text-gray-900 dark:text-white">{campaign.goal.replace(/_/g, ' ')}</p><p className="font-mono text-[10px] text-gray-400">{campaign.id}</p></div><div className="text-right"><p className="font-black text-gray-900 dark:text-white">{amount(campaign.actual_spend, campaign.billing_currency)}</p><p className="text-[10px] text-gray-400">actual spend</p></div></div><div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6"><Metric label="Impressions" value={campaign.actual_impressions.toLocaleString()} /><Metric label="Clicks" value={campaign.actual_clicks.toLocaleString()} /><Metric label="Conversions" value={campaign.actual_conversions.toLocaleString()} /><Metric label="Reach" value={campaign.actual_reach.toLocaleString()} /><Metric label="Assets" value={String(campaign.campaign_assets?.length || 0)} /><Metric label="Placements" value={String(campaign.campaign_placements?.length || 0)} /></div>{(campaign.campaign_assets?.length || 0) > 1 && <div className="mt-3 overflow-x-auto"><table className="min-w-full text-left text-xs"><thead className="text-gray-400"><tr><th className="py-2">Asset</th><th>Budget</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>Conversions</th></tr></thead><tbody>{campaign.campaign_assets?.map(asset => <tr key={asset.id} className="border-t border-gray-200 dark:border-gray-800"><td className="max-w-52 truncate py-2 font-semibold">{asset.title_snapshot || asset.asset_id}</td><td>{amount(asset.allocation_amount, campaign.billing_currency)}</td><td>{amount(asset.actual_spend, campaign.billing_currency)}</td><td>{asset.actual_impressions}</td><td>{asset.actual_clicks}</td><td>{asset.actual_conversions}</td></tr>)}</tbody></table></div>}</article>;
+  const [external, setExternal] = useState<PromotionExternalAnalytics | null>(null);
+
+  useEffect(() => {
+    if (!campaign.placements?.some(code => code === 'external_platforms' || code === 'email')) {
+      setExternal(null);
+      return;
+    }
+    let alive = true;
+    void fetchPromotionExternalAnalytics(campaign.id)
+      .then(data => { if (alive) setExternal(data); })
+      .catch(() => { if (alive) setExternal(null); });
+    return () => { alive = false; };
+  }, [campaign.id, campaign.placements]);
+
+  const tierLabel = campaign.tier_code === 'plus' ? 'premium' : campaign.tier_code;
+
+  return <article className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <span className="rounded-full bg-primary-50 px-2 py-1 text-[10px] font-black uppercase text-primary-600 dark:bg-primary-950">{tierLabel}</span>
+        <p className="mt-2 font-black capitalize text-gray-900 dark:text-white">{campaign.goal.replace(/_/g, ' ')}</p>
+        <p className="font-mono text-[10px] text-gray-400">{campaign.id}</p>
+      </div>
+      <div className="text-right"><p className="font-black text-gray-900 dark:text-white">{amount(campaign.actual_spend, campaign.billing_currency)}</p><p className="text-[10px] text-gray-400">actual spend</p></div>
+    </div>
+    <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+      <Metric label="Impressions" value={campaign.actual_impressions.toLocaleString()} />
+      <Metric label="Clicks" value={campaign.actual_clicks.toLocaleString()} />
+      <Metric label="Conversions" value={campaign.actual_conversions.toLocaleString()} />
+      <Metric label="Reach" value={campaign.actual_reach.toLocaleString()} />
+      <Metric label="Assets" value={String(campaign.campaign_assets?.length || 0)} />
+      <Metric label="Placements" value={String(campaign.campaign_placements?.length || 0)} />
+    </div>
+    {external && <div className="mt-3 rounded-2xl border border-primary-100 bg-primary-50/50 p-3 dark:border-primary-900/40 dark:bg-primary-950/20">
+      <p className="text-[10px] font-black uppercase tracking-wide text-primary-600">External delivery analytics</p>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <Metric label="Delivered" value={external.delivered.toLocaleString()} />
+        <Metric label="Est. reachable" value={external.estimated_reach.toLocaleString()} />
+        <Metric label="Tracked clicks" value={external.tracked_clicks.toLocaleString()} />
+      </div>
+      <p className="mt-2 text-[10px] text-gray-400">Telegram reach is based on destination member counts at send time; DRIGHT tracks CTA clicks directly.</p>
+    </div>}
+    {(campaign.campaign_assets?.length || 0) > 1 && <div className="mt-3 overflow-x-auto"><table className="min-w-full text-left text-xs"><thead className="text-gray-400"><tr><th className="py-2">Asset</th><th>Budget</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>Conversions</th></tr></thead><tbody>{campaign.campaign_assets?.map(asset => <tr key={asset.id} className="border-t border-gray-200 dark:border-gray-800"><td className="max-w-52 truncate py-2 font-semibold">{asset.title_snapshot || asset.asset_id}</td><td>{amount(asset.allocation_amount, campaign.billing_currency)}</td><td>{amount(asset.actual_spend, campaign.billing_currency)}</td><td>{asset.actual_impressions}</td><td>{asset.actual_clicks}</td><td>{asset.actual_conversions}</td></tr>)}</tbody></table></div>}
+  </article>;
 }
 
 function Kpi({ label, value, icon: Icon }: { label: string; value: string; icon: React.ComponentType<{ className?: string }> }) {
