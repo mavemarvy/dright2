@@ -50,37 +50,32 @@ async function promotionTrackingUrl(
   asset: any,
   destination: { type: "chat" | "subscriber"; id: string },
 ) {
-  const promotionId = clean(campaign?.payload?.promotion_campaign_id || campaign?.source_id, 80);
-  const campaignAssetId = clean(asset?.campaign_asset_id, 80);
-  const listingId = clean(asset?.asset_id, 80);
-  const rawDestination = clean(asset?.destination, 2000);
+  const promotionId = clean(campaign?.payload?.promotion_campaign_id || campaign?.source_id, 100);
+  const campaignAssetId = clean(asset?.campaign_asset_id, 100);
+  const listingId = clean(asset?.asset_id, 100);
+  const target = destinationUrl(asset?.destination);
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-  if (!promotionId || !campaignAssetId || !listingId || !rawDestination) {
-    return destinationUrl(rawDestination);
-  }
+  if (!uuid.test(promotionId) || !uuid.test(campaignAssetId) || !uuid.test(listingId)) return target;
 
-  const { data, error } = await db
-    .from("promotion_tracking_links")
-    .upsert({
-      campaign_id: promotionId,
-      campaign_asset_id: campaignAssetId,
-      listing_id: listingId,
-      placement_code: "external_platforms",
-      destination_url: rawDestination,
-      destination_type: `telegram_${destination.type}`,
-      destination_id: destination.id,
-    }, {
-      onConflict: "campaign_id,campaign_asset_id,placement_code,destination_type,destination_id",
-    })
-    .select("token")
-    .single();
+  const { data, error } = await db.from("promotion_tracking_links").upsert({
+    campaign_id: promotionId,
+    campaign_asset_id: campaignAssetId,
+    listing_id: listingId,
+    placement_code: "external_platforms",
+    destination_url: target,
+    destination_type: `telegram_${destination.type}`,
+    destination_id: destination.id,
+  }, {
+    onConflict: "campaign_id,campaign_asset_id,placement_code,destination_type,destination_id",
+  }).select("token").single();
 
   if (error || !data?.token) {
-    console.error("[broadcast-worker] tracking link", error?.message || "missing token");
-    return destinationUrl(rawDestination);
+    console.error("[broadcast-worker] tracking link failed", error?.message || "token missing");
+    return target;
   }
 
-  return `https://dright.store/r/${data.token}`;
+  return `${SUPABASE_URL}/functions/v1/promotion-click-redirect?token=${data.token}`;
 }
 
 async function sendPromotion(destination: { type: "chat" | "subscriber"; id: string }, campaign: any) {
@@ -187,12 +182,13 @@ async function destinations(campaign: any) {
   const result: Array<{ type: "chat" | "subscriber"; id: string }> = [];
   const audience = campaign?.audience || {};
   const { data: settings } = await db.from("telegram_broadcast_settings")
-    .select("private_broadcasts_enabled,news_broadcasts_enabled,promotion_broadcasts_enabled")
+    .select("private_broadcasts_enabled,news_broadcasts_enabled,promotion_broadcasts_enabled,recommendation_broadcasts_enabled")
     .eq("singleton", true)
     .maybeSingle();
 
   if (campaign?.source_type === "promotion" && settings?.promotion_broadcasts_enabled === false) return result;
   if (campaign?.source_type === "news" && settings?.news_broadcasts_enabled === false) return result;
+  if (campaign?.source_type === "recommendation" && settings?.recommendation_broadcasts_enabled === false) return result;
 
   if (audience.chats === "all") {
     const { data } = await db.from("telegram_broadcast_chats")
