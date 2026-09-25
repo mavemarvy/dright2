@@ -68,6 +68,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
       { path: '/admin/sales-team/applications', label: 'Marketer Applications', icon: FileCheck, page: 'sales_team' },
       { path: '/admin/sales-operations', label: 'Sales Operations', icon: TrendingUp, page: 'sales_operations' },
       { path: '/admin/promotions', label: 'Promotions', icon: TrendingUp, page: 'promotions' },
+      { path: '/admin/broadcast', label: 'Broadcast & Community', icon: Megaphone, page: 'promotions' },
       { path: '/admin/coupons', label: 'Coupons', icon: Ticket, page: 'coupons' },
       { path: '/admin/giveaways', label: 'Giveaways', icon: Gift, page: 'giveaways' },
       { path: '/admin/marketing-dashboard', label: 'Marketing Dashboard', icon: Megaphone, page: 'marketing_dashboard' },
