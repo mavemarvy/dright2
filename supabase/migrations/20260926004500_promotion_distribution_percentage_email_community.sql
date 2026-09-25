@@ -1222,3 +1222,15 @@ alter function public.get_admin_promotion_distribution_config() security invoker
 alter function public.admin_update_promotion_placement(text,boolean,numeric,integer) security invoker;
 alter function public.admin_update_promotion_tier(text,boolean,numeric,numeric) security invoker;
 alter function public.admin_update_promotion_distribution_settings(boolean,boolean,boolean) security invoker;
+
+
+
+drop policy if exists "Admins read notification email promotion outbox" on public.notification_email_outbox;
+create policy "Admins read notification email promotion outbox"
+on public.notification_email_outbox
+for select to authenticated
+using (
+  coalesce(((select auth.jwt())->>'is_anonymous'),'false') <> 'true'
+  and (select public.is_admin_user())
+);
+grant select on public.notification_email_outbox to authenticated;
