@@ -11,6 +11,7 @@ import {
   updatePricing, updatePackage, deletePackage, createPackage,
 } from '../../lib/promotionEngine';
 import { formatCurrency } from '../../lib/currency';
+import { useLocation } from 'react-router-dom';
 import {
   adminUpdatePromotionDistributionSettings,
   adminUpdatePromotionPlacement,
@@ -30,7 +31,10 @@ const STATUS_STYLES: Record<CampaignStatus, { bg: string; text: string; label: s
 };
 
 export default function AdminPromotionsPage() {
-  const [tab, setTab] = useState<'campaigns' | 'pricing' | 'distribution' | 'packages'>('campaigns');
+  const location = useLocation();
+  const [tab, setTab] = useState<'campaigns' | 'pricing' | 'distribution' | 'packages'>(
+    location.pathname.endsWith('/distribution') ? 'distribution' : 'campaigns',
+  );
   const { campaigns, loading } = useAllCampaigns();
   const { analytics } = useAdminAnalytics();
   const actions = useCampaignActions();
