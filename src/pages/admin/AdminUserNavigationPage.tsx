@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Compass, Eye, EyeOff, ExternalLink, Loader2, PanelLeft, ShieldCheck, Users, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigationVisibility } from '../../contexts/NavigationVisibilityContext';
+import SupportEmailVisibilityControls from '../../components/admin/SupportEmailVisibilityControls';
 
 interface NavigationRow {
   feature_key: string;
@@ -323,6 +324,8 @@ export default function AdminUserNavigationPage() {
           {error}
         </div>
       )}
+
+      <SupportEmailVisibilityControls canManage={canManage} />
 
       <div className="space-y-5">
         {groups.map(([group, items]) => (
