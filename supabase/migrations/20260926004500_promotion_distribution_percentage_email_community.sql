@@ -12,6 +12,10 @@ alter table public.promotion_distribution_settings
   add column if not exists email_ads_enabled boolean not null default true,
   add column if not exists community_ads_enabled boolean not null default true;
 
+alter table public.telegram_broadcast_settings
+  add column if not exists recommendation_broadcasts_enabled boolean not null default true;
+update public.telegram_broadcast_settings set recommendation_broadcasts_enabled=true where singleton=true;
+
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname='ad_placements_surcharge_percent_check' and conrelid='public.ad_placements'::regclass) then
