@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, Bell, BriefcaseBusiness, ChevronLeft, ChevronRight, CircleHelp,
-  Image as ImageIcon, Megaphone, Package, Sparkles, Store, X,
+  Image as ImageIcon, Megaphone, Package, Sparkles, Store, Users, X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigationVisibility } from '../../contexts/NavigationVisibilityContext';
@@ -36,7 +36,7 @@ type GalleryItem =
 
 const TIER_LABEL: Record<PromotionTierCode, string> = {
   normal: 'Normal',
-  plus: 'Plus',
+  plus: 'Premium',
   platinum: 'Platinum',
 };
 
@@ -62,6 +62,7 @@ function fallbackIcon(type?: string) {
   if (type === 'job') return BriefcaseBusiness;
   if (type === 'store') return Store;
   if (type === 'profile' || type === 'sales_team') return Sparkles;
+  if (type === 'community') return Users;
   return Package;
 }
 
