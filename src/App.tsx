@@ -22,6 +22,7 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const VerifyOtpPage = lazy(() => import('./pages/VerifyOtpPage'));
 const ReferralLandingPage = lazy(() => import('./pages/ReferralLandingPage'));
+const PromotionRedirectPage = lazy(() => import('./pages/PromotionRedirectPage'));
 const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
 const MarketPage = lazy(() => import('./pages/MarketPage'));
 const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
@@ -181,7 +182,7 @@ function PageLoader(){return <div className="flex items-center justify-center mi
 function AdminRoute({children}:{children:React.ReactNode}){const {isAdmin,adminRole,loading}=useAuth();const location=useLocation();if(loading)return <div className="min-h-screen flex items-center justify-center bg-surface-muted"><Spinner size="lg"/></div>;if(!isAdmin)return <Navigate to="/" replace/>;if(!canAccessPath(adminRole,location.pathname))return <Navigate to="/admin" replace/>;return <>{children}</>}
 // DRIGHT Starter owns its payment-gated guest UI outside the public shell.
 function App(){return <ErrorBoundary><AuthProvider><NavigationVisibilityProvider><BrowserRouter><a href="#main-content" className="skip-link">Skip to content</a><Suspense fallback={<PageLoader/>}><Routes>
-<Route path="/guest-payment/callback" element={<GuestPaymentCallbackPage/>}/>
+<Route path="/guest-payment/callback" element={<GuestPaymentCallbackPage/>}/><Route path="/r/:token" element={<PromotionRedirectPage/>}/>
 <Route path="/dright/starter/payment" element={<DrightStarterPaymentPage/>}/><Route path="/dright/starter" element={<DrightStarterProductPage/>}/>
 <Route path="/welcome" element={<LandingPage/>}/><Route path="/sign-in" element={<SignInPage/>}/><Route path="/sign-up" element={<SignUpPage/>}/><Route path="/forgot-password" element={<ForgotPasswordPage/>}/><Route path="/reset-password" element={<ResetPasswordPage/>}/><Route path="/verify-email" element={<VerifyEmailPage/>}/><Route path="/verify-otp" element={<VerifyOtpPage/>}/><Route path="/ref" element={<ReferralLandingPage/>}/><Route path="/ref/:code" element={<ReferralLandingPage/>}/><Route path="/invite/:token" element={<AcceptInvitePage/>}/>
 <Route element={<UserNavigationRouteGate><PublicAppShell/></UserNavigationRouteGate>}><Route path="/dright" element={<DrightOfficialStorePage/>}/><Route path="/dright/store" element={<DrightOfficialStorePage/>}/><Route path="/market" element={<MarketPage/>}/><Route path="/product/:id" element={<ProductDetailPage/>}/><Route path="/jobs" element={<JobBoardPage/>}/><Route path="/jobs/:id" element={<JobDetailPage/>}/><Route path="/shop/:userId" element={<PublicStorePage/>}/><Route path="/help" element={<HelpCenterPage/>}/><Route path="/tutorials" element={<TutorialsPage/>}/><Route path="/announcements" element={<AnnouncementsPage/>}/><Route path="/challenges" element={<ChallengesPage/>}/><Route path="/legal" element={<LegalPagesListPage/>}/><Route path="/legal/:slug" element={<LegalPageDetailPage/>}/><Route path="/permissions" element={<PermissionsPage/>}/></Route>
