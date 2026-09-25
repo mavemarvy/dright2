@@ -122,7 +122,8 @@ const AdminDrightStorePage = lazy(() => import('./pages/admin/AdminDrightStorePa
 const AdminSubscriptionsPage = lazy(() => import('./pages/admin/AdminSubscriptionsPage'));
 const AdminNotificationCenterPage = lazy(() => import('./pages/admin/AdminNotificationCenterPage'));
 const AdminAlgorithmPage = lazy(() => import('./pages/admin/AdminAlgorithmPage'));
-const AdminPromotionsPage = lazy(() => import('./pages/admin/AdminPromotionsPage'));\nconst AdminBroadcastPage = lazy(() => import('./pages/admin/AdminBroadcastPage'));
+const AdminPromotionsPage = lazy(() => import('./pages/admin/AdminPromotionsPage'));
+const AdminBroadcastPage = lazy(() => import('./pages/admin/AdminBroadcastPage'));
 const AdminCouponsPage = lazy(() => import('./pages/admin/AdminCouponsPage'));
 const AdminGiveawaysPage = lazy(() => import('./pages/admin/AdminGiveawaysPage'));
 const AdminMarketplaceAnalyticsPage = lazy(() => import('./pages/admin/AdminMarketplaceAnalyticsPage'));
