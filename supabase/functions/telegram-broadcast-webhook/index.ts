@@ -415,7 +415,7 @@ async function setup() {
       "Official DRIGHT Broadcast bot for news, approved promotions, recommendations, community updates and member notices. For private account support, use @DrightSupportBot.",
   });
 
-  const { error: cronError } = await supabase.rpc("configure_telegram_broadcast_cron", {
+  const { error: cronError } = await supabase.rpc("ensure_telegram_broadcast_cron", {
     p_worker_secret: await workerSecret(),
   });
 
@@ -481,6 +481,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const { error: ensureWorkerError } = await supabase.rpc("ensure_telegram_broadcast_cron", {
+      p_worker_secret: await workerSecret(),
+    });
+    if (ensureWorkerError) console.error("[broadcast] worker ensure failed", ensureWorkerError.message);
+
     await cleanupExpiredWelcomes();
 
     if (update?.my_chat_member) {
