@@ -147,6 +147,13 @@ async function sendGeneric(chatId: string, campaign: any) {
 async function destinations(campaign: any) {
   const result: Array<{ type: "chat" | "subscriber"; id: string }> = [];
   const audience = campaign?.audience || {};
+  const { data: settings } = await db.from("telegram_broadcast_settings")
+    .select("private_broadcasts_enabled,news_broadcasts_enabled,promotion_broadcasts_enabled")
+    .eq("singleton", true)
+    .maybeSingle();
+
+  if (campaign?.source_type === "promotion" && settings?.promotion_broadcasts_enabled === false) return result;
+  if (campaign?.source_type === "news" && settings?.news_broadcasts_enabled === false) return result;
 
   if (audience.chats === "all") {
     const { data } = await db.from("telegram_broadcast_chats")
@@ -158,7 +165,7 @@ async function destinations(campaign: any) {
   }
 
   const subscriptions = Array.isArray(audience.subscribers) ? audience.subscribers.map(String) : [];
-  if (subscriptions.length) {
+  if (subscriptions.length && settings?.private_broadcasts_enabled !== false) {
     let query = db.from("telegram_broadcast_subscribers")
       .select("telegram_user_id,private_chat_id")
       .eq("is_active", true);
@@ -249,6 +256,17 @@ async function cleanupExpiredWelcomes() {
 
 async function processCampaign(campaign: any) {
   const targets = await destinations(campaign);
+
+  if (targets.length === 0) {
+    await db.from("telegram_broadcast_campaigns").update({
+      status: "queued",
+      updated_at: new Date().toISOString(),
+      stats: { destinations: 0, sent: 0, failed: 0, skipped: 0, messages: 0 },
+      error_code: "NO_ACTIVE_DESTINATIONS",
+    }).eq("id", campaign.id);
+    return { id: campaign.id, status: "queued", destinations: 0, sent: 0, failed: 0, skipped: 0, messages: 0 };
+  }
+
   let sent = 0;
   let failed = 0;
   let skipped = 0;
