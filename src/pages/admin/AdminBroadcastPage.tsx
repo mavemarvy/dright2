@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 
 type BroadcastChat = {
   id: string;
+  chat_id: string;
   chat_type: 'group' | 'supergroup' | 'channel' | 'private';
   title: string | null;
   username: string | null;
