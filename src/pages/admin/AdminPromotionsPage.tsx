@@ -1,8 +1,9 @@
 import { formatDisplayCurrency } from '../../lib/currency';
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   TrendingUp, Eye, MousePointerClick, DollarSign, Loader2, Search,
   Pause, Play, XCircle, BarChart3, Package, Settings, Save,
+  SlidersHorizontal, Mail, Users, Radio,
 } from 'lucide-react';
 import { useAllCampaigns, useAdminAnalytics, useAllPackages, usePricing, useCampaignActions } from '../../lib/promotionHooks';
 import {
@@ -10,6 +11,14 @@ import {
   updatePricing, updatePackage, deletePackage, createPackage,
 } from '../../lib/promotionEngine';
 import { formatCurrency } from '../../lib/currency';
+import {
+  adminUpdatePromotionDistributionSettings,
+  adminUpdatePromotionPlacement,
+  adminUpdatePromotionTier,
+  fetchAdminPromotionDistributionConfig,
+  type PromotionDistributionAdminConfig,
+  type PromotionTierCode,
+} from '../../lib/universalPromotion';
 
 const STATUS_STYLES: Record<CampaignStatus, { bg: string; text: string; label: string }> = {
   pending: { bg: 'bg-amber-50', text: 'text-amber-600', label: 'Pending' },
@@ -21,7 +30,7 @@ const STATUS_STYLES: Record<CampaignStatus, { bg: string; text: string; label: s
 };
 
 export default function AdminPromotionsPage() {
-  const [tab, setTab] = useState<'campaigns' | 'pricing' | 'packages'>('campaigns');
+  const [tab, setTab] = useState<'campaigns' | 'pricing' | 'distribution' | 'packages'>('campaigns');
   const { campaigns, loading } = useAllCampaigns();
   const { analytics } = useAdminAnalytics();
   const actions = useCampaignActions();
@@ -57,6 +66,7 @@ export default function AdminPromotionsPage() {
         {([
           { key: 'campaigns', label: 'Campaigns', icon: BarChart3 },
           { key: 'pricing', label: 'Pricing', icon: DollarSign },
+          { key: 'distribution', label: 'Distribution', icon: SlidersHorizontal },
           { key: 'packages', label: 'Packages', icon: Package },
         ] as const).map(t => (
           <button
@@ -162,8 +172,196 @@ export default function AdminPromotionsPage() {
       {/* Pricing Tab */}
       {tab === 'pricing' && <PricingEditor />}
 
+      {/* Distribution Tab */}
+      {tab === 'distribution' && <DistributionEditor />}
+
       {/* Packages Tab */}
       {tab === 'packages' && <PackagesEditor />}
+    </div>
+  );
+}
+
+function DistributionEditor() {
+  const [config, setConfig] = useState<PromotionDistributionAdminConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState('');
+  const [error, setError] = useState('');
+
+  const reload = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setConfig(await fetchAdminPromotionDistributionConfig());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to load promotion distribution configuration.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void reload(); }, []);
+
+  if (loading || !config) {
+    return <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-primary-500 animate-spin" /></div>;
+  }
+
+  const settings = (config.settings || {}) as Record<string, unknown>;
+  const patchSettings = (key: string, value: boolean) => {
+    setConfig(current => current ? { ...current, settings: { ...(current.settings || {}), [key]: value } } : current);
+  };
+  const patchPlacement = (code: string, patch: Record<string, unknown>) => {
+    setConfig(current => current ? {
+      ...current,
+      placements: current.placements.map(item => item.code === code ? { ...item, ...patch } : item),
+    } : current);
+  };
+  const patchTier = (code: PromotionTierCode, patch: Record<string, unknown>) => {
+    setConfig(current => current ? {
+      ...current,
+      tiers: current.tiers.map(item => item.code === code ? { ...item, ...patch } : item),
+    } : current);
+  };
+
+  const saveSettings = async () => {
+    setSavingKey('settings');
+    setError('');
+    try {
+      await adminUpdatePromotionDistributionSettings({
+        emailAdsEnabled: Boolean(settings.email_ads_enabled),
+        communityAdsEnabled: Boolean(settings.community_ads_enabled),
+        externalPlatformsEnabled: Boolean(settings.external_platforms_enabled),
+      });
+      await reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to save delivery switches.');
+    } finally {
+      setSavingKey('');
+    }
+  };
+
+  const savePlacement = async (code: string) => {
+    const item = config.placements.find(row => row.code === code);
+    if (!item) return;
+    setSavingKey(`placement:${code}`);
+    setError('');
+    try {
+      await adminUpdatePromotionPlacement({
+        code,
+        enabled: item.enabled,
+        surchargePercent: Number(item.surcharge_percent || 0),
+        minimumTierRank: item.minimum_tier_rank,
+      });
+      await reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to save placement.');
+    } finally {
+      setSavingKey('');
+    }
+  };
+
+  const saveTier = async (code: PromotionTierCode) => {
+    const item = config.tiers.find(row => row.code === code);
+    if (!item) return;
+    setSavingKey(`tier:${code}`);
+    setError('');
+    try {
+      await adminUpdatePromotionTier({
+        code,
+        enabled: item.is_enabled,
+        pricingMultiplier: Number(item.pricing_multiplier),
+        reachMultiplier: Number(item.reach_multiplier),
+      });
+      await reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to save tier.');
+    } finally {
+      setSavingKey('');
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>}
+
+      <section className="rounded-2xl border border-gray-100 bg-white p-5">
+        <div className="flex items-center gap-2">
+          <Radio className="h-5 w-5 text-primary-500" />
+          <div>
+            <h2 className="font-bold text-gray-900">Placement delivery switches</h2>
+            <p className="text-xs text-gray-500">These switches immediately control whether DRIGHT may distribute ads through each delivery family.</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {[
+            { key: 'email_ads_enabled', label: 'Email Promotions', icon: Mail, note: `${config.promotion_email_subscribers} opted-in subscribers` },
+            { key: 'community_ads_enabled', label: 'Community Ads', icon: Users, note: 'Sponsored community discovery inventory' },
+            { key: 'external_platforms_enabled', label: 'External Platforms', icon: Radio, note: `${config.telegram_private_subscribers} active Telegram subscribers` },
+          ].map(item => (
+            <label key={item.key} className="flex items-start justify-between gap-3 rounded-2xl border border-gray-200 p-4">
+              <div className="flex min-w-0 gap-3">
+                <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{item.label}</p>
+                  <p className="mt-1 text-xs text-gray-500">{item.note}</p>
+                </div>
+              </div>
+              <input type="checkbox" checked={Boolean(settings[item.key])} onChange={e => patchSettings(item.key, e.target.checked)} className="h-5 w-5 accent-primary-600" />
+            </label>
+          ))}
+        </div>
+        <button onClick={() => void saveSettings()} disabled={savingKey === 'settings'} className="mt-4 flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+          {savingKey === 'settings' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Save delivery switches
+        </button>
+      </section>
+
+      <section className="rounded-2xl border border-gray-100 bg-white p-5">
+        <h2 className="font-bold text-gray-900">Tier delivery & spend multipliers</h2>
+        <p className="mt-1 text-xs text-gray-500">Defaults are Normal 1×, Premium 5× and Platinum 25×. Spend intensity controls how quickly budget is consumed per unit; visibility controls delivery priority.</p>
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {config.tiers.map(item => (
+            <div key={item.code} className="rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div><p className="font-bold text-gray-900">{item.name}</p><p className="text-[10px] font-bold uppercase text-gray-400">{item.code}</p></div>
+                <input type="checkbox" checked={item.is_enabled} onChange={e => patchTier(item.code, { is_enabled: e.target.checked })} className="h-5 w-5 accent-primary-600" />
+              </div>
+              <label className="mt-4 block text-xs font-semibold text-gray-500">Spend intensity multiplier
+                <input type="number" min="0.01" max="100" step="0.25" value={item.pricing_multiplier} onChange={e => patchTier(item.code, { pricing_multiplier: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+              </label>
+              <label className="mt-3 block text-xs font-semibold text-gray-500">Visibility / delivery multiplier
+                <input type="number" min="0.01" max="1000" step="0.25" value={item.reach_multiplier} onChange={e => patchTier(item.code, { reach_multiplier: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+              </label>
+              <button onClick={() => void saveTier(item.code)} disabled={savingKey === `tier:${item.code}`} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-bold text-primary-700 disabled:opacity-50">
+                {savingKey === `tier:${item.code}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Save tier
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-gray-100 bg-white p-5">
+        <h2 className="font-bold text-gray-900">Placement percentage add-ons</h2>
+        <p className="mt-1 text-xs text-gray-500">Each selected placement adds this percentage of the advertiser's media budget. With ten placements at 1% and a $5 media budget, the placement add-on is $0.50 and the subtotal is $5.50 before any configured platform fee or tax.</p>
+        <div className="mt-4 space-y-2">
+          {config.placements.map(item => (
+            <div key={item.code} className="grid gap-3 rounded-2xl border border-gray-200 p-3 sm:grid-cols-[minmax(0,1fr)_120px_90px] sm:items-center">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2"><p className="truncate text-sm font-bold text-gray-900">{item.name}</p><span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">{item.code}</span></div>
+                <p className="mt-1 line-clamp-1 text-xs text-gray-500">{item.description}</p>
+                <label className="mt-2 flex items-center gap-2 text-xs text-gray-500"><input type="checkbox" checked={item.enabled} onChange={e => patchPlacement(item.code, { enabled: e.target.checked })} className="accent-primary-600" /> Enabled</label>
+              </div>
+              <label className="text-xs font-semibold text-gray-500">Add-on %
+                <input type="number" min="0" max="100" step="0.25" value={item.surcharge_percent} onChange={e => patchPlacement(item.code, { surcharge_percent: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+              </label>
+              <button onClick={() => void savePlacement(item.code)} disabled={savingKey === `placement:${item.code}`} className="flex items-center justify-center gap-1 rounded-xl bg-gray-950 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                {savingKey === `placement:${item.code}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Save
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
