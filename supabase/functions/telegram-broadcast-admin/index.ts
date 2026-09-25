@@ -212,7 +212,7 @@ Deno.serve(async (req: Request) => {
       const allowed = [
         "support_bot_username","welcome_enabled","welcome_template","welcome_delete_after_seconds",
         "moderation_enabled","delete_blocked_messages","blocked_terms","support_redirect_terms",
-        "auto_create_join_request_link","private_broadcasts_enabled","news_broadcasts_enabled","promotion_broadcasts_enabled","recommendation_broadcasts_enabled"
+        "auto_create_join_request_link","private_broadcasts_enabled","news_broadcasts_enabled","promotion_broadcasts_enabled","recommendation_broadcasts_enabled","recommendation_broadcasts_enabled"
       ];
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: user.id };
       for (const key of allowed) if (input[key] !== undefined) patch[key] = input[key];
