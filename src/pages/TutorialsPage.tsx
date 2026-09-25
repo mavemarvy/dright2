@@ -27,13 +27,13 @@ export default function TutorialsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <SeoHead title="Tutorials & Learning Center" description="Learn how to use DRIGHT with step-by-step video tutorials." canonical="/tutorials" />
+      <SeoHead title="Tutorials & Learning Center" description="Learn how to use DRIGHT with step-by-step tutorials and practical guides." canonical="/tutorials" />
 
       <div className="bg-gradient-to-br from-purple-600 to-purple-800 text-white py-14 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-80" />
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">Learning Center</h1>
-          <p className="text-purple-100 mb-6">Watch tutorials and master DRIGHT</p>
+          <p className="text-purple-100 mb-6">Read step-by-step guides, watch tutorials and master DRIGHT</p>
           <div className="relative max-w-xl mx-auto">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tutorials..." className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white text-gray-900 outline-none shadow-lg" />
@@ -70,10 +70,15 @@ export default function TutorialsPage() {
                     {tutorial.thumbnail ? (
                       <img src={tutorial.thumbnail} alt={tutorial.title} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center"><Video className="w-10 h-10 text-gray-300" /></div>
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30">
+                        {tutorial.video_url ? <Video className="w-10 h-10 text-purple-300" /> : <BookOpen className="w-10 h-10 text-purple-400" />}
+                        <span className="mt-2 text-xs font-bold uppercase tracking-wide text-purple-500">{tutorial.video_url ? 'Video tutorial' : 'Step-by-step guide'}</span>
+                      </div>
                     )}
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                      <div className="w-12 h-12 bg-white/30 backdrop-blur rounded-full flex items-center justify-center"><Play className="w-5 h-5 text-white ml-0.5" fill="white" /></div>
+                    <div className="absolute inset-0 bg-black/15 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <div className="w-12 h-12 bg-white/80 backdrop-blur rounded-full flex items-center justify-center">
+                        {tutorial.video_url ? <Play className="w-5 h-5 text-purple-700 ml-0.5" fill="currentColor" /> : <BookOpen className="w-5 h-5 text-purple-700" />}
+                      </div>
                     </div>
                     {tutorial.duration_minutes > 0 && (
                       <span className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded-md flex items-center gap-1"><Clock className="w-3 h-3" /> {tutorial.duration_minutes}m</span>
@@ -121,7 +126,16 @@ export default function TutorialsPage() {
 
 function TutorialPlayer({ tutorial }: { tutorial: Tutorial }) {
   if (!tutorial.video_url) {
-    return <div className="aspect-video bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400">No video available</div>;
+    return (
+      <div className="bg-gradient-to-br from-purple-600 to-indigo-700 px-6 py-8 text-white">
+        <div className="mx-auto max-w-xl text-center">
+          <BookOpen className="mx-auto h-10 w-10 text-purple-100" />
+          <p className="mt-3 text-xs font-black uppercase tracking-[0.18em] text-purple-200">DRIGHT practical guide</p>
+          <p className="mt-2 text-lg font-bold">{tutorial.title}</p>
+          <p className="mt-2 text-sm text-purple-100/80">Follow the written steps below. This guide does not require a video.</p>
+        </div>
+      </div>
+    );
   }
 
   if (tutorial.video_type === 'youtube') {

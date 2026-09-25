@@ -162,7 +162,7 @@ export default function HelpCenterPage() {
                 </div>
                 {dept.description && <p className="text-xs text-gray-400 mb-3">{dept.description}</p>}
                 <div className="space-y-1.5 text-xs">
-                  {dept.email && <a href={`mailto:${dept.email}`} className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-blue-600"><Mail className="w-3.5 h-3.5" /> {dept.email}</a>}
+                  {dept.email && dept.email_visible !== false && <a href={`mailto:${dept.email}`} className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-blue-600"><Mail className="w-3.5 h-3.5" /> {dept.email}</a>}
                   {dept.phone && <a href={`tel:${dept.phone}`} className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-blue-600"><Phone className="w-3.5 h-3.5" /> {dept.phone}</a>}
                   {dept.whatsapp && <a href={dept.whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-green-600"><MessageCircle className="w-3.5 h-3.5" /> WhatsApp</a>}
                   {dept.telegram && <a href={dept.telegram} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-blue-600"><Send className="w-3.5 h-3.5" /> Telegram</a>}

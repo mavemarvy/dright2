@@ -5,6 +5,8 @@ import {
   Image as ImageIcon, Megaphone, Package, Sparkles, Store, X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigationVisibility } from '../../contexts/NavigationVisibilityContext';
+import { getMyDrightStarterAffiliateProgress } from '../../lib/drightStarter';
 import { supabase } from '../../lib/supabase';
 import {
   type AdPlacement, type PromotableAsset, type PromotionTierCode,
@@ -25,6 +27,7 @@ type OfficialBanner = {
   cta_link: string | null;
   button_link: string | null;
   badge_text: string | null;
+  campaign_id: string | null;
 };
 
 type GalleryItem =
@@ -40,9 +43,10 @@ const TIER_LABEL: Record<PromotionTierCode, string> = {
 async function fetchOfficialBanners(limit = 5): Promise<OfficialBanner[]> {
   const { data } = await supabase
     .from('promotional_banners')
-    .select('id,title,subtitle,description,media_url,desktop_image,tablet_image,mobile_image,cta_label,button_text,cta_link,button_link,badge_text')
+    .select('id,title,subtitle,description,media_url,desktop_image,tablet_image,mobile_image,cta_label,button_text,cta_link,button_link,badge_text,campaign_id')
     .eq('is_active', true)
     .eq('is_deleted', false)
+    .eq('status', 'active')
     .order('priority', { ascending: false })
     .order('display_order', { ascending: true })
     .limit(limit);
@@ -62,74 +66,170 @@ function fallbackIcon(type?: string) {
 }
 
 export function CompactPromoStrip({ className = '' }: { className?: string }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
-  const [delivery, setDelivery] = useState<SponsoredDeliveryItem | null>(null);
-  const [banner, setBanner] = useState<OfficialBanner | null>(null);
+  const { isVisible } = useNavigationVisibility();
+  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [active, setActive] = useState(0);
+  const [intervalSeconds, setIntervalSeconds] = useState(5);
+  const [loopEnabled, setLoopEnabled] = useState(true);
   const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('dright-promo-strip-dismissed') === '1');
-  const tracked = useRef<string | null>(null);
+  const tracked = useRef(new Set<string>());
+  const visible = isVisible('promo_flyer_strip', isAdmin);
 
   useEffect(() => {
-    if (dismissed) return;
+    if (dismissed || !visible) return;
     let alive = true;
+
     void (async () => {
-      if (user) {
-        const paid = await fetchSponsoredDelivery('flyer', 1);
-        if (!alive) return;
-        if (paid[0]) {
-          setDelivery(paid[0]);
-          setBanner(null);
-          return;
-        }
+      const { data: settingsData } = await supabase
+        .from('marketplace_flyer_settings')
+        .select('loop_enabled,interval_seconds,max_official_items,max_sponsored_items')
+        .eq('singleton', true)
+        .maybeSingle();
+
+      if (!alive) return;
+
+      const nextLoop = settingsData?.loop_enabled !== false;
+      const nextInterval = Math.min(30, Math.max(3, Number(settingsData?.interval_seconds || 5)));
+      const officialLimit = Math.min(25, Math.max(1, Number(settingsData?.max_official_items || 8)));
+      const sponsoredLimit = Math.min(10, Math.max(0, Number(settingsData?.max_sponsored_items || 4)));
+
+      setLoopEnabled(nextLoop);
+      setIntervalSeconds(nextInterval);
+
+      const official = await fetchOfficialBanners(officialLimit);
+      if (!alive) return;
+
+      const welcome = official.find(item =>
+        item.title.toLowerCase().includes('welcome to dright marketplace')
+      ) || official.find(item => item.button_link === '/market') || official[0] || null;
+
+      if (!nextLoop) {
+        setItems(welcome ? [{ kind: 'official', item: welcome }] : []);
+        setActive(0);
+        return;
       }
-      const official = await fetchOfficialBanners(1);
-      if (alive) setBanner(official[0] || null);
+
+      const orderedOfficial = welcome
+        ? [welcome, ...official.filter(item => item.id !== welcome.id)]
+        : official;
+
+      let paid: SponsoredDeliveryItem[] = [];
+      if (user && sponsoredLimit > 0) {
+        paid = await fetchSponsoredDelivery('flyer', sponsoredLimit);
+        if (!alive) return;
+      }
+
+      const combined: GalleryItem[] = [
+        ...orderedOfficial.map(item => ({ kind: 'official' as const, item })),
+        ...paid.map(item => ({ kind: 'paid' as const, item })),
+      ];
+
+      setItems(combined);
+      setActive(0);
     })();
+
     return () => { alive = false; };
-  }, [user?.id, dismissed]);
+  }, [user?.id, dismissed, visible]);
 
   useEffect(() => {
-    if (!user || !delivery || tracked.current === delivery.campaign_asset_id) return;
-    tracked.current = delivery.campaign_asset_id;
-    void recordSponsoredDeliveryEvent(delivery, 'impression', user.id);
-  }, [delivery, user]);
+    if (!loopEnabled || items.length < 2) return;
+    const timer = window.setInterval(() => {
+      setActive(value => (value + 1) % items.length);
+    }, intervalSeconds * 1000);
+    return () => window.clearInterval(timer);
+  }, [items.length, intervalSeconds, loopEnabled]);
 
-  if (dismissed || (!delivery && !banner)) return null;
+  useEffect(() => {
+    const current = items[active];
+    if (!current || current.kind !== 'paid' || !user) return;
+    const key = current.item.campaign_asset_id;
+    if (tracked.current.has(key)) return;
+    const timer = window.setTimeout(() => {
+      tracked.current.add(key);
+      void recordSponsoredDeliveryEvent(current.item, 'impression', user.id);
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [active, items, user]);
 
+  if (dismissed || !visible || items.length === 0) return null;
+
+  const current = items[Math.min(active, items.length - 1)];
+  const delivery = current.kind === 'paid' ? current.item : null;
+  const banner = current.kind === 'official' ? current.item : null;
   const title = delivery?.title || banner?.title || 'Discover something useful on DRIGHT';
   const subtitle = delivery?.description || banner?.subtitle || banner?.description || 'Relevant opportunities, clearly labelled.';
   const image = delivery?.image_url || banner?.mobile_image || banner?.media_url || banner?.desktop_image || null;
   const label = delivery ? 'Sponsored' : banner?.badge_text || 'DRIGHT Update';
   const cta = delivery?.cta_label || banner?.button_text || banner?.cta_label || 'Explore';
-  const destination = delivery?.destination || banner?.button_link || banner?.cta_link || '/market';
 
-  const open = () => {
-    if (delivery && user) void recordSponsoredDeliveryEvent(delivery, 'click', user.id);
+  const open = async () => {
+    if (delivery && user) {
+      void recordSponsoredDeliveryEvent(delivery, 'click', user.id);
+      navigateTo(delivery.destination || '/market', navigate);
+      return;
+    }
+
+    let destination = banner?.button_link || banner?.cta_link || '/market';
+    if (banner?.campaign_id === 'starter_affiliate_dynamic') {
+      if (user) {
+        const progress = await getMyDrightStarterAffiliateProgress();
+        destination = progress?.completed ? '/market?affiliate=1' : '/dright/starter';
+      } else {
+        destination = '/dright/starter';
+      }
+    }
     navigateTo(destination, navigate);
   };
 
+  const stripGradients = [
+    'from-slate-950 via-slate-900 to-slate-200 dark:from-gray-950 dark:via-gray-900 dark:to-slate-800',
+    'from-violet-950 via-violet-700 to-fuchsia-500 dark:from-violet-950 dark:via-purple-950 dark:to-fuchsia-950',
+    'from-indigo-950 via-indigo-700 to-violet-400 dark:from-indigo-950 dark:via-indigo-900 dark:to-violet-950',
+    'from-emerald-950 via-emerald-700 to-teal-400 dark:from-emerald-950 dark:via-emerald-900 dark:to-teal-950',
+  ];
+  const gradient = stripGradients[active % stripGradients.length];
+
   return (
-    <div className={`relative overflow-hidden border-b border-primary-100 bg-gradient-to-r from-primary-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-950 dark:to-primary-950 ${className}`}>
+    <div className={'relative overflow-hidden border-b border-white/10 bg-gradient-to-r text-white transition-colors duration-500 ' + gradient + ' ' + className}>
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-2 sm:px-5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary-600 text-white shadow-sm">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/15 text-white shadow-sm ring-1 ring-white/15">
           {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : <Sparkles className="h-4 w-4" />}
         </div>
-        <button onClick={open} className="min-w-0 flex-1 text-left">
+
+        <button onClick={() => void open()} className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-700 dark:bg-primary-900/50 dark:text-primary-200">{label}</span>
-            <span className="truncate text-sm font-bold text-gray-900 dark:text-white">{title}</span>
+            <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white ring-1 ring-white/10">{label}</span>
+            <span className="truncate text-sm font-black text-white">{title}</span>
           </div>
-          <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
+          <p className="mt-0.5 truncate text-xs text-white/70">{subtitle}</p>
         </button>
-        <button onClick={open} className="hidden shrink-0 items-center gap-1 rounded-full bg-gray-950 px-3 py-1.5 text-xs font-semibold text-white sm:flex dark:bg-white dark:text-gray-950">
+
+        <button onClick={() => void open()} className="hidden shrink-0 items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-gray-950 shadow-sm sm:flex">
           {cta}<ArrowRight className="h-3.5 w-3.5" />
         </button>
+
+        {loopEnabled && items.length > 1 && (
+          <div className="hidden items-center gap-1 md:flex" aria-label="Flyer position">
+            {items.slice(0, 8).map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => setActive(index)}
+                className={'h-1.5 rounded-full transition-all ' + (index === active ? 'w-4 bg-white' : 'w-1.5 bg-white/35')}
+                aria-label={'Show flyer ' + (index + 1)}
+              />
+            ))}
+          </div>
+        )}
+
         <button
           onClick={() => {
             sessionStorage.setItem('dright-promo-strip-dismissed', '1');
             setDismissed(true);
           }}
-          className="shrink-0 rounded-full p-2 text-gray-400 hover:bg-white/80 hover:text-gray-700 dark:hover:bg-gray-800"
+          className="shrink-0 rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white"
           aria-label="Dismiss promotional strip"
         >
           <X className="h-4 w-4" />

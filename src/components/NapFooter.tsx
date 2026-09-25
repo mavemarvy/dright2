@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MapPin, Phone, Mail, Clock, Globe, ExternalLink } from 'lucide-react';
 import { getBusinessSettings, clearBusinessSettingsCache, formatHours, isOpenNow, formatShortAddress } from '../lib/seo';
 import { supabase } from '../lib/supabase';
@@ -288,7 +289,13 @@ export default function NapFooter({ compact = false }: { compact?: boolean }) {
                 <span itemProp="postalCode">{settings.postal_code}</span>
               </span>
             </div>
-            <p>&copy; {new Date().getFullYear()} {settings.business_name}. All rights reserved.</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:justify-end">
+              <Link to="/legal/terms-of-service" className="hover:text-gray-600 transition-colors">Terms & Conditions</Link>
+              <Link to="/legal/privacy-policy" className="hover:text-gray-600 transition-colors">Privacy</Link>
+              <Link to="/legal/cookie-policy" className="hover:text-gray-600 transition-colors">Cookies</Link>
+              <Link to="/help" className="hover:text-gray-600 transition-colors">Help</Link>
+              <span>&copy; {new Date().getFullYear()} {settings.business_name}. All rights reserved.</span>
+            </div>
           </div>
         </div>
       </div>

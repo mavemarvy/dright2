@@ -12,10 +12,12 @@ import {
   buildDrightStarterAffiliateLink,
   fetchDrightStarterProduct,
   getPendingDrightStarterPurchase,
+  getMyDrightStarterAffiliateProgress,
   markDrightStarterSignupFunnel,
   setPendingDrightStarterPurchase,
   startDrightStarterCheckout,
   type DrightStarterPublicSettings,
+  type DrightStarterAffiliateProgress,
 } from '../lib/drightStarter';
 import { formatCurrencyValue } from '../lib/currency';
 import { resolveAndRecordTracking } from '../lib/affiliate';
@@ -34,6 +36,7 @@ export default function DrightStarterProductPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [canAffiliate, setCanAffiliate] = useState(false);
+  const [affiliateProgress, setAffiliateProgress] = useState<DrightStarterAffiliateProgress | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -50,7 +53,12 @@ export default function DrightStarterProductPage() {
   }, [params]);
 
   useEffect(() => {
-    if (user) void canUsePlatformFeature('affiliate_marketing').then(setCanAffiliate);
+    if (!user) {
+      setAffiliateProgress(null);
+      return;
+    }
+    void canUsePlatformFeature('affiliate_marketing').then(setCanAffiliate);
+    void getMyDrightStarterAffiliateProgress().then(setAffiliateProgress);
   }, [user]);
 
   const product = settings?.product;
@@ -60,6 +68,9 @@ export default function DrightStarterProductPage() {
     [product],
   );
   const pendingStarterPurchase = useMemo(() => getPendingDrightStarterPurchase(), []);
+  const starterProgressPercent = affiliateProgress && affiliateProgress.target_sales > 0
+    ? Math.min(100, Math.round((affiliateProgress.sales / affiliateProgress.target_sales) * 100))
+    : 0;
 
   const copyAffiliateLink = async () => {
     if (!profile?.referral_code) return;
@@ -207,6 +218,65 @@ export default function DrightStarterProductPage() {
                       listingId={product.marketplace_product_id}
                       title="Starter affiliate marketing kit"
                     />
+                  </div>
+                )}
+
+                {user && affiliateProgress?.enabled && affiliateProgress.applies && (
+                  <div className="mt-5 rounded-2xl border border-violet-400/25 bg-violet-500/10 p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-200">Starter affiliate requirement</p>
+                        <h3 className="mt-1 text-lg font-black text-white">
+                          {affiliateProgress.completed ? affiliateProgress.unlock_label + ' unlocked' : 'Complete this to unlock more affiliate products'}
+                        </h3>
+                        <p className="mt-1 text-sm text-violet-100/75">
+                          {affiliateProgress.completed
+                            ? 'Your verified Starter sales have reached the current requirement.'
+                            : 'Only verified DRIGHT Starter Access affiliate sales count toward this requirement.'}
+                        </p>
+                      </div>
+                      <div className="shrink-0 rounded-xl bg-white/10 px-3 py-2 text-right">
+                        <p className="text-2xl font-black text-white">{affiliateProgress.sales}/{affiliateProgress.target_sales}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-violet-200">verified sales</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400 transition-all duration-500"
+                          style={{ width: String(starterProgressPercent) + '%' }}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-xs text-violet-100/75">
+                        <span>{starterProgressPercent}% complete</span>
+                        <span className="font-bold">
+                          {affiliateProgress.completed
+                            ? 'Requirement completed'
+                            : String(affiliateProgress.remaining_sales) + ' sale' + (affiliateProgress.remaining_sales === 1 ? '' : 's') + ' remaining'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {affiliateProgress.completed ? (
+                        <Link to="/market?affiliate=1" className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-slate-950">
+                          Browse affiliate products <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      ) : profile?.referral_code ? (
+                        <button type="button" onClick={copyAffiliateLink} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-slate-950">
+                          {copied ? <BadgeCheck className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                          {copied ? 'Affiliate link copied' : 'Copy Starter affiliate link'}
+                        </button>
+                      ) : null}
+                      <Link to="/challenges?section=affiliate&challenge=starter_affiliate" className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-violet-300/30 bg-violet-400/10 px-4 text-sm font-black text-violet-100">
+                        <Trophy className="h-4 w-4" /> View leaderboard
+                      </Link>
+                    </div>
+
+                    <p className="mt-3 text-[11px] text-violet-100/60">
+                      The requirement is dynamic. If DRIGHT changes it from {affiliateProgress.target_sales} later, this progress card updates automatically from the current platform setting.
+                    </p>
                   </div>
                 )}
 

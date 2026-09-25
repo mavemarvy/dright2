@@ -59,6 +59,7 @@ export interface SupportDepartment {
   name: string;
   description: string | null;
   email: string | null;
+  email_visible: boolean;
   phone: string | null;
   whatsapp: string | null;
   telegram: string | null;
@@ -190,8 +191,9 @@ export interface PermissionInfo {
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 export const LEGAL_PAGE_TYPES: Array<{ value: string; label: string }> = [
-  { value: 'terms', label: 'Terms of Service' },
+  { value: 'terms', label: 'Terms & Conditions' },
   { value: 'privacy', label: 'Privacy Policy' },
+  { value: 'cookie', label: 'Cookie Policy' },
   { value: 'refund', label: 'Refund Policy' },
   { value: 'vendor_agreement', label: 'Vendor Agreement' },
   { value: 'affiliate_agreement', label: 'Affiliate Agreement' },
