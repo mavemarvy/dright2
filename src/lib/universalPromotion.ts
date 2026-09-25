@@ -28,6 +28,7 @@ export interface AdPlacement {
   contextual: boolean;
   premium: boolean;
   surcharge: number;
+  surcharge_percent: number;
   density_organic_interval: number;
   frequency_cap: number;
   frequency_window_hours: number;
@@ -85,6 +86,7 @@ export interface CampaignPlacementRecord {
   placement_code: string;
   tier_code: PromotionTierCode;
   placement_fee: number;
+  placement_fee_percent: number;
   status: string;
   actual_spend: number;
   actual_impressions: number;
@@ -177,7 +179,7 @@ export async function fetchPromotionConfiguration() {
 
   return {
     tiers: ((tiersRes.data || []) as PromotionTier[]).map(t => ({ ...t, pricing_multiplier: money(t.pricing_multiplier), reach_multiplier: money(t.reach_multiplier) })),
-    placements: ((placementsRes.data || []) as AdPlacement[]).map(p => ({ ...p, surcharge: money(p.surcharge) })),
+    placements: ((placementsRes.data || []) as AdPlacement[]).map(p => ({ ...p, surcharge: money(p.surcharge), surcharge_percent: money(p.surcharge_percent) })),
     tierPlacements: linksRes.data || [],
     settings: settingsRes.data || null,
     pricing: pricingRes.data || null,
@@ -185,7 +187,7 @@ export async function fetchPromotionConfiguration() {
 }
 
 export async function fetchPromotableAssets(userId: string): Promise<PromotableAsset[]> {
-  const [productsRes, jobsRes, campaignsRes, profileRes] = await Promise.all([
+  const [productsRes, jobsRes, campaignsRes, communitiesRes, profileRes] = await Promise.all([
     supabase.from('products')
       .select('id,name,category,image_url,price,product_type,approval_status,is_active,is_hidden')
       .eq('uploaded_by', userId)
@@ -201,6 +203,11 @@ export async function fetchPromotableAssets(userId: string): Promise<PromotableA
     supabase.from('cc_campaigns')
       .select('id,name,task_type,status,reward_per_completion')
       .eq('creator_id', userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false }),
+    supabase.from('communities')
+      .select('id,name,slug,category,avatar_url,banner_url,status,owner_id')
+      .eq('owner_id', userId)
       .eq('status', 'active')
       .order('created_at', { ascending: false }),
     supabase.from('users')
@@ -239,6 +246,14 @@ export async function fetchPromotableAssets(userId: string): Promise<PromotableA
       asset_type: 'campaign', asset_id: row.id, title: row.name,
       subtitle: row.task_type || 'Campaign / task', image_url: null,
       destination: `/creator-campaigns/${row.id}`, status: 'Eligible', public_id: row.id,
+    });
+  }
+
+  for (const row of communitiesRes.data || []) {
+    assets.push({
+      asset_type: 'community', asset_id: row.id, title: row.name,
+      subtitle: row.category || 'Community', image_url: row.banner_url || row.avatar_url || null,
+      destination: `/communities/${row.slug}`, status: 'Eligible', public_id: row.id,
     });
   }
 
@@ -290,6 +305,7 @@ export function goalsForAssets(assets: PromotableAsset[]): Array<{ value: Promot
   if ([...types].some(t => ['product', 'store', 'course'].includes(t))) add('more_sales', 'More sales', 'Reach users likely to purchase or enroll.');
   if (types.has('store')) add('more_store_visits', 'More store visits', 'Bring relevant shoppers to your DRIGHT store.');
   if (types.has('profile')) add('more_profile_visits', 'More profile visits', 'Increase professional profile discovery.');
+  if (types.has('community')) add('more_community_visits', 'More community visits', 'Increase discovery and qualified visits to your community.');
   if (types.has('job')) {
     add('more_job_applications', 'More applications', 'Increase legitimate candidate discovery and applications.');
     add('more_qualified_applicants', 'More qualified applicants', 'Optimize for candidates matching the job context.');
@@ -383,4 +399,119 @@ export async function fetchPromotionCampaignAnalytics(campaignId: string, days =
 export async function updateCampaignLifecycle(campaignId: string, status: 'paused' | 'active' | 'cancelled') {
   const { error } = await supabase.from('promotion_campaigns').update({ status }).eq('id', campaignId);
   if (error) throw error;
+}
+
+
+export interface PromotionDistributionAdminConfig {
+  placements: AdPlacement[];
+  tiers: PromotionTier[];
+  tier_placements: Array<{
+    tier_code: PromotionTierCode;
+    placement_code: string;
+    is_included: boolean;
+    surcharge_override?: number | null;
+    surcharge_percent_override?: number | null;
+  }>;
+  settings: Record<string, unknown> | null;
+  promotion_email_subscribers: number;
+  telegram_private_subscribers: number;
+}
+
+export async function fetchAdminPromotionDistributionConfig(): Promise<PromotionDistributionAdminConfig> {
+  const { data, error } = await supabase.rpc('get_admin_promotion_distribution_config');
+  if (error) throw error;
+  const payload = data as PromotionDistributionAdminConfig;
+  return {
+    ...payload,
+    placements: (payload?.placements || []).map(p => ({
+      ...p,
+      surcharge: money(p.surcharge),
+      surcharge_percent: money(p.surcharge_percent),
+    })),
+    tiers: (payload?.tiers || []).map(t => ({
+      ...t,
+      pricing_multiplier: money(t.pricing_multiplier),
+      reach_multiplier: money(t.reach_multiplier),
+    })),
+    promotion_email_subscribers: Number(payload?.promotion_email_subscribers || 0),
+    telegram_private_subscribers: Number(payload?.telegram_private_subscribers || 0),
+  };
+}
+
+export async function adminUpdatePromotionPlacement(input: {
+  code: string;
+  enabled: boolean;
+  surchargePercent: number;
+  minimumTierRank?: number | null;
+}) {
+  const { data, error } = await supabase.rpc('admin_update_promotion_placement', {
+    p_code: input.code,
+    p_enabled: input.enabled,
+    p_surcharge_percent: input.surchargePercent,
+    p_minimum_tier_rank: input.minimumTierRank ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function adminUpdatePromotionTier(input: {
+  code: PromotionTierCode;
+  enabled: boolean;
+  pricingMultiplier: number;
+  reachMultiplier: number;
+}) {
+  const { data, error } = await supabase.rpc('admin_update_promotion_tier', {
+    p_code: input.code,
+    p_is_enabled: input.enabled,
+    p_pricing_multiplier: input.pricingMultiplier,
+    p_reach_multiplier: input.reachMultiplier,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function adminUpdatePromotionDistributionSettings(input: {
+  emailAdsEnabled: boolean;
+  communityAdsEnabled: boolean;
+  externalPlatformsEnabled: boolean;
+}) {
+  const { data, error } = await supabase.rpc('admin_update_promotion_distribution_settings', {
+    p_email_ads_enabled: input.emailAdsEnabled,
+    p_community_ads_enabled: input.communityAdsEnabled,
+    p_external_platforms_enabled: input.externalPlatformsEnabled,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getPromotionEmailSubscription() {
+  const { data, error } = await supabase.rpc('get_promotion_email_subscription');
+  if (error) throw error;
+  return data as { subscribed: boolean; consented_at?: string | null; revoked_at?: string | null };
+}
+
+export async function setPromotionEmailSubscription(subscribed: boolean) {
+  const { data, error } = await supabase.rpc('set_promotion_email_subscription', { p_subscribed: subscribed });
+  if (error) throw error;
+  return data as { subscribed: boolean; consented_at?: string | null; revoked_at?: string | null };
+}
+
+export interface PromotionExternalSummary {
+  telegram_deliveries: number;
+  telegram_clicks: number;
+  email_deliveries: number;
+  email_clicks: number;
+}
+
+export async function fetchPromotionExternalSummary(sellerId?: string | null): Promise<PromotionExternalSummary> {
+  const { data, error } = await supabase.rpc('get_promotion_external_summary', {
+    p_seller_id: sellerId || null,
+  });
+  if (error) throw error;
+  return {
+    telegram_deliveries: Number(data?.telegram_deliveries || 0),
+    telegram_clicks: Number(data?.telegram_clicks || 0),
+    email_deliveries: Number(data?.email_deliveries || 0),
+    email_clicks: Number(data?.email_clicks || 0),
+  };
 }
