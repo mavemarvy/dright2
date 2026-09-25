@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   TrendingUp, Eye, MousePointerClick, DollarSign,
   Pause, Play, Copy, XCircle, Calendar, Clock, Loader2, BarChart3,
-  Plus,
+  Plus, Send, Mail,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -90,6 +90,26 @@ export default function CampaignDashboardPage() {
             </div>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(analytics.total_spend)}</p>
             <p className="text-xs text-gray-400">CPC: {formatCurrency(analytics.avg_cpc)}</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+            <div className="flex items-center gap-2 mb-1"><Send className="w-4 h-4 text-sky-500" /><span className="text-xs text-gray-400">Telegram deliveries</span></div>
+            <p className="text-2xl font-bold text-gray-900">{analytics.telegram_deliveries.toLocaleString()}</p>
+            <p className="text-xs text-gray-400">Published bot messages</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+            <div className="flex items-center gap-2 mb-1"><MousePointerClick className="w-4 h-4 text-sky-600" /><span className="text-xs text-gray-400">Telegram clicks</span></div>
+            <p className="text-2xl font-bold text-gray-900">{analytics.telegram_clicks.toLocaleString()}</p>
+            <p className="text-xs text-gray-400">Tracked DRIGHT CTA clicks</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+            <div className="flex items-center gap-2 mb-1"><Mail className="w-4 h-4 text-amber-500" /><span className="text-xs text-gray-400">Email deliveries</span></div>
+            <p className="text-2xl font-bold text-gray-900">{analytics.email_deliveries.toLocaleString()}</p>
+            <p className="text-xs text-gray-400">Opted-in recipients</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+            <div className="flex items-center gap-2 mb-1"><MousePointerClick className="w-4 h-4 text-amber-600" /><span className="text-xs text-gray-400">Email clicks</span></div>
+            <p className="text-2xl font-bold text-gray-900">{analytics.email_clicks.toLocaleString()}</p>
+            <p className="text-xs text-gray-400">Tracked DRIGHT CTA clicks</p>
           </div>
         </div>
       )}
