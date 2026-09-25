@@ -77,29 +77,67 @@ function chatPermissions(member: any) {
   return out;
 }
 
+let cachedBotIdentity: any = null;
+
+async function getBotIdentity() {
+  if (!cachedBotIdentity) cachedBotIdentity = await telegram("getMe");
+  return cachedBotIdentity;
+}
+
 async function upsertChat(chat: any, member?: any) {
   if (!chat?.id || !["group", "supergroup", "channel", "private"].includes(chat.type)) return null;
 
-  const status = clean(member?.status || "member", 32) || "member";
-  const isActive = !["left", "kicked"].includes(status);
+  const chatId = String(chat.id);
   const type = String(chat.type);
+  const { data: existing } = await supabase
+    .from("telegram_broadcast_chats")
+    .select("bot_status,bot_permissions,is_active,publish_enabled,moderation_enabled,welcome_enabled,join_requests_enabled,request_invite_link")
+    .eq("chat_id", chatId)
+    .maybeSingle();
+
+  let resolvedMember = member || null;
+  if (!resolvedMember && ["group", "supergroup", "channel"].includes(type)) {
+    try {
+      const bot = await getBotIdentity();
+      if (bot?.id) {
+        resolvedMember = await telegram("getChatMember", {
+          chat_id: chatId,
+          user_id: bot.id,
+        });
+      }
+    } catch (error) {
+      console.error("[broadcast] getChatMember failed", error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  const hasResolvedMembership = !!resolvedMember?.status;
+  const status = hasResolvedMembership
+    ? (clean(resolvedMember.status, 32) || "member")
+    : (clean(existing?.bot_status, 32) || "member");
+  const isActive = hasResolvedMembership
+    ? !["left", "kicked"].includes(status)
+    : (existing?.is_active ?? true);
+  const resolvedPermissions = hasResolvedMembership
+    ? chatPermissions(resolvedMember)
+    : (existing?.bot_permissions || {});
 
   const { data, error } = await supabase
     .from("telegram_broadcast_chats")
     .upsert({
-      chat_id: String(chat.id),
+      chat_id: chatId,
       chat_type: type,
       title:
         clean(chat.title, 240) ||
         (type === "private" ? clean([chat.first_name, chat.last_name].filter(Boolean).join(" "), 240) : null),
       username: clean(chat.username, 120) || null,
       bot_status: status,
-      bot_permissions: chatPermissions(member),
+      bot_permissions: resolvedPermissions,
       is_active: isActive,
-      publish_enabled: ["group", "supergroup", "channel"].includes(type),
-      moderation_enabled: ["group", "supergroup"].includes(type),
-      welcome_enabled: ["group", "supergroup"].includes(type),
-      join_requests_enabled: ["group", "supergroup", "channel"].includes(type),
+      publish_enabled: existing?.publish_enabled ?? ["group", "supergroup", "channel"].includes(type),
+      moderation_enabled: existing?.moderation_enabled ?? ["group", "supergroup"].includes(type),
+      welcome_enabled: existing?.welcome_enabled ?? ["group", "supergroup"].includes(type),
+      join_requests_enabled: existing?.join_requests_enabled ?? ["group", "supergroup", "channel"].includes(type),
+      request_invite_link: existing?.request_invite_link || null,
       last_seen_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: "chat_id" })
