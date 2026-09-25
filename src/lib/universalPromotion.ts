@@ -17,6 +17,7 @@ export interface PromotionTier {
   is_enabled: boolean;
   pricing_multiplier: number;
   reach_multiplier: number;
+  spend_pace_multiplier: number;
 }
 
 export interface AdPlacement {
@@ -28,6 +29,7 @@ export interface AdPlacement {
   contextual: boolean;
   premium: boolean;
   surcharge: number;
+  surcharge_percent: number;
   density_organic_interval: number;
   frequency_cap: number;
   frequency_window_hours: number;
@@ -176,8 +178,17 @@ export async function fetchPromotionConfiguration() {
   ]);
 
   return {
-    tiers: ((tiersRes.data || []) as PromotionTier[]).map(t => ({ ...t, pricing_multiplier: money(t.pricing_multiplier), reach_multiplier: money(t.reach_multiplier) })),
-    placements: ((placementsRes.data || []) as AdPlacement[]).map(p => ({ ...p, surcharge: money(p.surcharge) })),
+    tiers: ((tiersRes.data || []) as PromotionTier[]).map(t => ({
+      ...t,
+      pricing_multiplier: money(t.pricing_multiplier),
+      reach_multiplier: money(t.reach_multiplier),
+      spend_pace_multiplier: money(t.spend_pace_multiplier || 1),
+    })),
+    placements: ((placementsRes.data || []) as AdPlacement[]).map(p => ({
+      ...p,
+      surcharge: money(p.surcharge),
+      surcharge_percent: money(p.surcharge_percent || 0),
+    })),
     tierPlacements: linksRes.data || [],
     settings: settingsRes.data || null,
     pricing: pricingRes.data || null,
@@ -185,7 +196,7 @@ export async function fetchPromotionConfiguration() {
 }
 
 export async function fetchPromotableAssets(userId: string): Promise<PromotableAsset[]> {
-  const [productsRes, jobsRes, campaignsRes, profileRes] = await Promise.all([
+  const [productsRes, jobsRes, campaignsRes, communitiesRes, profileRes] = await Promise.all([
     supabase.from('products')
       .select('id,name,category,image_url,price,product_type,approval_status,is_active,is_hidden')
       .eq('uploaded_by', userId)
@@ -202,6 +213,12 @@ export async function fetchPromotableAssets(userId: string): Promise<PromotableA
       .select('id,name,task_type,status,reward_per_completion')
       .eq('creator_id', userId)
       .eq('status', 'active')
+      .order('created_at', { ascending: false }),
+    supabase.from('communities')
+      .select('id,public_id,name,slug,description,avatar_url,banner_url,category,status,visibility')
+      .eq('owner_id', userId)
+      .eq('status', 'active')
+      .neq('visibility', 'hidden')
       .order('created_at', { ascending: false }),
     supabase.from('users')
       .select('id,full_name,username,role,avatar_url,profession,store_title,store_banner_url,store_description,marketer_level,marketer_status,advertiser_grade,advertiser_status,is_verified')
@@ -239,6 +256,19 @@ export async function fetchPromotableAssets(userId: string): Promise<PromotableA
       asset_type: 'campaign', asset_id: row.id, title: row.name,
       subtitle: row.task_type || 'Campaign / task', image_url: null,
       destination: `/creator-campaigns/${row.id}`, status: 'Eligible', public_id: row.id,
+    });
+  }
+
+  for (const row of communitiesRes.data || []) {
+    assets.push({
+      asset_type: 'community',
+      asset_id: row.id,
+      title: row.name,
+      subtitle: row.category || 'Community',
+      image_url: row.banner_url || row.avatar_url || null,
+      destination: `/communities/${row.slug}`,
+      status: 'Eligible',
+      public_id: row.public_id || row.id,
     });
   }
 
@@ -378,6 +408,45 @@ export async function fetchPromotionCampaignAnalytics(campaignId: string, days =
   const { data, error } = await supabase.rpc('get_promotion_analytics', { p_promotion_id: campaignId, p_days: days });
   if (error) return null;
   return data as Record<string, unknown>;
+}
+
+
+export type PromotionExternalChannel =
+  | 'telegram_group' | 'telegram_channel' | 'telegram_private' | 'email';
+
+export interface PromotionExternalAnalytics {
+  campaign_id: string;
+  delivered: number;
+  estimated_reach: number;
+  tracked_clicks: number;
+  channels: Array<{
+    channel: PromotionExternalChannel;
+    deliveries: number;
+    delivered: number;
+    estimated_reach: number;
+    tracked_clicks: number;
+  }>;
+}
+
+export async function fetchPromotionExternalAnalytics(campaignId: string): Promise<PromotionExternalAnalytics> {
+  const { data, error } = await supabase.rpc('get_promotion_external_analytics', { p_campaign_id: campaignId });
+  if (error) throw error;
+  const raw = (data || {}) as Partial<PromotionExternalAnalytics>;
+  return {
+    campaign_id: raw.campaign_id || campaignId,
+    delivered: Number(raw.delivered || 0),
+    estimated_reach: Number(raw.estimated_reach || 0),
+    tracked_clicks: Number(raw.tracked_clicks || 0),
+    channels: Array.isArray(raw.channels)
+      ? raw.channels.map(item => ({
+          ...item,
+          deliveries: Number(item.deliveries || 0),
+          delivered: Number(item.delivered || 0),
+          estimated_reach: Number(item.estimated_reach || 0),
+          tracked_clicks: Number(item.tracked_clicks || 0),
+        }))
+      : [],
+  };
 }
 
 export async function updateCampaignLifecycle(campaignId: string, status: 'paused' | 'active' | 'cancelled') {
