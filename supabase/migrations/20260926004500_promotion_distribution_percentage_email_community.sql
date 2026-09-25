@@ -1170,3 +1170,55 @@ revoke all on function public.admin_update_promotion_tier(text,boolean,numeric,n
 grant execute on function public.admin_update_promotion_tier(text,boolean,numeric,numeric) to authenticated;
 revoke all on function public.admin_update_promotion_distribution_settings(boolean,boolean,boolean) from public,anon;
 grant execute on function public.admin_update_promotion_distribution_settings(boolean,boolean,boolean) to authenticated;
+
+
+-- Harden new promotion distribution objects.
+create index if not exists promotion_tracking_links_campaign_asset_id_idx
+  on public.promotion_tracking_links(campaign_asset_id);
+create index if not exists promotion_tracking_links_user_id_idx
+  on public.promotion_tracking_links(user_id);
+
+drop policy if exists "Users read own promotion email subscription" on public.promotion_email_subscriptions;
+create policy "Users read own promotion email subscription"
+on public.promotion_email_subscriptions for select to authenticated
+using (
+  coalesce(((select auth.jwt())->>'is_anonymous'),'false') <> 'true'
+  and ((select auth.uid())=user_id or (select public.is_admin_user()))
+);
+
+drop policy if exists "Users create own promotion email subscription" on public.promotion_email_subscriptions;
+create policy "Users create own promotion email subscription"
+on public.promotion_email_subscriptions for insert to authenticated
+with check (
+  coalesce(((select auth.jwt())->>'is_anonymous'),'false') <> 'true'
+  and (select auth.uid())=user_id
+);
+
+drop policy if exists "Users update own promotion email subscription" on public.promotion_email_subscriptions;
+create policy "Users update own promotion email subscription"
+on public.promotion_email_subscriptions for update to authenticated
+using (
+  coalesce(((select auth.jwt())->>'is_anonymous'),'false') <> 'true'
+  and (select auth.uid())=user_id
+)
+with check (
+  coalesce(((select auth.jwt())->>'is_anonymous'),'false') <> 'true'
+  and (select auth.uid())=user_id
+);
+
+drop policy if exists "Campaign owners and admins read promotion tracking links" on public.promotion_tracking_links;
+create policy "Campaign owners and admins read promotion tracking links"
+on public.promotion_tracking_links for select to authenticated
+using (
+  coalesce(((select auth.jwt())->>'is_anonymous'),'false') <> 'true'
+  and exists(
+    select 1 from public.promotion_campaigns pc
+    where pc.id=campaign_id
+      and (pc.seller_id=(select auth.uid()) or (select public.is_admin_user()))
+  )
+);
+
+alter function public.get_admin_promotion_distribution_config() security invoker;
+alter function public.admin_update_promotion_placement(text,boolean,numeric,integer) security invoker;
+alter function public.admin_update_promotion_tier(text,boolean,numeric,numeric) security invoker;
+alter function public.admin_update_promotion_distribution_settings(boolean,boolean,boolean) security invoker;
