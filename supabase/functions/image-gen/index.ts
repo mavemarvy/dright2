@@ -34,6 +34,23 @@ function getSupabaseClient(req: Request) {
   );
 }
 
+async function getAIMasterStatus() {
+  const service = createClient(
+    Deno.env.get("SUPABASE_URL") || "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+  );
+  const { data, error } = await service
+    .from("ai_master_settings")
+    .select("enabled,disabled_message")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (error || !data) return { enabled: true, disabledMessage: "AI features are temporarily turned off by DRIGHT." };
+  return {
+    enabled: data.enabled !== false,
+    disabledMessage: String(data.disabled_message || "AI features are temporarily turned off by DRIGHT."),
+  };
+}
+
 function sanitizePrompt(input: string): string {
   return input
     .replace(/<script[^>]*>.*?<\/script>/gis, "")
@@ -396,8 +413,11 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method === "GET") {
+    const master = await getAIMasterStatus();
     return new Response(JSON.stringify({
-      success: !!OPENAI_API_KEY,
+      success: master.enabled && !!OPENAI_API_KEY,
+      masterEnabled: master.enabled,
+      disabledMessage: master.disabledMessage,
       provider: "OpenAI DALL-E 3",
       configured: !!OPENAI_API_KEY,
       visionProviders: {
@@ -423,6 +443,14 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ success: false, error: "Authentication required. Please sign in to use AI features." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const master = await getAIMasterStatus();
+    if (!master.enabled) {
+      return new Response(
+        JSON.stringify({ success: false, error: master.disabledMessage, code: "AI_DISABLED" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
