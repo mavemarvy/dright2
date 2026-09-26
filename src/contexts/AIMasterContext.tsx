@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { BrainCircuit, Power } from 'lucide-react';
+import { BrainCircuit } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type AIMasterState = {
@@ -62,15 +62,7 @@ export function AIMasterGate({
   if (loading) return null;
   if (enabled) return <>{children}</>;
 
-  if (compact) {
-    return (
-      <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-        <span className="inline-flex items-center gap-1.5 font-semibold">
-          <Power className="h-3.5 w-3.5" /> AI is currently off
-        </span>
-      </div>
-    );
-  }
+  if (compact) return null;
 
   return (
     <div className="mx-auto flex min-h-[55vh] max-w-2xl items-center justify-center p-5">
