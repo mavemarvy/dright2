@@ -11,14 +11,16 @@ import { useRecentlyViewed } from '../../lib/marketplaceHooks';
 import { getRecentlyViewedIds } from '../../lib/marketplace';
 import { fetchSponsoredListings, logSponsoredImpression } from '../../lib/promotionEngine';
 import type { MarketplaceProduct } from './ProductCard';
-import { formatCurrency } from '../../lib/currency';
+import { formatCurrency, formatDisplayCurrency } from '../../lib/currency';
+import { useNavigationVisibility } from '../../contexts/NavigationVisibilityContext';
 import { getBuyerFacingPrice } from '../../lib/pricing';
 
 const PRODUCT_SELECT = `
   id, name, description, price, commission_rate, image_url, category,
   uploaded_by, created_at, sales_team_tier, admin_task_percent, sales_team_task_percent,
   is_free, stock_quantity, initial_stock, product_type, demo_video_url, total_reviews,
-  average_rating, total_sales, view_count, is_featured, is_sponsored
+  average_rating, total_sales, view_count, is_featured, is_sponsored,
+  sku, affiliate_commission_percent, specifications
 `;
 
 async function fetchProductsByIds(ids: string[]): Promise<MarketplaceProduct[]> {
@@ -30,7 +32,9 @@ async function fetchProductsByIds(ids: string[]): Promise<MarketplaceProduct[]> 
     .eq('is_active', true)
     .eq('is_hidden', false)
     .eq('approval_status', 'approved');
-  return (data || []) as MarketplaceProduct[];
+  const rows = (data || []) as MarketplaceProduct[];
+  const byId = new Map(rows.map((product) => [product.id, product]));
+  return ids.map((id) => byId.get(id)).filter((product): product is MarketplaceProduct => Boolean(product));
 }
 
 async function enrichWithSellers(products: MarketplaceProduct[]): Promise<MarketplaceProduct[]> {
@@ -55,7 +59,7 @@ async function enrichWithSellers(products: MarketplaceProduct[]): Promise<Market
 
 // ─── Discovery Sections (no ranking labels) ───────────────────────────────────
 
-function useDiscoverySections(showRecentlyViewed: boolean) {
+function useDiscoverySections(showRecentlyViewed: boolean, showDiscoverMore: boolean) {
   const [sections, setSections] = useState<{ id: string; products: MarketplaceProduct[] }[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -76,7 +80,7 @@ function useDiscoverySections(showRecentlyViewed: boolean) {
       ]);
 
       if (topRated.length > 0) results.push({ id: 'top_rated', products: topRated });
-      if (bestSellers.length > 0) results.push({ id: 'best_sellers', products: bestSellers });
+      if (showDiscoverMore && bestSellers.length > 0) results.push({ id: 'best_sellers', products: bestSellers });
 
       if (showRecentlyViewed) {
         const viewedIds = recentlyViewed.length > 0 ? recentlyViewed : getRecentlyViewedIds();
@@ -89,7 +93,7 @@ function useDiscoverySections(showRecentlyViewed: boolean) {
       setSections(results);
       setLoading(false);
     })();
-  }, [user?.id, recentlyViewed, showRecentlyViewed]);
+  }, [user?.id, recentlyViewed, showRecentlyViewed, showDiscoverMore]);
 
   return { sections, loading };
 }
@@ -200,6 +204,25 @@ function SponsoredTileTracker({
 
 // ─── Product Row (horizontal scroll, no ranking labels) ──────────────────────
 
+function discoveryPriceText(product: MarketplaceProduct): string {
+  if (product.is_free) return 'FREE';
+  const specs = product.specifications && typeof product.specifications === 'object'
+    ? product.specifications
+    : {};
+  const isStarter = product.sku === 'DRIGHT-STARTER-ACCESS'
+    || specs.system_product_kind === 'dright_starter_access';
+  const buyerPrice = getBuyerFacingPrice(product);
+
+  if (isStarter) {
+    const sourceCurrency = String(
+      specs.price_currency || specs.source_currency || specs.display_currency || 'NGN',
+    ).toUpperCase();
+    return formatDisplayCurrency(buyerPrice, sourceCurrency);
+  }
+
+  return formatCurrency(buyerPrice);
+}
+
 function ProductRow({
   products,
   label,
@@ -247,7 +270,7 @@ function ProductRow({
                   <p className="text-xs text-gray-400 mt-0.5">{product.category}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-gray-900">
-                      {product.is_free ? 'FREE' : formatCurrency(getBuyerFacingPrice(product))}
+                      {discoveryPriceText(product)}
                     </span>
                     {(product.average_rating ?? 0) > 0 && (
                       <div className="flex items-center gap-0.5">
@@ -301,8 +324,10 @@ export default function DiscoverySections({
   showRecommended?: boolean;
   showRecentlyViewed?: boolean;
 }) {
-  const { user } = useAuth();
-  const { sections: staticSections, loading: staticLoading } = useDiscoverySections(showRecentlyViewed);
+  const { user, profile } = useAuth();
+  const { isVisible } = useNavigationVisibility();
+  const showDiscoverMore = isVisible('marketplace_discover_more', Boolean(profile?.is_admin));
+  const { sections: staticSections, loading: staticLoading } = useDiscoverySections(showRecentlyViewed, showDiscoverMore);
   const { sections: personalizedSections, loading: personalizedLoading } = usePersonalizedFeed(user?.id);
   const { products: sponsoredProducts, campaignByProduct } = useSponsoredMarketplaceProducts(user?.id);
 

@@ -39,9 +39,10 @@ import UserVerificationSection from '../components/UserVerificationSection';
 import OnboardingCenter from '../components/OnboardingCenter';
 import PayoutMethodManager from '../components/PayoutMethodManager';
 
-type Tab = 'profile' | 'account' | 'payment' | 'payouts' | 'privacy' | 'notifications' | 'verification';
+type Tab = 'setup' | 'profile' | 'account' | 'payment' | 'payouts' | 'privacy' | 'notifications' | 'verification';
 
 const TABS: { key: Tab; label: string; icon: typeof User }[] = [
+  { key: 'setup', label: 'Account Setup', icon: CheckCircle },
   { key: 'profile', label: 'Profile', icon: User },
   { key: 'account', label: 'Account', icon: Lock },
   { key: 'payment', label: 'Payment PIN', icon: KeyRound },
@@ -109,6 +110,7 @@ export default function SettingsPage() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
+          {tab === 'setup' && <AccountSetupTab />}
           {tab === 'profile' && <ProfileTab />}
           {tab === 'account' && <AccountTab />}
           {tab === 'payment' && <PaymentPinTab />}
@@ -118,6 +120,25 @@ export default function SettingsPage() {
           {tab === 'notifications' && <NotificationsTab />}
         </motion.div>
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Account Setup Tab ────────────────────────────────────────────────────────
+
+function AccountSetupTab() {
+  return (
+    <div className="space-y-6">
+      <OnboardingCenter />
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-5 shadow-sm">
+        <div className="mb-4">
+          <h3 className="font-bold text-gray-900 dark:text-gray-100">KYC & identity verification</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Complete the verification level required for the DRIGHT activities you use. Anything skipped earlier remains available here.
+          </p>
+        </div>
+        <UserVerificationSection />
+      </div>
     </div>
   );
 }
@@ -317,7 +338,6 @@ function ProfileTab() {
         </div>
       </div>
 
-      <OnboardingCenter />
     </div>
   );
 }

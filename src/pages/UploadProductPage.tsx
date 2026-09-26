@@ -601,7 +601,7 @@ export default function UploadProductPage() {
     }
     if (currentVerification.required && !currentVerification.eligible) {
       const reason = currentVerification.reasons?.find((item) => item.message)?.message;
-      setError(reason || currentVerification.message || 'Complete the required KYC and listing documents before submitting this item.');
+      setError(reason || currentVerification.message || 'You cannot upload this kind of product yet. Complete the required KYC and ownership verification in Account Setup before submitting it.');
       return;
     }
 
@@ -1021,9 +1021,15 @@ export default function UploadProductPage() {
                     <div className="flex items-start gap-3">
                       <ShieldAlert className={`w-5 h-5 shrink-0 mt-0.5 ${listingVerification.eligible ? 'text-green-600' : 'text-amber-600'}`} />
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-gray-900 dark:text-gray-100">{listingVerification.name || 'Listing verification required'}</p>
+                        <p className="font-bold text-gray-900 dark:text-gray-100">
+                          {listingVerification.eligible
+                            ? (listingVerification.name || 'Listing verification complete')
+                            : 'You can’t upload this kind of product yet'}
+                        </p>
                         <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                          {listingVerification.message || 'This category needs additional verification before it can be submitted.'}
+                          {listingVerification.eligible
+                            ? (listingVerification.message || 'The required verification for this category is satisfied.')
+                            : (listingVerification.message || 'High-risk ownership categories require KYC and supporting ownership documents before submission to reduce fraud and scams.')}
                         </p>
                       </div>
                       <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${listingVerification.eligible
@@ -1041,7 +1047,7 @@ export default function UploadProductPage() {
                           <p className="text-xs text-gray-500 dark:text-gray-400">{prettyVerificationStatus(listingVerification.kyc_status)}</p>
                         </div>
                         {listingVerification.kyc_status !== 'approved' && (
-                          <Link to="/settings?tab=verification" className="text-xs font-bold text-primary-600 dark:text-primary-400">Complete KYC</Link>
+                          <Link to="/settings?tab=setup" className="text-xs font-bold text-primary-600 dark:text-primary-400">Verify / upgrade KYC</Link>
                         )}
                       </div>
                     )}
