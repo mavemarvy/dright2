@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { supabase } from './supabase';
+import { assertAIEnabled } from './aiMaster';
 
 const EDGE_FUNCTION = 'ai-proxy';
 
@@ -80,6 +81,8 @@ async function callAIProxy(params: {
   locale?: string;
   useCache?: boolean;
 }): Promise<AIGroqResult> {
+  try { await assertAIEnabled(); } catch (error) { return { success: false, content: '', tokens: 0, model: '', provider: 'none', latencyMs: 0, error: error instanceof Error ? error.message : 'AI is disabled' }; }
+
   const cacheKey = params.useCache
     ? `${params.feature}:${params.prompt}:${params.context || ''}`
     : '';
