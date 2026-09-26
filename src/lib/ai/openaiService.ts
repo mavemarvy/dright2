@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { assertAIEnabled } from '../aiMaster';
 
 export type OpenAIImageSize = '1024x1024' | '1792x1024' | '1024x1792';
 export type OpenAIImageQuality = 'standard' | 'hd';
@@ -42,6 +43,9 @@ export interface OpenAIChatResult {
 }
 
 async function callOpenAI(action: string, payload: Record<string, unknown>) {
+  try { await assertAIEnabled(); } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'AI is disabled' } as const;
+  }
   const { data, error } = await supabase.functions.invoke('openai-proxy', {
     body: { action, ...payload },
   });

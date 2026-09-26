@@ -545,12 +545,45 @@ export default function AdminDrightStarterProductSettings() {
                   onChange={(e) => setChallenge({ ...challenge, target_sales: Math.max(1, Number(e.target.value || 1)) })}
                   className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
                 />
+                <p className="mt-1 text-[11px] text-gray-500">The user progress board automatically changes when this target changes.</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unlock level name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Starting affiliate level name</label>
+                <input
+                  value={challenge.base_level_label}
+                  onChange={(e) => setChallenge({ ...challenge, base_level_label: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
+                  placeholder="Affiliate Level 0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Starting level number</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1000"
+                  value={challenge.base_level_number}
+                  onChange={(e) => setChallenge({ ...challenge, base_level_number: Math.max(0, Number(e.target.value || 0)) })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Completed level name</label>
                 <input
                   value={challenge.unlock_label}
                   onChange={(e) => setChallenge({ ...challenge, unlock_label: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
+                  placeholder="Level 1 Pro Affiliate"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Completed level number</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1000"
+                  value={challenge.unlock_level_number}
+                  onChange={(e) => setChallenge({ ...challenge, unlock_level_number: Math.max(0, Number(e.target.value || 0)) })}
                   className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
                 />
               </div>

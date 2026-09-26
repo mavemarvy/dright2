@@ -20,6 +20,19 @@ function clients(req: Request) {
   };
 }
 
+async function aiMaster(admin: ReturnType<typeof createClient>) {
+  const { data, error } = await admin
+    .from("ai_master_settings")
+    .select("enabled,disabled_message")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (error || !data) return { enabled: true, disabledMessage: "AI features are temporarily turned off by DRIGHT." };
+  return {
+    enabled: data.enabled !== false,
+    disabledMessage: String(data.disabled_message || "AI features are temporarily turned off by DRIGHT."),
+  };
+}
+
 async function isAdmin(userClient: ReturnType<typeof createClient>, uid: string) {
   const { data } = await userClient.from("users").select("is_admin,admin_status").eq("id", uid).maybeSingle();
   return Boolean(data?.is_admin && data?.admin_status === "active");
@@ -134,6 +147,11 @@ Deno.serve(async (req) => {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = String(body.action || (req.method === "GET" ? "status" : "semantic-search"));
     const adminUser = await isAdmin(user, uid);
+    const master = await aiMaster(admin);
+
+    if (!master.enabled && action !== "status") {
+      return json({ success:false, semanticEnabled:false, error:master.disabledMessage, code:"AI_DISABLED" }, 503);
+    }
 
     if (action === "status") {
       if (!adminUser) return json({ success:false,error:"Admin access required" }, 403);

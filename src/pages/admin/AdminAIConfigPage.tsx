@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Brain, Zap, CheckCircle,
   Loader2, Star, Clock, Thermometer,
-  Gauge, Shield, Activity, TrendingUp, DollarSign, Hash,
+  Gauge, Shield, Activity, TrendingUp, DollarSign, Hash, Power, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
@@ -25,16 +25,25 @@ export default function AdminAIConfigPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency: number; error?: string }>>({});
+  const [masterEnabled, setMasterEnabled] = useState(true);
+  const [masterMessage, setMasterMessage] = useState('AI features are temporarily turned off by DRIGHT.');
+  const [masterSaving, setMasterSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [providerData, limitData] = await Promise.all([
+      const [providerData, limitData, masterData] = await Promise.all([
         supabase.from('ai_provider_config').select('*').order('fallback_priority', { ascending: true }),
         supabase.from('ai_rate_limits').select('*').order('tier', { ascending: true }),
+        supabase.rpc('get_ai_master_status'),
       ]);
       setProviders((providerData.data as ProviderRow[]) || []);
       setRateLimits((limitData.data as RateLimitRow[]) || []);
+      if (masterData.data && typeof masterData.data === 'object') {
+        const row = masterData.data as Record<string, unknown>;
+        setMasterEnabled(row.enabled !== false);
+        setMasterMessage(String(row.disabled_message || 'AI features are temporarily turned off by DRIGHT.'));
+      }
     } catch (err) {
       console.error('Failed to load AI config:', err);
     } finally {
@@ -43,6 +52,26 @@ export default function AdminAIConfigPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleMasterToggle = async () => {
+    if (masterSaving) return;
+    setMasterSaving(true);
+    try {
+      const next = !masterEnabled;
+      const { data, error } = await supabase.rpc('admin_set_ai_master_enabled', {
+        p_enabled: next,
+        p_disabled_message: masterMessage,
+      });
+      if (error) throw error;
+      const row = (data || {}) as Record<string, unknown>;
+      setMasterEnabled(row.enabled !== false);
+      if (row.disabled_message) setMasterMessage(String(row.disabled_message));
+    } catch (error) {
+      console.error('Unable to update AI master switch', error);
+    } finally {
+      setMasterSaving(false);
+    }
+  };
 
   const handleToggleProvider = async (provider: string, enabled: boolean) => {
     setSaving(provider);
@@ -84,6 +113,58 @@ export default function AdminAIConfigPage() {
           <h1 className="text-xl font-bold text-gray-900">AI Configuration Center</h1>
           <p className="text-sm text-gray-500">Manage AI providers, models, rate limits, and health</p>
         </div>
+      </div>
+
+      <div className={`mb-6 rounded-2xl border p-5 ${masterEnabled ? 'border-emerald-200 bg-emerald-50/60' : 'border-red-200 bg-red-50'}`}>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${masterEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+              <Power className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-black text-gray-950">DRIGHT AI master switch</h2>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${masterEnabled ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+                  {masterEnabled ? 'All AI enabled' : 'All AI disabled'}
+                </span>
+              </div>
+              <p className="mt-1 max-w-3xl text-sm text-gray-600">
+                This overrides every DRIGHT AI surface for both users and administrators: AI chat, AI analysis, AI images, AI moderation, AI recommendations, AI seller insights and provider-backed AI requests. Provider configuration is preserved while the switch is off.
+              </p>
+              {!masterEnabled && (
+                <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-red-700">
+                  <AlertTriangle className="h-3.5 w-3.5" /> AI requests are blocked until this switch is turned back on.
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={masterEnabled}
+            disabled={masterSaving}
+            onClick={() => void handleMasterToggle()}
+            className={`relative inline-flex h-9 w-16 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${masterEnabled ? 'bg-emerald-600' : 'bg-gray-400'}`}
+          >
+            {masterSaving ? (
+              <Loader2 className="mx-auto h-4 w-4 animate-spin text-white" />
+            ) : (
+              <span className={`inline-block h-7 w-7 rounded-full bg-white shadow transition-transform ${masterEnabled ? 'translate-x-8' : 'translate-x-1'}`} />
+            )}
+          </button>
+        </div>
+
+        <label className="mt-4 block text-xs font-bold text-gray-600">
+          Message shown while AI is off
+          <input
+            value={masterMessage}
+            onChange={event => setMasterMessage(event.target.value)}
+            onBlur={() => {
+              if (!masterEnabled) void supabase.rpc('admin_set_ai_master_enabled', { p_enabled: false, p_disabled_message: masterMessage });
+            }}
+            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900"
+          />
+        </label>
       </div>
 
       <div className="mb-6">
@@ -136,7 +217,7 @@ export default function AdminAIConfigPage() {
                   {testResults[p.provider] && <span className={`text-xs ${testResults[p.provider].ok ? 'text-green-600' : 'text-red-500'}`}>{testResults[p.provider].ok ? `${testResults[p.provider].latency}ms` : 'Failed'}</span>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleTestProvider(p.provider, p.default_model)} disabled={!p.enabled || testing === p.provider} className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1 disabled:opacity-50">
+                  <button onClick={() => handleTestProvider(p.provider, p.default_model)} disabled={!masterEnabled || !p.enabled || testing === p.provider} className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1 disabled:opacity-50">
                     {testing === p.provider ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />} Test
                   </button>
                   {!p.is_default && p.enabled && <button onClick={() => handleSetDefault(p.provider)} disabled={saving === p.provider} className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1"><Star className="w-3 h-3" /> Set Default</button>}

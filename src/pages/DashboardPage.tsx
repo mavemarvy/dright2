@@ -26,11 +26,13 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { AIMasterGate } from '../contexts/AIMasterContext';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../lib/currency';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import { DiscoveryPromoGallery } from '../components/promotion/PromotionSurfaces';
 import DrightStarterProductCard from '../components/DrightStarterProductCard';
+import StarterAffiliateProgressBoard from '../components/StarterAffiliateProgressBoard';
 
 interface Announcement {
   id: string;
@@ -235,6 +237,8 @@ export default function DashboardPage() {
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <div className="mb-6"><h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Welcome back, {profile?.full_name?.split(' ')[0] || 'Promoter'}!</h1><p className="text-gray-500 dark:text-gray-400 mt-1">Here's your earnings overview</p></div>
 
+      <StarterAffiliateProgressBoard className="mb-6" />
+
       <DrightStarterProductCard className="mb-6" />
 
       <div className="mb-6"><DiscoveryPromoGallery placement="login_gallery" /></div>
@@ -323,8 +327,10 @@ export default function DashboardPage() {
       <div className="mt-6"><AnalyticsAlerts /></div>
       <div className="mt-6"><h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">Product Performance</h2><ProductPerformanceTable /></div>
       <div className="mt-6"><FunnelAnalyticsSection /></div>
-      <div className="mt-8"><AIBusinessAdvisor sellerId={user?.id} /></div>
-      <div className="mt-8"><PredictionEngineDashboard sellerId={user?.id} /></div>
+      <AIMasterGate compact>
+        <div className="mt-8"><AIBusinessAdvisor sellerId={user?.id} /></div>
+        <div className="mt-8"><PredictionEngineDashboard sellerId={user?.id} /></div>
+      </AIMasterGate>
       <div className="mt-8"><TrendingEngineDashboard /></div>
       <div className="mt-8"><FinancialDashboard sellerId={user?.id} /></div>
       <div className="mt-8"><CustomerJourneyDashboard sellerId={user?.id} /></div>

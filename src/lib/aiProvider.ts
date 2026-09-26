@@ -10,6 +10,7 @@ import { formatDisplayCurrency } from './currency';
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { supabase } from './supabase';
+import { assertAIEnabled } from './aiMaster';
 
 export type AIProvider = 'groq' | 'openai' | 'gemini' | 'claude' | 'grok' | 'local' | 'mock';
 
@@ -75,6 +76,7 @@ export async function callAI(
   messages: AIMessage[],
   config: AIProviderConfig = { provider: 'groq' },
 ): Promise<AIResponse> {
+  await assertAIEnabled();
   const startTime = Date.now();
   const handler = config.provider === 'groq' ? groqProvider : mockProvider;
 
