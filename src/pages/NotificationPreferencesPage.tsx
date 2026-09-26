@@ -61,26 +61,19 @@ export default function NotificationPreferencesPage() {
 
   useEffect(() => {
     if (!user?.id) return;
-    void supabase.from('promotion_email_subscriptions')
-      .select('subscribed')
-      .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => setPromotionEmailSubscribed(Boolean(data?.subscribed)));
+    void supabase.rpc('get_promotion_email_subscription')
+      .then(({ data, error }) => {
+        if (!error) setPromotionEmailSubscribed(Boolean(data?.subscribed));
+      });
   }, [user?.id]);
 
   const setPromotionEmailConsent = async (next: boolean) => {
     if (!user?.id || promotionEmailSaving) return;
     setPromotionEmailSaving(true);
-    const now = new Date().toISOString();
-    const { error } = await supabase.from('promotion_email_subscriptions').upsert({
-      user_id: user.id,
-      subscribed: next,
-      consent_source: 'notification_preferences',
-      consented_at: next ? now : null,
-      revoked_at: next ? null : now,
-      updated_at: now,
-    }, { onConflict: 'user_id' });
-    if (!error) setPromotionEmailSubscribed(next);
+    const { data, error } = await supabase.rpc('set_promotion_email_subscription', {
+      p_subscribed: next,
+    });
+    if (!error) setPromotionEmailSubscribed(Boolean(data?.subscribed));
     setPromotionEmailSaving(false);
   };
 
