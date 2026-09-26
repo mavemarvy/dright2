@@ -576,6 +576,10 @@ export interface CampaignAnalyticsSummary {
   avg_cpc: number;
   avg_cpa: number;
   total_revenue: number;
+  telegram_deliveries: number;
+  telegram_clicks: number;
+  email_deliveries: number;
+  email_clicks: number;
 }
 
 export async function fetchSellerAnalytics(sellerId: string): Promise<CampaignAnalyticsSummary> {
@@ -587,6 +591,7 @@ export async function fetchSellerAnalytics(sellerId: string): Promise<CampaignAn
     if (error) throw error;
 
     const campaigns = data || [];
+    const { data: external } = await supabase.rpc('get_promotion_external_summary', { p_seller_id: sellerId });
     const totalSpend = campaigns.reduce((sum, c) => sum + Number(c.actual_spend), 0);
     const totalImpressions = campaigns.reduce((sum, c) => sum + (c.actual_impressions || 0), 0);
     const totalClicks = campaigns.reduce((sum, c) => sum + (c.actual_clicks || 0), 0);
@@ -604,12 +609,17 @@ export async function fetchSellerAnalytics(sellerId: string): Promise<CampaignAn
       avg_cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
       avg_cpa: totalConversions > 0 ? totalSpend / totalConversions : 0,
       total_revenue: 0, // Would need sales data join
+      telegram_deliveries: Number(external?.telegram_deliveries || 0),
+      telegram_clicks: Number(external?.telegram_clicks || 0),
+      email_deliveries: Number(external?.email_deliveries || 0),
+      email_clicks: Number(external?.email_clicks || 0),
     };
   } catch {
     return {
       total_campaigns: 0, active_campaigns: 0, total_spend: 0,
       total_impressions: 0, total_clicks: 0, total_conversions: 0,
       avg_ctr: 0, avg_cpc: 0, avg_cpa: 0, total_revenue: 0,
+      telegram_deliveries: 0, telegram_clicks: 0, email_deliveries: 0, email_clicks: 0,
     };
   }
 }
@@ -618,12 +628,13 @@ export async function fetchAdminAnalytics(): Promise<CampaignAnalyticsSummary & 
   try {
     const { data, error } = await supabase
       .from('promotion_campaigns')
-      .select('status, budget, actual_spend, actual_impressions, actual_clicks, actual_conversions, payment_status');
+      .select('status, budget, total_payable, actual_spend, actual_impressions, actual_clicks, actual_conversions, payment_status');
     if (error) throw error;
 
     const campaigns = data || [];
+    const { data: external } = await supabase.rpc('get_promotion_external_summary', { p_seller_id: null });
     const paidCampaigns = campaigns.filter(c => c.payment_status === 'paid');
-    const totalRevenue = paidCampaigns.reduce((sum, c) => sum + Number(c.budget), 0);
+    const totalRevenue = paidCampaigns.reduce((sum, c) => sum + Number(c.total_payable || c.budget), 0);
     const totalSpend = campaigns.reduce((sum, c) => sum + Number(c.actual_spend), 0);
     const totalImpressions = campaigns.reduce((sum, c) => sum + (c.actual_impressions || 0), 0);
     const totalClicks = campaigns.reduce((sum, c) => sum + (c.actual_clicks || 0), 0);
@@ -641,12 +652,17 @@ export async function fetchAdminAnalytics(): Promise<CampaignAnalyticsSummary & 
       avg_cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
       avg_cpa: totalConversions > 0 ? totalSpend / totalConversions : 0,
       total_revenue: totalRevenue,
+      telegram_deliveries: Number(external?.telegram_deliveries || 0),
+      telegram_clicks: Number(external?.telegram_clicks || 0),
+      email_deliveries: Number(external?.email_deliveries || 0),
+      email_clicks: Number(external?.email_clicks || 0),
     };
   } catch {
     return {
       total_campaigns: 0, active_campaigns: 0, total_spend: 0,
       total_impressions: 0, total_clicks: 0, total_conversions: 0,
       avg_ctr: 0, avg_cpc: 0, avg_cpa: 0, total_revenue: 0,
+      telegram_deliveries: 0, telegram_clicks: 0, email_deliveries: 0, email_clicks: 0,
     };
   }
 }
