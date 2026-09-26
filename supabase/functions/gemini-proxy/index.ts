@@ -25,6 +25,19 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
+async function getAIMasterStatus() {
+  const { data, error } = await supabase
+    .from("ai_master_settings")
+    .select("enabled,disabled_message")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (error || !data) return { enabled: true, disabledMessage: "AI features are temporarily turned off by DRIGHT." };
+  return {
+    enabled: data.enabled !== false,
+    disabledMessage: String(data.disabled_message || "AI features are temporarily turned off by DRIGHT."),
+  };
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface AIMessage {
@@ -200,9 +213,12 @@ Deno.serve(async (req: Request) => {
 
   // Health check
   if (req.method === "GET") {
+    const master = await getAIMasterStatus();
     return new Response(
       JSON.stringify({
-        success: !!GEMINI_API_KEY,
+        success: master.enabled && !!GEMINI_API_KEY,
+        masterEnabled: master.enabled,
+        disabledMessage: master.disabledMessage,
         provider: "Google Gemini",
         configured: !!GEMINI_API_KEY,
         model: GEMINI_MODEL,
@@ -215,6 +231,13 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ success: false, error: "Method not allowed" }), {
       status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const master = await getAIMasterStatus();
+  if (!master.enabled) {
+    return new Response(JSON.stringify({ success: false, error: master.disabledMessage, code: "AI_DISABLED" }), {
+      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
