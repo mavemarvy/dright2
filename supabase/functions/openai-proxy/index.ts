@@ -26,6 +26,23 @@ function getSupabaseClient(req: Request) {
   );
 }
 
+async function getAIMasterStatus() {
+  const service = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  const { data, error } = await service
+    .from("ai_master_settings")
+    .select("enabled,disabled_message")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (error || !data) return { enabled: true, disabledMessage: "AI features are temporarily turned off by DRIGHT." };
+  return {
+    enabled: data.enabled !== false,
+    disabledMessage: String(data.disabled_message || "AI features are temporarily turned off by DRIGHT."),
+  };
+}
+
 function sanitizePrompt(prompt: string): string {
   return prompt.slice(0, 4000).replace(/[\x00-\x1F\x7F]/g, "");
 }
@@ -376,8 +393,11 @@ Deno.serve(async (req: Request) => {
 
   if (req.method === "GET") {
     const configured = !!Deno.env.get("OPENAI_API_KEY");
+    const master = await getAIMasterStatus();
     return new Response(JSON.stringify({
-      success: configured, provider: "OpenAI", configured,
+      success: master.enabled && configured, provider: "OpenAI", configured,
+      masterEnabled: master.enabled,
+      disabledMessage: master.disabledMessage,
       model: `${OPENAI_CHAT_MODEL} / ${OPENAI_IMAGE_MODEL} / ${OPENAI_TRANSCRIBE_MODEL}`,
       ...(!configured && { error: "Missing OPENAI_API_KEY" }),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -398,6 +418,14 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ success: false, error: "Authentication required. Please sign in to use AI features." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const master = await getAIMasterStatus();
+    if (!master.enabled) {
+      return new Response(
+        JSON.stringify({ success: false, error: master.disabledMessage, code: "AI_DISABLED" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

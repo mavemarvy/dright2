@@ -356,7 +356,10 @@ export interface DrightStarterAffiliateChallengeSettings {
   singleton?: boolean;
   enabled: boolean;
   target_sales: number;
+  base_level_label: string;
+  base_level_number: number;
   unlock_label: string;
+  unlock_level_number: number;
   description_template: string;
   restrict_marketplace_until_complete: boolean;
   allow_own_listings_while_restricted: boolean;
@@ -373,7 +376,14 @@ export interface DrightStarterAffiliateProgress {
   target_sales: number;
   remaining_sales: number;
   completed: boolean;
+  progress_percent: number;
+  base_level_label: string;
+  base_level_number: number;
   unlock_label: string;
+  unlock_level_number: number;
+  current_level_label: string;
+  current_level_number: number;
+  next_level_label: string | null;
   description_template: string;
   restrict_marketplace_until_complete: boolean;
   allow_own_listings_while_restricted: boolean;
@@ -401,7 +411,10 @@ export async function getDrightStarterAffiliateChallenge(): Promise<DrightStarte
   return {
     enabled: row.enabled === true,
     target_sales: Number(row.target_sales ?? 20),
+    base_level_label: String(row.base_level_label || 'Affiliate Level 0'),
+    base_level_number: Number(row.base_level_number ?? 0),
     unlock_label: String(row.unlock_label || 'Level 1 Pro Affiliate'),
+    unlock_level_number: Number(row.unlock_level_number ?? 1),
     description_template: String(row.description_template || ''),
     restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
     allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
@@ -421,7 +434,14 @@ export async function getMyDrightStarterAffiliateProgress(): Promise<DrightStart
     target_sales: Number(row.target_sales ?? 20),
     remaining_sales: Number(row.remaining_sales ?? 0),
     completed: row.completed === true,
+    progress_percent: Number(row.progress_percent ?? 0),
+    base_level_label: String(row.base_level_label || 'Affiliate Level 0'),
+    base_level_number: Number(row.base_level_number ?? 0),
     unlock_label: String(row.unlock_label || 'Level 1 Pro Affiliate'),
+    unlock_level_number: Number(row.unlock_level_number ?? 1),
+    current_level_label: String(row.current_level_label || (row.completed ? row.unlock_label : row.base_level_label) || 'Affiliate Level 0'),
+    current_level_number: Number(row.current_level_number ?? (row.completed ? 1 : 0)),
+    next_level_label: row.next_level_label == null ? null : String(row.next_level_label),
     description_template: String(row.description_template || ''),
     restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
     allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
@@ -439,7 +459,10 @@ export async function getAdminDrightStarterAffiliateChallenge(): Promise<DrightS
     singleton: true,
     enabled: row.enabled === true,
     target_sales: Number(row.target_sales ?? 20),
+    base_level_label: String(row.base_level_label || 'Affiliate Level 0'),
+    base_level_number: Number(row.base_level_number ?? 0),
     unlock_label: String(row.unlock_label || 'Level 1 Pro Affiliate'),
+    unlock_level_number: Number(row.unlock_level_number ?? 1),
     description_template: String(row.description_template || ''),
     restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
     allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
@@ -456,7 +479,10 @@ export async function updateAdminDrightStarterAffiliateChallenge(
     p_settings: {
       enabled: settings.enabled,
       target_sales: Number(settings.target_sales || 1),
+      base_level_label: settings.base_level_label,
+      base_level_number: Number(settings.base_level_number || 0),
       unlock_label: settings.unlock_label,
+      unlock_level_number: Number(settings.unlock_level_number || 1),
       description_template: settings.description_template,
       restrict_marketplace_until_complete: settings.restrict_marketplace_until_complete,
       allow_own_listings_while_restricted: settings.allow_own_listings_while_restricted,
