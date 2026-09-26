@@ -18,6 +18,7 @@ type Tier = {
   is_enabled: boolean;
   pricing_multiplier: number;
   reach_multiplier: number;
+  spend_pace_multiplier: number;
   tier_rank: number;
 };
 
@@ -78,12 +79,19 @@ export default function AdminPromotionDistributionPage() {
   const saveTier = async (tier: Tier) => {
     setWorking(`tier:${tier.code}`);
     setError(null); setMessage(null);
-    const { error: rpcError } = await supabase.rpc('admin_update_promotion_tier', {
-      p_code: tier.code,
-      p_is_enabled: tier.is_enabled,
-      p_pricing_multiplier: num(tier.pricing_multiplier),
-      p_reach_multiplier: num(tier.reach_multiplier),
-    });
+    const [{ error: tierError }, { error: paceError }] = await Promise.all([
+      supabase.rpc('admin_update_promotion_tier', {
+        p_code: tier.code,
+        p_is_enabled: tier.is_enabled,
+        p_pricing_multiplier: num(tier.pricing_multiplier),
+        p_reach_multiplier: num(tier.reach_multiplier),
+      }),
+      supabase.rpc('admin_update_promotion_tier_pacing', {
+        p_code: tier.code,
+        p_spend_pace_multiplier: num(tier.spend_pace_multiplier),
+      }),
+    ]);
+    const rpcError = tierError || paceError;
     if (rpcError) setError(rpcError.message);
     else { setMessage(`${tier.name} saved.`); await load(); }
     setWorking(null);
@@ -156,7 +164,7 @@ export default function AdminPromotionDistributionPage() {
 
       <section className="mb-6 rounded-3xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
         <h2 className="font-black text-gray-950 dark:text-white">Tier delivery multipliers</h2>
-        <p className="mt-1 text-xs leading-5 text-gray-500">Default delivery priority is Normal 1×, Premium 5× and Platinum 25×. Higher tiers are selected more aggressively and can spend the same budget faster through greater delivery opportunity.</p>
+        <p className="mt-1 text-xs leading-5 text-gray-500">Defaults: Normal 1×, Premium 5× and Platinum 25× for both delivery strength and spend pace. The selected media budget stays fixed; higher pace lets that budget be consumed faster.</p>
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
           {config.tiers.map(tier => <div key={tier.code} className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
             <div className="flex items-center justify-between gap-3">
@@ -165,6 +173,9 @@ export default function AdminPromotionDistributionPage() {
             </div>
             <label className="mt-4 block text-xs font-bold text-gray-500">Delivery / reach multiplier
               <input type="number" min="0.01" step="0.25" value={tier.reach_multiplier} onChange={event => patchTier(tier.code, { reach_multiplier: Number(event.target.value) })} className="mt-1 w-full rounded-xl border border-gray-200 bg-transparent px-3 py-2.5 text-sm dark:border-gray-700" />
+            </label>
+            <label className="mt-3 block text-xs font-bold text-gray-500">Spend pace multiplier
+              <input type="number" min="0.01" step="0.25" value={tier.spend_pace_multiplier} onChange={event => patchTier(tier.code, { spend_pace_multiplier: Number(event.target.value) })} className="mt-1 w-full rounded-xl border border-gray-200 bg-transparent px-3 py-2.5 text-sm dark:border-gray-700" />
             </label>
             <label className="mt-3 block text-xs font-bold text-gray-500">CPM pricing multiplier
               <input type="number" min="0.01" step="0.05" value={tier.pricing_multiplier} onChange={event => patchTier(tier.code, { pricing_multiplier: Number(event.target.value) })} className="mt-1 w-full rounded-xl border border-gray-200 bg-transparent px-3 py-2.5 text-sm dark:border-gray-700" />
@@ -178,7 +189,7 @@ export default function AdminPromotionDistributionPage() {
 
       <section className="rounded-3xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
         <h2 className="font-black text-gray-950 dark:text-white">Placement pricing</h2>
-        <p className="mt-1 text-xs leading-5 text-gray-500">Each selected placement adds its percentage to the media budget. Example: $5 media budget + ten 1% placements = $0.50 placement fees before any configured platform fee/tax.</p>
+        <p className="mt-1 text-xs leading-5 text-gray-500">Each selected placement adds its percentage to the media budget. Example: a 5.00 media budget with ten 1% placements adds 0.50 in placement fees before any configured platform fee or tax.</p>
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {config.placements.map(placement => <div key={placement.code} className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
             <div className="flex items-start justify-between gap-3">
