@@ -5,7 +5,7 @@ import {
   Heart, Share2, Eye, Star, Download,
   Zap, Package, Copy, Check, MessageSquare, ShoppingBag,
   BadgeCheck, Clock, Briefcase, Images,
-  Sparkles, Trophy,
+  Sparkles, Trophy, LockKeyhole,
 } from 'lucide-react';
 import { getProductBadges, type ProductBadge } from '../../lib/marketplace';
 import { ProfileLink } from '../Social';
@@ -63,6 +63,8 @@ interface ProductCardProps {
   onCopyAffiliate: (product: MarketplaceProduct) => void;
   copiedId?: string | null;
   affiliateCode?: string | null;
+  affiliateEligible?: boolean;
+  affiliateLockLabel?: string | null;
   variant?: 'default' | 'compact';
   cardSize?: MarketplaceCardSize;
 }
@@ -101,7 +103,8 @@ function StockBadge({ stock }: { stock: number | null | undefined }) {
 
 export default function ProductCard({
   product, index, inWishlist, onToggleWishlist, onQuickView, onShare,
-  onCopyAffiliate, copiedId, affiliateCode, variant = 'default', cardSize = 'medium',
+  onCopyAffiliate, copiedId, affiliateCode, affiliateEligible = true, affiliateLockLabel = null,
+  variant = 'default', cardSize = 'medium',
 }: ProductCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const isJob = isJobCategory(product.category, product.product_type);
@@ -387,17 +390,29 @@ export default function ProductCard({
             <Share2 className="w-4 h-4" />
           </button>
           {affiliateCode && (
-            <button
-              onClick={() => onCopyAffiliate(product)}
-              className={`p-2.5 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
-                copiedId === product.id
-                  ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                  : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300'
-              }`}
-              aria-label="Copy affiliate link"
-            >
-              {copiedId === product.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            </button>
+            affiliateEligible ? (
+              <button
+                onClick={() => onCopyAffiliate(product)}
+                className={`p-2.5 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                  copiedId === product.id
+                    ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300'
+                }`}
+                aria-label="Copy affiliate link"
+              >
+                {copiedId === product.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title={affiliateLockLabel || 'Unlock this product by increasing your affiliate level.'}
+                aria-label={affiliateLockLabel || 'Affiliate product locked at your current level'}
+                className="p-2.5 rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center bg-violet-50 text-violet-400 dark:bg-violet-950/30 dark:text-violet-500 cursor-not-allowed"
+              >
+                <LockKeyhole className="w-4 h-4" />
+              </button>
+            )
           )}
         </div>
         <Link
