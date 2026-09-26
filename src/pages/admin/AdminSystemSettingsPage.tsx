@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import AdminDrightStarterProductSettings from '../../components/admin/AdminDrightStarterProductSettings';
-import { useAuth } from '../../contexts/AuthContext';
 import {
   getAdminPlatformAccessPolicy,
   updateAdminPlatformAccessPolicy,
@@ -34,7 +33,6 @@ const MARKETER_LEVELS = ['3', '4', '5'];
 const ADVERTISER_GRADES = ['A', 'B', 'C', 'Pro', 'Super', 'Partnership'];
 
 export default function AdminSystemSettingsPage() {
-  const { profile } = useAuth();
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -130,32 +128,42 @@ export default function AdminSystemSettingsPage() {
   };
 
   const handleSave = async () => {
-    if (!config) return;
+    if (!config || saving) return;
     setSaving(true);
     setError(null);
+    setSuccess(false);
 
     try {
-      const { error } = await supabase
-        .from('system_config')
-        .update({
-          admin_task_percent: config.admin_task_percent,
-          marketer_task_pcts: config.marketer_task_pcts,
-          advertiser_task_pcts: config.advertiser_task_pcts,
-          marketer_sub_prices: config.marketer_sub_prices,
-          advertiser_sub_prices: config.advertiser_sub_prices,
-          admin_cut_percent: config.admin_cut_percent,
-          updated_at: new Date().toISOString(),
-          updated_by: profile?.id,
-        })
-        .eq('id', config.id);
+      const { data, error: saveError } = await supabase.rpc('admin_update_system_config', {
+        p_admin_task_percent: Number(config.admin_task_percent),
+        p_marketer_task_pcts: config.marketer_task_pcts,
+        p_advertiser_task_pcts: config.advertiser_task_pcts,
+        p_marketer_sub_prices: config.marketer_sub_prices,
+        p_advertiser_sub_prices: config.advertiser_sub_prices,
+        p_admin_cut_percent: Number(config.admin_cut_percent),
+      });
 
-      if (error) throw error;
+      if (saveError) throw saveError;
+
+      const saved = (data ?? {}) as Partial<ConfigData>;
+      setConfig(current => current ? {
+        ...current,
+        admin_task_percent: Number(saved.admin_task_percent ?? current.admin_task_percent),
+        marketer_task_pcts: (saved.marketer_task_pcts ?? current.marketer_task_pcts) as Record<string, number>,
+        advertiser_task_pcts: (saved.advertiser_task_pcts ?? current.advertiser_task_pcts) as Record<string, number>,
+        marketer_sub_prices: (saved.marketer_sub_prices ?? current.marketer_sub_prices) as Record<string, number>,
+        advertiser_sub_prices: (saved.advertiser_sub_prices ?? current.advertiser_sub_prices) as Record<string, number>,
+        admin_cut_percent: Number(saved.admin_cut_percent ?? current.admin_cut_percent),
+      } : current);
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
-      console.error('Save error:', err);
-      setError('Failed to save settings. Please try again.');
+      console.error('System settings save failed:', err);
+      const message = err && typeof err === 'object' && 'message' in err
+        ? String((err as { message?: unknown }).message || '')
+        : '';
+      setError(message ? `Failed to save settings: ${message}` : 'Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
     }
