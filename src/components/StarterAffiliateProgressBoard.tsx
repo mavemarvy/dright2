@@ -48,7 +48,7 @@ export default function StarterAffiliateProgressBoard({
       </div>
     );
   }
-  if (!progress?.enabled || !progress.applies) return null;
+  if (!progress?.enabled) return null;
 
   const percent = Math.max(0, Math.min(100, progress.progress_percent));
   const completed = progress.completed;
@@ -69,7 +69,9 @@ export default function StarterAffiliateProgressBoard({
               <p className="mt-1 max-w-2xl text-xs leading-5 text-violet-100/70 sm:text-sm">
                 {completed
                   ? 'Your verified Starter affiliate sales reached the current requirement. Eligible affiliate products are now available according to DRIGHT access rules.'
-                  : 'This is the requirement you need to complete before the wider affiliate marketplace unlocks.'}
+                  : progress.applies
+                    ? 'This is the requirement you need to complete before the wider affiliate marketplace unlocks.'
+                    : 'Your Starter affiliate progress is shown here even when this account is not currently restricted by the Starter unlock rule.'}
               </p>
             </div>
           </div>
@@ -122,6 +124,7 @@ export default function StarterAffiliateProgressBoard({
           {!completed && (
             <p className="mt-2 text-xs text-violet-100/65">
               Get {progress.remaining_sales.toLocaleString()} more verified Starter sale{progress.remaining_sales === 1 ? '' : 's'} to move from <strong>{progress.base_level_label}</strong> to <strong>{progress.unlock_label}</strong>.
+              {!progress.applies && <span> This account is not currently blocked from the wider affiliate marketplace by this requirement.</span>}
             </p>
           )}
         </div>
