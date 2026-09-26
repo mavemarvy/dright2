@@ -117,14 +117,16 @@ export default function PromotePage() {
     tierPlacements.filter(item => item.tier_code === tier && item.is_included).map(item => item.placement_code),
   ), [tier, tierPlacements]);
 
+  const currentTierRank = tiers.find(item => item.code === tier)?.tier_rank ?? 1;
   const eligiblePlacements = useMemo(() => {
     const selectedTypes = selectedAssets.map(item => item.asset_type);
     return placements.filter(item =>
       item.enabled &&
+      item.minimum_tier_rank <= currentTierRank &&
       allowedCodes.has(item.code) &&
       (selectedTypes.length === 0 || selectedTypes.every(type => item.supported_asset_types.includes(type)))
     );
-  }, [allowedCodes, placements, selectedAssets]);
+  }, [allowedCodes, currentTierRank, placements, selectedAssets]);
 
   useEffect(() => {
     setSelectedPlacements(current => current.filter(code => eligiblePlacements.some(item => item.code === code)));
