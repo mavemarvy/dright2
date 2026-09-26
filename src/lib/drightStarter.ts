@@ -606,9 +606,9 @@ export interface DrightAffiliateCatalogAccess {
   affiliate_eligible_product_ids: string[];
 }
 
-export async function getMyAffiliateCatalogAccess(productIds: string[]): Promise<DrightAffiliateCatalogAccess | null> {
+export async function getMyAffiliateCatalogAccess(productIds?: string[]): Promise<DrightAffiliateCatalogAccess | null> {
   const { data, error } = await supabase.rpc('get_my_affiliate_catalog_access', {
-    p_product_ids: productIds,
+    p_product_ids: productIds && productIds.length > 0 ? productIds : null,
   });
   if (error || !data || typeof data !== 'object') return null;
   const row = data as Record<string, unknown>;
