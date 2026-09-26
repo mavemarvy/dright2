@@ -368,6 +368,18 @@ export interface DrightStarterAffiliateChallengeSettings {
   updated_by?: string | null;
 }
 
+export interface DrightAffiliateLevelSettings {
+  level_number: number;
+  title: string;
+  sales_to_next: number;
+  product_limit: number | null;
+  starter_only: boolean;
+  entry_sales: number;
+  cumulative_after: number;
+  is_current?: boolean;
+  is_unlocked?: boolean;
+}
+
 export interface DrightStarterAffiliateProgress {
   authenticated: boolean;
   enabled: boolean;
@@ -383,11 +395,21 @@ export interface DrightStarterAffiliateProgress {
   unlock_level_number: number;
   current_level_label: string;
   current_level_number: number;
+  current_level_entry_sales: number;
+  sales_in_current_level: number;
+  sales_required_this_level: number;
   next_level_label: string | null;
+  next_level_number: number | null;
+  next_level_total_sales: number | null;
+  product_limit: number | null;
+  starter_only: boolean;
+  max_level: boolean;
+  levels: DrightAffiliateLevelSettings[];
   description_template: string;
   restrict_marketplace_until_complete: boolean;
   allow_own_listings_while_restricted: boolean;
   marketplace_limited: boolean;
+  affiliate_access_limited: boolean;
   selected_profiles: string[];
   seller_exempt: boolean;
 }
@@ -439,13 +461,36 @@ export async function getMyDrightStarterAffiliateProgress(): Promise<DrightStart
     base_level_number: Number(row.base_level_number ?? 0),
     unlock_label: String(row.unlock_label || 'Level 1 Pro Affiliate'),
     unlock_level_number: Number(row.unlock_level_number ?? 1),
-    current_level_label: String(row.current_level_label || (row.completed ? row.unlock_label : row.base_level_label) || 'Affiliate Level 0'),
-    current_level_number: Number(row.current_level_number ?? (row.completed ? 1 : 0)),
+    current_level_label: String(row.current_level_label || (row.completed ? row.unlock_label : row.base_level_label) || 'Starter Affiliate'),
+    current_level_number: Number(row.current_level_number ?? 0),
+    current_level_entry_sales: Number(row.current_level_entry_sales ?? 0),
+    sales_in_current_level: Number(row.sales_in_current_level ?? 0),
+    sales_required_this_level: Number(row.sales_required_this_level ?? 0),
     next_level_label: row.next_level_label == null ? null : String(row.next_level_label),
+    next_level_number: row.next_level_number == null ? null : Number(row.next_level_number),
+    next_level_total_sales: row.next_level_total_sales == null ? null : Number(row.next_level_total_sales),
+    product_limit: row.product_limit == null ? null : Number(row.product_limit),
+    starter_only: row.starter_only === true,
+    max_level: row.max_level === true,
+    levels: Array.isArray(row.levels) ? row.levels.map((level) => {
+      const item = (level || {}) as Record<string, unknown>;
+      return {
+        level_number: Number(item.level_number ?? 0),
+        title: String(item.title || 'Affiliate'),
+        sales_to_next: Number(item.sales_to_next ?? 0),
+        product_limit: item.product_limit == null ? null : Number(item.product_limit),
+        starter_only: item.starter_only === true,
+        entry_sales: Number(item.entry_sales ?? 0),
+        cumulative_after: Number(item.cumulative_after ?? 0),
+        is_current: item.is_current === true,
+        is_unlocked: item.is_unlocked === true,
+      };
+    }) : [],
     description_template: String(row.description_template || ''),
     restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
     allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
     marketplace_limited: row.marketplace_limited === true,
+    affiliate_access_limited: row.affiliate_access_limited === true,
     selected_profiles: Array.isArray(row.selected_profiles) ? row.selected_profiles.map(String) : [],
     seller_exempt: row.seller_exempt === true,
   };
@@ -494,3 +539,94 @@ export async function updateAdminDrightStarterAffiliateChallenge(
   if (!next) throw new Error('Unable to reload Starter affiliate challenge settings.');
   return next;
 }
+
+export async function getAdminDrightAffiliateLevels(): Promise<DrightAffiliateLevelSettings[]> {
+  const { data, error } = await supabase.rpc('admin_get_dright_affiliate_levels');
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => {
+    const item = (row || {}) as Record<string, unknown>;
+    return {
+      level_number: Number(item.level_number ?? 0),
+      title: String(item.title || 'Affiliate'),
+      sales_to_next: Number(item.sales_to_next ?? 0),
+      product_limit: item.product_limit == null ? null : Number(item.product_limit),
+      starter_only: item.starter_only === true,
+      entry_sales: Number(item.entry_sales ?? 0),
+      cumulative_after: Number(item.cumulative_after ?? 0),
+    };
+  });
+}
+
+export async function updateAdminDrightAffiliateLevels(
+  levels: DrightAffiliateLevelSettings[],
+): Promise<DrightAffiliateLevelSettings[]> {
+  const payload = levels
+    .slice()
+    .sort((a, b) => a.level_number - b.level_number)
+    .map((level) => ({
+      level_number: level.level_number,
+      title: level.title,
+      sales_to_next: Math.max(0, Math.trunc(Number(level.sales_to_next || 0))),
+      product_limit: level.product_limit == null ? null : Math.max(1, Math.trunc(Number(level.product_limit))),
+      starter_only: level.level_number === 0 ? true : Boolean(level.starter_only),
+    }));
+  const { data, error } = await supabase.rpc('admin_update_dright_affiliate_levels', {
+    p_levels: payload,
+  });
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error('Unable to reload affiliate levels.');
+  return data.map((row) => {
+    const item = (row || {}) as Record<string, unknown>;
+    return {
+      level_number: Number(item.level_number ?? 0),
+      title: String(item.title || 'Affiliate'),
+      sales_to_next: Number(item.sales_to_next ?? 0),
+      product_limit: item.product_limit == null ? null : Number(item.product_limit),
+      starter_only: item.starter_only === true,
+      entry_sales: Number(item.entry_sales ?? 0),
+      cumulative_after: Number(item.cumulative_after ?? 0),
+    };
+  });
+}
+
+export interface DrightAffiliateCatalogAccess {
+  authenticated: boolean;
+  current_level_number: number;
+  current_level_label: string;
+  product_limit: number | null;
+  starter_only: boolean;
+  access_rules_apply: boolean;
+  accessible_product_ids: string[];
+  locked_product_ids: string[];
+  affiliate_eligible_product_ids: string[];
+}
+
+export async function getMyAffiliateCatalogAccess(productIds: string[]): Promise<DrightAffiliateCatalogAccess | null> {
+  const { data, error } = await supabase.rpc('get_my_affiliate_catalog_access', {
+    p_product_ids: productIds,
+  });
+  if (error || !data || typeof data !== 'object') return null;
+  const row = data as Record<string, unknown>;
+  return {
+    authenticated: row.authenticated === true,
+    current_level_number: Number(row.current_level_number ?? 0),
+    current_level_label: String(row.current_level_label || 'Starter Affiliate'),
+    product_limit: row.product_limit == null ? null : Number(row.product_limit),
+    starter_only: row.starter_only === true,
+    access_rules_apply: row.access_rules_apply === true,
+    accessible_product_ids: Array.isArray(row.accessible_product_ids) ? row.accessible_product_ids.map(String) : [],
+    locked_product_ids: Array.isArray(row.locked_product_ids) ? row.locked_product_ids.map(String) : [],
+    affiliate_eligible_product_ids: Array.isArray(row.affiliate_eligible_product_ids) ? row.affiliate_eligible_product_ids.map(String) : [],
+  };
+}
+
+export async function canAffiliateProduct(productId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('can_user_affiliate_product', {
+    p_user_id: (await supabase.auth.getUser()).data.user?.id || null,
+    p_product_id: productId,
+  });
+  if (error) return false;
+  return data === true;
+}
+
