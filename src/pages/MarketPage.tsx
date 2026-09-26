@@ -303,17 +303,12 @@ export default function MarketPage() {
       setAffiliateCatalogAccess(null);
       return;
     }
-    const ids = Array.from(new Set([...products, ...marketFeed].map(product => product.id)));
-    if (ids.length === 0) {
-      setAffiliateCatalogAccess(null);
-      return;
-    }
     let active = true;
-    void getMyAffiliateCatalogAccess(ids).then(value => {
+    void getMyAffiliateCatalogAccess().then(value => {
       if (active) setAffiliateCatalogAccess(value);
     });
     return () => { active = false; };
-  }, [user?.id, products, marketFeed]);
+  }, [user?.id, starterAffiliateProgress?.current_level_number]);
 
   useEffect(() => {
     fetchSystemConfig().then(setSystemConfig);
@@ -805,7 +800,7 @@ export default function MarketPage() {
                   onCopyAffiliate={handleCopyAffiliateLink}
                   copiedId={copiedId}
                   affiliateCode={referralCode}
-                  affiliateEligible={affiliateAccessibleIds.has(product.id)}
+                  affiliateEligible={affiliateCatalogAccess ? affiliateAccessibleIds.has(product.id) : true}
                   affiliateLockLabel={
                     affiliateEligibleIds.has(product.id)
                       ? 'Unlock this product by increasing your affiliate level.'
