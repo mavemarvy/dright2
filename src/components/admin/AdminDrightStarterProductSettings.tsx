@@ -535,8 +535,8 @@ export default function AdminDrightStarterProductSettings() {
 
               <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Restrict affiliate marketplace</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Apply level-based affiliate-link limits. Buyers still see and can buy every public marketplace product.</p>
+                  <p className="text-sm font-semibold text-gray-900">Enforce affiliate level catalog limits</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Limits which products a user can affiliate at each level. Buyer browsing and buying always remain fully available.</p>
                 </div>
                 <Toggle
                   value={challenge.restrict_marketplace_until_complete}
@@ -546,19 +546,19 @@ export default function AdminDrightStarterProductSettings() {
 
               <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Allow own listings while restricted</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Keeps products uploaded by that user visible.</p>
+                  <p className="text-sm font-semibold text-gray-900">Apply levels to existing affiliates</p>
+                  <p className="text-xs text-gray-500 mt-0.5">When ON, existing affiliate accounts also use Levels 0–10. When OFF, only the configured new-user cohort is level-limited.</p>
                 </div>
                 <Toggle
-                  value={challenge.allow_own_listings_while_restricted}
-                  onChange={() => setChallenge({ ...challenge, allow_own_listings_while_restricted: !challenge.allow_own_listings_while_restricted })}
+                  value={challenge.apply_levels_to_existing_affiliates}
+                  onChange={() => setChallenge({ ...challenge, apply_levels_to_existing_affiliates: !challenge.apply_levels_to_existing_affiliates })}
                 />
               </label>
 
               <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Seller profile exempt</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Affiliates who also selected Seller/Vendor keep the normal marketplace.</p>
+                  <p className="text-xs text-gray-500 mt-0.5">When ON, users who are both Seller/Vendor and Affiliate are exempt from affiliate-product level limits.</p>
                 </div>
                 <Toggle
                   value={challenge.seller_profile_exempt}
