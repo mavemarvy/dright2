@@ -33,6 +33,23 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return json({ success: false, error: "Authentication required" }, 401);
 
+    const service = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: master } = await service
+      .from("ai_master_settings")
+      .select("enabled,disabled_message")
+      .eq("singleton", true)
+      .maybeSingle();
+    if (master?.enabled === false) {
+      return json({
+        success:false,
+        error:String(master.disabled_message || "AI features are temporarily turned off by DRIGHT."),
+        code:"AI_DISABLED",
+      }, 503);
+    }
+
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) return json({ success: false, error: "Voice transcription is not configured" }, 503);
 
