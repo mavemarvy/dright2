@@ -98,20 +98,20 @@ export default function DrightStarterProductCard({ className = '' }: { className
                 </p>
               </div>
               <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-black">
-                {progress.sales}/{progress.target_sales}
+                Level {progress.current_level_number} · {progress.current_level_label}
               </span>
             </div>
             <div className="mt-3 h-2 rounded-full bg-white/10 overflow-hidden">
               <div
                 className="h-full bg-violet-300 transition-all"
-                style={{ width: `${Math.min(100, progress.target_sales > 0 ? (progress.sales / progress.target_sales) * 100 : 0)}%` }}
+                style={{ width: `${Math.max(0, Math.min(100, progress.progress_percent))}%` }}
               />
             </div>
             <div className="mt-3 flex items-center justify-between gap-3 text-xs text-violet-200">
               <span>
-                {progress.completed
-                  ? `${progress.unlock_label} unlocked`
-                  : `${progress.remaining_sales} verified sale${progress.remaining_sales === 1 ? '' : 's'} remaining`}
+                {progress.max_level
+                  ? 'Highest affiliate level reached'
+                  : `${progress.remaining_sales} verified Starter sale${progress.remaining_sales === 1 ? '' : 's'} to ${progress.next_level_label || 'the next level'}`}
               </span>
               <Link to="/challenges?section=affiliate&challenge=starter_affiliate" className="font-bold text-white hover:underline">
                 View challenge

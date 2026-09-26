@@ -5,18 +5,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Store, Loader2, ShieldAlert,
   Users, Shield, AlertCircle, Check,
-  LayoutGrid, List,
+  LayoutGrid, List, LockKeyhole, ShoppingBag,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { trackListingEvent } from '../lib/marketplaceAnalytics';
 import { trackProductView } from '../lib/analyticsService';
-import { generateAffiliateLink, copyToClipboard } from '../lib/affiliate';
+import { getOrCreateAffiliateLink, copyToClipboard } from '../lib/affiliate';
 import {
   buildDrightStarterAffiliateLink,
   getMyDrightStarterAffiliateProgress,
-  renderDrightStarterTemplate,
+  getMyAffiliateCatalogAccess,
   type DrightStarterAffiliateProgress,
+  type DrightAffiliateCatalogAccess,
 } from '../lib/drightStarter';
 import {
   fetchSystemConfig, calculateSubscriptionTotal, getBuyerFacingPrice,
@@ -107,12 +108,15 @@ export default function MarketPage() {
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [starterAffiliateProgress, setStarterAffiliateProgress] = useState<DrightStarterAffiliateProgress | null>(null);
+  const [affiliateCatalogAccess, setAffiliateCatalogAccess] = useState<DrightAffiliateCatalogAccess | null>(null);
+  const [affiliateActionMessage, setAffiliateActionMessage] = useState<string | null>(null);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
   const [taxonomyTree, setTaxonomyTree] = useState<MarketplaceCategoryTreeNode[]>([]);
   const [taxonomyFilterDefinitions, setTaxonomyFilterDefinitions] = useState<MarketplaceAttributeDefinition[]>([]);
   const [listingExtensions, setListingExtensions] = useState<Map<string, PublicMarketplaceListingExtension>>(new Map());
   const [searchParams] = useSearchParams();
+  const affiliateMode = searchParams.get('affiliate') === '1';
 
   const [quickViewProduct, setQuickViewProduct] = useState<MarketplaceProduct | null>(null);
   const [shareProduct, setShareProduct] = useState<MarketplaceProduct | null>(null);
@@ -295,6 +299,18 @@ export default function MarketPage() {
   }, [user]);
 
   useEffect(() => {
+    if (!user?.id) {
+      setAffiliateCatalogAccess(null);
+      return;
+    }
+    let active = true;
+    void getMyAffiliateCatalogAccess().then(value => {
+      if (active) setAffiliateCatalogAccess(value);
+    });
+    return () => { active = false; };
+  }, [user?.id, starterAffiliateProgress?.current_level_number]);
+
+  useEffect(() => {
     fetchSystemConfig().then(setSystemConfig);
     fetchMarketplaceEngineSettings().then(setEngineSettings);
     void fetchCategoryCounts();
@@ -397,16 +413,21 @@ export default function MarketPage() {
   }, [quickViewProduct, recordView, user?.id, usingMarketplaceV2]);
 
   const handleCopyAffiliateLink = async (product: MarketplaceProduct) => {
-    if (isAccountLocked || isAccountBanned || !referralCode) return;
+    if (isAccountLocked || isAccountBanned || !referralCode || !user?.id) return;
+    setAffiliateActionMessage(null);
     const isDrightStarter = product.sku === 'DRIGHT-STARTER-ACCESS'
       || product.specifications?.system_product_kind === 'dright_starter_access';
-    const link = isDrightStarter
-      ? buildDrightStarterAffiliateLink(referralCode)
-      : generateAffiliateLink(referralCode, product.id);
-    const success = await copyToClipboard(link);
-    if (success) {
-      setCopiedId(product.id);
-      setTimeout(() => setCopiedId(null), 2000);
+    try {
+      const link = isDrightStarter
+        ? buildDrightStarterAffiliateLink(referralCode)
+        : await getOrCreateAffiliateLink(user.id, product.id);
+      const success = await copyToClipboard(link);
+      if (success) {
+        setCopiedId(product.id);
+        setTimeout(() => setCopiedId(null), 2000);
+      }
+    } catch (error) {
+      setAffiliateActionMessage(error instanceof Error ? error.message : 'This product is not available at your current affiliate level yet.');
     }
   };
 
@@ -463,15 +484,6 @@ export default function MarketPage() {
   }, [filters.attributeFilters]);
 
   const filteredProducts = products.filter(p => {
-    if (starterAffiliateProgress?.marketplace_limited) {
-      const isStarter = p.sku === 'DRIGHT-STARTER-ACCESS'
-        || p.specifications?.system_product_kind === 'dright_starter_access';
-      const isOwnListing = starterAffiliateProgress.allow_own_listings_while_restricted
-        && Boolean(user?.id)
-        && p.uploaded_by === user?.id;
-      if (!isStarter && !isOwnListing) return false;
-    }
-
     if (searchQuery.trim()) {
       const parsed = parseNaturalLanguageSearch(searchQuery);
       const q = parsed.keywords.join(' ').toLowerCase();
@@ -533,20 +545,24 @@ export default function MarketPage() {
     });
   })();
 
-  const gatedMarketFeed = useMemo(() => {
-    if (!starterAffiliateProgress?.marketplace_limited) return marketFeed;
-    return marketFeed.filter((product) => {
-      const isStarter = product.sku === 'DRIGHT-STARTER-ACCESS'
-        || product.specifications?.system_product_kind === 'dright_starter_access';
-      const isOwnListing = starterAffiliateProgress.allow_own_listings_while_restricted
-        && Boolean(user?.id)
-        && product.uploaded_by === user?.id;
-      return isStarter || isOwnListing;
-    });
-  }, [marketFeed, starterAffiliateProgress, user?.id]);
+  const affiliateAccessibleIds = useMemo(
+    () => new Set(affiliateCatalogAccess?.accessible_product_ids || []),
+    [affiliateCatalogAccess],
+  );
+  const affiliateEligibleIds = useMemo(
+    () => new Set(affiliateCatalogAccess?.affiliate_eligible_product_ids || []),
+    [affiliateCatalogAccess],
+  );
 
-  const displayProducts = usingMarketplaceV2 ? gatedMarketFeed : sortedProducts;
-  const visibleProducts = usingMarketplaceV2 ? gatedMarketFeed : sortedProducts.slice(0, visibleCount);
+  const affiliateLegacyProducts = affiliateMode && user
+    ? sortedProducts.filter(product => affiliateAccessibleIds.has(product.id))
+    : sortedProducts;
+  const affiliateMarketFeed = affiliateMode && user
+    ? marketFeed.filter(product => affiliateAccessibleIds.has(product.id))
+    : marketFeed;
+
+  const displayProducts = usingMarketplaceV2 ? affiliateMarketFeed : affiliateLegacyProducts;
+  const visibleProducts = usingMarketplaceV2 ? affiliateMarketFeed : affiliateLegacyProducts.slice(0, visibleCount);
 
   useEffect(() => {
     if (!sentinelRef.current) return;
@@ -637,30 +653,42 @@ export default function MarketPage() {
         </div>
       )}
 
-      {starterAffiliateProgress?.marketplace_limited && (
+      {affiliateMode && starterAffiliateProgress && (
         <div className="rounded-2xl border border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/30 p-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <p className="font-black text-violet-900 dark:text-violet-100">Starter Affiliate Challenge in progress</p>
-              <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
-                {renderDrightStarterTemplate(
-                  starterAffiliateProgress.description_template,
-                  0,
-                  starterAffiliateProgress.target_sales,
-                )} You have {starterAffiliateProgress.sales}/{starterAffiliateProgress.target_sales} verified sales.
-              </p>
-              <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">
-                This marketplace view currently shows the official Starter product
-                {starterAffiliateProgress.allow_own_listings_while_restricted ? ' and your own listings' : ''}.
-              </p>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0">
+                {starterAffiliateProgress.starter_only ? <LockKeyhole className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
+              </div>
+              <div>
+                <p className="font-black text-violet-900 dark:text-violet-100">
+                  Affiliate catalog · Level {starterAffiliateProgress.current_level_number} {starterAffiliateProgress.current_level_label}
+                </p>
+                <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
+                  {starterAffiliateProgress.starter_only
+                    ? 'Your current affiliate level can promote the DRIGHT Starter product only.'
+                    : starterAffiliateProgress.product_limit == null
+                      ? 'Your current level has unlimited affiliate-product access.'
+                      : 'Your current level can generate affiliate links for up to ' + starterAffiliateProgress.product_limit.toLocaleString() + ' ranked affiliate products.'}
+                </p>
+                <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">
+                  This is affiliate mode only. Normal Marketplace browsing still shows every public product for buying.
+                </p>
+              </div>
             </div>
             <Link
-              to="/challenges"
+              to="/dright/starter"
               className="shrink-0 min-h-[42px] inline-flex items-center justify-center rounded-xl bg-violet-600 text-white px-4 text-sm font-bold"
             >
-              View Challenge
+              View Level Progress
             </Link>
           </div>
+        </div>
+      )}
+
+      {affiliateActionMessage && (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          {affiliateActionMessage}
         </div>
       )}
 
@@ -685,7 +713,7 @@ export default function MarketPage() {
       </div>
 
       <AnimatePresence>
-        {showCategorySection && !starterAffiliateProgress?.marketplace_limited && (
+        {showCategorySection && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mt-6">
             <CategorySection onCategorySelect={handleCategorySelect} categoryCounts={categoryCounts} />
           </motion.div>
@@ -695,7 +723,7 @@ export default function MarketPage() {
       {/* First-party DRIGHT inventory is independent from sponsored/featured seller visibility. */}
       <DrightOfficialStoreMarketplaceCard />
 
-      {isBrowsing && !starterAffiliateProgress?.marketplace_limited && (
+      {isBrowsing && !affiliateMode && (
         <div className="mt-8">
           <DiscoverySections
             showRecommended={marketplaceSectionVisibility.recommended}
@@ -711,7 +739,7 @@ export default function MarketPage() {
       )}
 
       <div data-tour="marketplace-listings" className="mt-8" id="marketplace-products">
-        {filters.sortBy === 'trending' && !starterAffiliateProgress?.marketplace_limited && <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />}
+        {filters.sortBy === 'trending' && !affiliateMode && <SponsoredPlacementCard placement="trending" variant="compact" className="mt-4" />}
 
         <div className="flex items-center justify-between mb-4 mt-4">
           <div>
@@ -731,7 +759,7 @@ export default function MarketPage() {
           </div>
         </div>
 
-        {contextualPlacement && !starterAffiliateProgress?.marketplace_limited && <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />}
+        {contextualPlacement && !affiliateMode && <SponsoredPlacementCard placement={contextualPlacement} variant="compact" className="mt-4" />}
 
         {loading && (
           <div className={`grid ${viewMode === 'grid' ? MARKETPLACE_GRID_CLASSES[listingCardSize] : 'grid-cols-1'} gap-3 sm:gap-5 mt-6`}>
@@ -772,6 +800,12 @@ export default function MarketPage() {
                   onCopyAffiliate={handleCopyAffiliateLink}
                   copiedId={copiedId}
                   affiliateCode={referralCode}
+                  affiliateEligible={affiliateCatalogAccess ? affiliateAccessibleIds.has(product.id) : true}
+                  affiliateLockLabel={
+                    affiliateEligibleIds.has(product.id)
+                      ? 'Unlock this product by increasing your affiliate level.'
+                      : 'This product does not currently have an affiliate offer.'
+                  }
                   cardSize={listingCardSize}
                 />
               ))}

@@ -116,16 +116,32 @@ export function generateAffiliateLink(referralCode: string, productId?: string):
 }
 
 export async function getOrCreateAffiliateLink(userId: string, productId?: string): Promise<string> {
+  if (productId) {
+    const { data: allowed, error: accessError } = await supabase.rpc('can_user_affiliate_product', {
+      p_user_id: userId,
+      p_product_id: productId,
+    });
+    if (accessError) throw accessError;
+    if (allowed !== true) {
+      throw new Error('This product is not available at your current affiliate level yet.');
+    }
+  }
+
   const { data, error } = await supabase.rpc('get_or_create_tracking_link', {
     p_user_id: userId,
     p_product_id: productId || null,
     p_source_type: 'affiliate',
   });
+
   if (error || !data?.[0]?.tracking_code) {
+    if (productId) {
+      throw error || new Error('Unable to create an affiliate link for this product.');
+    }
     const { data: user } = await supabase.from('users').select('referral_code').eq('id', userId).maybeSingle();
     if (!user?.referral_code) throw new Error('Unable to create affiliate link');
-    return generateAffiliateLink(user.referral_code, productId);
+    return generateAffiliateLink(user.referral_code);
   }
+
   const params = new URLSearchParams({ ref: data[0].tracking_code });
   if (productId) params.set('product', productId);
   return `${window.location.origin}/ref?${params.toString()}`;

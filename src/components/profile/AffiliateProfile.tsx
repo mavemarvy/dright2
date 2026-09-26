@@ -15,9 +15,14 @@ export function AffiliateProfile({ profile, promotedCategories }: AffiliateProfi
     target_sales: number;
     remaining_sales: number;
     completed: boolean;
+    progress_percent: number;
     current_level_label: string;
     current_level_number: number;
     next_level_label: string | null;
+    next_level_number: number | null;
+    product_limit: number | null;
+    starter_only: boolean;
+    max_level: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -31,9 +36,14 @@ export function AffiliateProfile({ profile, promotedCategories }: AffiliateProfi
         target_sales: Number(row.target_sales ?? 20),
         remaining_sales: Number(row.remaining_sales ?? 0),
         completed: row.completed === true,
-        current_level_label: String(row.current_level_label || 'Affiliate Level 0'),
+        progress_percent: Number(row.progress_percent ?? 0),
+        current_level_label: String(row.current_level_label || 'Starter Affiliate'),
         current_level_number: Number(row.current_level_number ?? 0),
         next_level_label: row.next_level_label == null ? null : String(row.next_level_label),
+        next_level_number: row.next_level_number == null ? null : Number(row.next_level_number),
+        product_limit: row.product_limit == null ? null : Number(row.product_limit),
+        starter_only: row.starter_only === true,
+        max_level: row.max_level === true,
       });
     });
     return () => { active = false; };
@@ -61,7 +71,7 @@ export function AffiliateProfile({ profile, promotedCategories }: AffiliateProfi
               ? affiliateLevel?.current_level_label || 'Affiliate Level 0'
               : '—'}
             icon={Crown}
-            color={affiliateLevel?.completed ? 'text-amber-500' : 'text-indigo-500'}
+            color={affiliateLevel?.max_level ? 'text-amber-500' : 'text-indigo-500'}
           />
           <AffiliateMetric
             label="Weekly Sales"
@@ -81,21 +91,27 @@ export function AffiliateProfile({ profile, promotedCategories }: AffiliateProfi
                 </p>
               </div>
               <span className="rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-700 shadow-sm dark:bg-gray-900 dark:text-indigo-300">
-                {affiliateLevel.sales}/{affiliateLevel.target_sales}
+                {affiliateLevel.starter_only
+                  ? 'Starter only'
+                  : affiliateLevel.product_limit == null
+                    ? 'Unlimited products'
+                    : affiliateLevel.product_limit.toLocaleString() + ' products'}
               </span>
             </div>
-            {!affiliateLevel.completed && (
+            {!affiliateLevel.max_level ? (
               <div className="mt-3">
                 <div className="h-2 overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-950">
                   <div
                     className="h-full rounded-full bg-indigo-500"
-                    style={{ width: Math.min(100, Math.round((affiliateLevel.sales / Math.max(affiliateLevel.target_sales, 1)) * 100)) + '%' }}
+                    style={{ width: Math.max(0, Math.min(100, affiliateLevel.progress_percent)) + '%' }}
                   />
                 </div>
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {affiliateLevel.remaining_sales} verified Starter sale{affiliateLevel.remaining_sales === 1 ? '' : 's'} remaining to reach {affiliateLevel.next_level_label || 'the next affiliate level'}.
                 </p>
               </div>
+            ) : (
+              <p className="mt-3 text-xs font-bold text-amber-600 dark:text-amber-300">Super Affiliate level reached.</p>
             )}
           </div>
         )}

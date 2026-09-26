@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Share2, X, Copy, Check, MessageCircle, Mail, Link as LinkIcon,
   Facebook, Twitter, Linkedin,
 } from 'lucide-react';
-import { copyToClipboard } from '../../lib/affiliate';
+import { copyToClipboard, getOrCreateAffiliateLink } from '../../lib/affiliate';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ShareBarProps {
   listingId: string;
@@ -13,27 +14,55 @@ interface ShareBarProps {
 }
 
 export default function ShareBar({ listingId, listingName, referralCode }: ShareBarProps) {
+  const { user } = useAuth();
   const [copied, setCopied] = useState(false);
   const [showFull, setShowFull] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [affiliateTracked, setAffiliateTracked] = useState(false);
+  const [affiliateMessage, setAffiliateMessage] = useState<string | null>(null);
 
-  const generateLink = () => {
-    if (referralCode) {
-      return `${window.location.origin}/ref?ref=${referralCode}&product=${listingId}`;
+  const generateLink = async () => {
+    const normalLink = `${window.location.origin}/product/${listingId}`;
+    if (!referralCode || !user?.id) {
+      setShareLink(normalLink);
+      setAffiliateTracked(false);
+      setAffiliateMessage(null);
+      return normalLink;
     }
-    return `${window.location.origin}/product/${listingId}`;
+
+    try {
+      const link = await getOrCreateAffiliateLink(user.id, listingId);
+      setShareLink(link);
+      setAffiliateTracked(true);
+      setAffiliateMessage(null);
+      return link;
+    } catch (error) {
+      setShareLink(normalLink);
+      setAffiliateTracked(false);
+      setAffiliateMessage(
+        error instanceof Error
+          ? error.message
+          : 'Your current affiliate level does not include this product. A normal share link will be used instead.',
+      );
+      return normalLink;
+    }
   };
 
+  useEffect(() => {
+    void generateLink();
+  }, [listingId, referralCode, user?.id]);
+
   const handleCopy = async () => {
-    const link = generateLink();
+    const link = shareLink || await generateLink();
     const success = await copyToClipboard(link);
     if (success) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const shareTo = (platform: string) => {
-    const link = generateLink();
+  const shareTo = async (platform: string) => {
+    const link = shareLink || await generateLink();
     const text = `Check out "${listingName}" on DRIGHT`;
     const urls: Record<string, string> = {
       whatsapp: `https://wa.me/?text=${encodeURIComponent(text + ' ' + link)}`,
@@ -51,7 +80,7 @@ export default function ShareBar({ listingId, listingName, referralCode }: Share
     <>
       <div className="flex items-center gap-2">
         <button
-          onClick={handleCopy}
+          onClick={() => void handleCopy()}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
             copied ? 'bg-success-muted text-success' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
           }`}
@@ -90,7 +119,9 @@ export default function ShareBar({ listingId, listingName, referralCode }: Share
                   <X className="w-5 h-5" />
                 </button>
               </div>
+
               <p className="text-sm text-gray-500 mb-4">Share "{listingName}" with your network</p>
+
               <div className="grid grid-cols-4 gap-3 mb-4">
                 {[
                   { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, color: 'text-green-600 bg-green-50' },
@@ -98,30 +129,31 @@ export default function ShareBar({ listingId, listingName, referralCode }: Share
                   { id: 'x', label: 'X', icon: Twitter, color: 'text-gray-900 bg-gray-100' },
                   { id: 'linkedin', label: 'LinkedIn', icon: Linkedin, color: 'text-blue-700 bg-blue-50' },
                   { id: 'email', label: 'Email', icon: Mail, color: 'text-orange-600 bg-orange-50' },
-                ].map(p => {
-                  const Icon = p.icon;
+                ].map(platform => {
+                  const Icon = platform.icon;
                   return (
                     <button
-                      key={p.id}
-                      onClick={() => shareTo(p.id)}
-                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl hover:scale-105 transition-transform ${p.color}`}
+                      key={platform.id}
+                      onClick={() => void shareTo(platform.id)}
+                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl hover:scale-105 transition-transform ${platform.color}`}
                     >
                       <Icon className="w-5 h-5" />
-                      <span className="text-[10px] font-medium">{p.label}</span>
+                      <span className="text-[10px] font-medium">{platform.label}</span>
                     </button>
                   );
                 })}
               </div>
+
               <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-2">
                 <LinkIcon className="w-4 h-4 text-gray-400 ml-2 shrink-0" />
                 <input
                   type="text"
                   readOnly
-                  value={generateLink()}
+                  value={shareLink || `${window.location.origin}/product/${listingId}`}
                   className="flex-1 bg-transparent text-sm text-gray-600 outline-none truncate"
                 />
                 <button
-                  onClick={handleCopy}
+                  onClick={() => void handleCopy()}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     copied ? 'bg-success-muted text-success' : 'bg-primary-600 text-white hover:bg-primary-700'
                   }`}
@@ -129,9 +161,17 @@ export default function ShareBar({ listingId, listingName, referralCode }: Share
                   {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
+
               {referralCode && (
-                <p className="text-xs text-success mt-3 flex items-center gap-1">
-                  <Check className="w-3 h-3" />Affiliate link with referral tracking
+                <p className={'mt-3 text-xs flex items-start gap-1.5 ' + (affiliateTracked ? 'text-success' : 'text-amber-600')}>
+                  {affiliateTracked
+                    ? <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    : <LinkIcon className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                  <span>
+                    {affiliateTracked
+                      ? 'Affiliate tracking is active for this product at your current level.'
+                      : (affiliateMessage || 'This is a normal share link. Increase your affiliate level to unlock affiliate tracking for this product.')}
+                  </span>
                 </p>
               )}
             </motion.div>

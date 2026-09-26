@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, ExternalLink, ImagePlus, Loader2, Save, Star, Store, Target, WalletCards, X } from 'lucide-react';
+import { BadgeCheck, Crown, ExternalLink, ImagePlus, Layers3, Loader2, Save, Star, Store, Target, WalletCards, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   getAdminDrightStarterSettings,
   getAdminDrightStarterAffiliateChallenge,
+  getAdminDrightAffiliateLevels,
   updateAdminDrightStarterSettings,
   updateAdminDrightStarterAffiliateChallenge,
+  updateAdminDrightAffiliateLevels,
   type DrightStarterAdminSettings,
   type DrightStarterAffiliateChallengeSettings,
+  type DrightAffiliateLevelSettings,
 } from '../../lib/drightStarter';
 import { formatCurrencyValue } from '../../lib/currency';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,6 +45,7 @@ export default function AdminDrightStarterProductSettings() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<DrightStarterAdminSettings | null>(null);
   const [challenge, setChallenge] = useState<DrightStarterAffiliateChallengeSettings | null>(null);
+  const [affiliateLevels, setAffiliateLevels] = useState<DrightAffiliateLevelSettings[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -52,9 +56,11 @@ export default function AdminDrightStarterProductSettings() {
     void Promise.all([
       getAdminDrightStarterSettings(),
       getAdminDrightStarterAffiliateChallenge(),
-    ]).then(async ([value, challengeValue]) => {
+      getAdminDrightAffiliateLevels(),
+    ]).then(async ([value, challengeValue, levelValues]) => {
       setSettings(value);
       setChallenge(challengeValue);
+      setAffiliateLevels(levelValues);
       if (value?.product.marketplace_product_id) {
         try {
           setMarketingMaterials(await loadListingMarketingMaterials('product', value.product.marketplace_product_id));
@@ -112,8 +118,21 @@ export default function AdminDrightStarterProductSettings() {
       const next = await updateAdminDrightStarterSettings(settings);
       setSettings(next);
       if (challenge) {
-        const nextChallenge = await updateAdminDrightStarterAffiliateChallenge(challenge);
+        const levelZero = affiliateLevels.find(level => level.level_number === 0);
+        const levelOne = affiliateLevels.find(level => level.level_number === 1);
+        const nextChallenge = await updateAdminDrightStarterAffiliateChallenge({
+          ...challenge,
+          target_sales: levelZero?.sales_to_next ?? challenge.target_sales,
+          base_level_label: levelZero?.title ?? challenge.base_level_label,
+          base_level_number: 0,
+          unlock_label: levelOne?.title ?? challenge.unlock_label,
+          unlock_level_number: 1,
+        });
         setChallenge(nextChallenge);
+      }
+      if (affiliateLevels.length === 11) {
+        const nextLevels = await updateAdminDrightAffiliateLevels(affiliateLevels);
+        setAffiliateLevels(nextLevels);
       }
       if (next.product.marketplace_product_id && user?.id) {
         try {
@@ -130,7 +149,7 @@ export default function AdminDrightStarterProductSettings() {
           return;
         }
       }
-      setMessage('Official DRIGHT Store, Starter product, affiliate materials, and challenge settings saved.');
+      setMessage('Official DRIGHT Store, Starter product, affiliate levels, product-access limits, and challenge settings saved.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to save Starter product settings.');
     } finally {
@@ -149,6 +168,20 @@ export default function AdminDrightStarterProductSettings() {
   if (!settings) return null;
 
   const { store, product } = settings;
+  let runningAffiliateSales = 0;
+  const affiliateLevelsWithTotals = affiliateLevels
+    .slice()
+    .sort((a, b) => a.level_number - b.level_number)
+    .map(level => {
+      const entrySales = runningAffiliateSales;
+      const salesToNext = level.level_number === 10 ? 0 : Math.max(0, Number(level.sales_to_next || 0));
+      runningAffiliateSales += salesToNext;
+      return {
+        ...level,
+        entry_sales: entrySales,
+        cumulative_after: runningAffiliateSales,
+      };
+    });
 
   return (
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
@@ -502,8 +535,8 @@ export default function AdminDrightStarterProductSettings() {
 
               <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Restrict affiliate marketplace</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Affiliate-only onboarding sees Starter + own listings until target is reached.</p>
+                  <p className="text-sm font-semibold text-gray-900">Enforce affiliate level catalog limits</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Limits which products a user can affiliate at each level. Buyer browsing and buying always remain fully available.</p>
                 </div>
                 <Toggle
                   value={challenge.restrict_marketplace_until_complete}
@@ -513,19 +546,19 @@ export default function AdminDrightStarterProductSettings() {
 
               <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Allow own listings while restricted</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Keeps products uploaded by that user visible.</p>
+                  <p className="text-sm font-semibold text-gray-900">Apply levels to existing affiliates</p>
+                  <p className="text-xs text-gray-500 mt-0.5">When ON, existing affiliate accounts also use Levels 0–10. When OFF, only the configured new-user cohort is level-limited.</p>
                 </div>
                 <Toggle
-                  value={challenge.allow_own_listings_while_restricted}
-                  onChange={() => setChallenge({ ...challenge, allow_own_listings_while_restricted: !challenge.allow_own_listings_while_restricted })}
+                  value={challenge.apply_levels_to_existing_affiliates}
+                  onChange={() => setChallenge({ ...challenge, apply_levels_to_existing_affiliates: !challenge.apply_levels_to_existing_affiliates })}
                 />
               </label>
 
               <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Seller profile exempt</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Affiliates who also selected Seller/Vendor keep the normal marketplace.</p>
+                  <p className="text-xs text-gray-500 mt-0.5">When ON, users who are both Seller/Vendor and Affiliate are exempt from affiliate-product level limits.</p>
                 </div>
                 <Toggle
                   value={challenge.seller_profile_exempt}
@@ -534,69 +567,103 @@ export default function AdminDrightStarterProductSettings() {
               </label>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Verified sales needed</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100000"
-                  value={challenge.target_sales}
-                  onChange={(e) => setChallenge({ ...challenge, target_sales: Math.max(1, Number(e.target.value || 1)) })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
-                />
-                <p className="mt-1 text-[11px] text-gray-500">The user progress board automatically changes when this target changes.</p>
+            <div className="rounded-2xl border border-violet-200 bg-violet-50/50 overflow-hidden">
+              <div className="p-4 border-b border-violet-200 bg-violet-100/60">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0">
+                    <Layers3 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-gray-900">Affiliate levels 0–10</h4>
+                    <p className="mt-1 text-xs text-gray-600 max-w-3xl">
+                      Set the title, extra verified Starter sales needed to reach the next level, and how many marketplace products that level may affiliate. Buyer browsing and purchasing are never hidden by these limits.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Starting affiliate level name</label>
-                <input
-                  value={challenge.base_level_label}
-                  onChange={(e) => setChallenge({ ...challenge, base_level_label: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
-                  placeholder="Affiliate Level 0"
-                />
+
+              <div className="overflow-x-auto">
+                <div className="min-w-[860px]">
+                  <div className="grid grid-cols-[76px_minmax(190px,1fr)_150px_150px_180px] gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-gray-500 border-b border-violet-100">
+                    <span>Level</span>
+                    <span>Title</span>
+                    <span>Extra sales</span>
+                    <span>Affiliate products</span>
+                    <span>Cumulative sales</span>
+                  </div>
+                  <div className="divide-y divide-violet-100">
+                    {affiliateLevelsWithTotals.map((level) => {
+                      const unlimited = level.product_limit == null;
+                      const lastLevel = level.level_number === 10;
+                      return (
+                        <div key={level.level_number} className="grid grid-cols-[76px_minmax(190px,1fr)_150px_150px_180px] gap-3 px-4 py-3 items-center bg-white/70">
+                          <div className="flex items-center gap-2">
+                            <span className={'w-9 h-9 rounded-xl flex items-center justify-center font-black ' + (lastLevel ? 'bg-amber-100 text-amber-700' : level.level_number === 0 ? 'bg-slate-100 text-slate-700' : 'bg-violet-100 text-violet-700')}>
+                              {lastLevel ? <Crown className="w-4 h-4" /> : level.level_number}
+                            </span>
+                          </div>
+                          <input
+                            value={level.title}
+                            onChange={(event) => setAffiliateLevels(current => current.map(item => item.level_number === level.level_number ? { ...item, title: event.target.value } : item))}
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500"
+                          />
+                          <input
+                            type="number"
+                            min={level.level_number === 0 ? 1 : 0}
+                            disabled={lastLevel}
+                            value={lastLevel ? 0 : level.sales_to_next}
+                            onChange={(event) => setAffiliateLevels(current => current.map(item => item.level_number === level.level_number ? { ...item, sales_to_next: Math.max(level.level_number === 0 ? 1 : 0, Math.trunc(Number(event.target.value) || 0)) } : item))}
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500 disabled:bg-gray-100 disabled:text-gray-400"
+                          />
+                          <div>
+                            <input
+                              type="number"
+                              min="1"
+                              disabled={level.level_number === 0 || unlimited}
+                              value={level.level_number === 0 ? 1 : (level.product_limit ?? '')}
+                              placeholder="Unlimited"
+                              onChange={(event) => setAffiliateLevels(current => current.map(item => item.level_number === level.level_number ? { ...item, product_limit: event.target.value === '' ? null : Math.max(1, Math.trunc(Number(event.target.value) || 1)) } : item))}
+                              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500 disabled:bg-gray-100 disabled:text-gray-400"
+                            />
+                            {level.level_number > 0 && (
+                              <label className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-gray-500">
+                                <input
+                                  type="checkbox"
+                                  checked={unlimited}
+                                  onChange={(event) => setAffiliateLevels(current => current.map(item => item.level_number === level.level_number ? { ...item, product_limit: event.target.checked ? null : Math.max(1, item.product_limit ?? (level.level_number === 1 ? 5 : 20)) } : item))}
+                                />
+                                Unlimited
+                              </label>
+                            )}
+                          </div>
+                          <div className="text-xs">
+                            <p className="font-black text-gray-900">{level.entry_sales.toLocaleString()} total to enter</p>
+                            <p className="mt-0.5 text-gray-500">
+                              {lastLevel ? 'Highest level' : level.cumulative_after.toLocaleString() + ' total to reach Level ' + (level.level_number + 1)}
+                            </p>
+                            {level.level_number === 0 && <p className="mt-1 font-semibold text-violet-700">Starter product only</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Starting level number</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="1000"
-                  value={challenge.base_level_number}
-                  onChange={(e) => setChallenge({ ...challenge, base_level_number: Math.max(0, Number(e.target.value || 0)) })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
-                />
+
+              <div className="p-4 border-t border-violet-100 bg-white/60 text-xs text-gray-600">
+                Example: Level 0 requires 20 sales and Level 1 requires 30 more, so the user reaches Level 2 at 50 verified Starter sales. DRIGHT calculates every cumulative threshold automatically.
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Completed level name</label>
-                <input
-                  value={challenge.unlock_label}
-                  onChange={(e) => setChallenge({ ...challenge, unlock_label: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
-                  placeholder="Level 1 Pro Affiliate"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Completed level number</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="1000"
-                  value={challenge.unlock_level_number}
-                  onChange={(e) => setChallenge({ ...challenge, unlock_level_number: Math.max(0, Number(e.target.value || 0)) })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Challenge description</label>
-                <textarea
-                  rows={3}
-                  value={challenge.description_template}
-                  onChange={(e) => setChallenge({ ...challenge, description_template: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-y"
-                />
-                <p className="text-[11px] text-gray-500 mt-1">Use <code>{'{{target_sales}}'}</code> to keep the text synchronized with the sales target.</p>
-              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Challenge description</label>
+              <textarea
+                rows={3}
+                value={challenge.description_template}
+                onChange={(e) => setChallenge({ ...challenge, description_template: e.target.value })}
+                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 resize-y"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">Use <code>{'{{target_sales}}'}</code> for the current first-level target in legacy Starter copy.</p>
             </div>
           </div>
         )}
