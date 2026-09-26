@@ -17,6 +17,7 @@ export interface PromotionTier {
   is_enabled: boolean;
   pricing_multiplier: number;
   reach_multiplier: number;
+  spend_pace_multiplier: number;
 }
 
 export interface AdPlacement {
@@ -178,7 +179,7 @@ export async function fetchPromotionConfiguration() {
   ]);
 
   return {
-    tiers: ((tiersRes.data || []) as PromotionTier[]).map(t => ({ ...t, pricing_multiplier: money(t.pricing_multiplier), reach_multiplier: money(t.reach_multiplier) })),
+    tiers: ((tiersRes.data || []) as PromotionTier[]).map(t => ({ ...t, pricing_multiplier: money(t.pricing_multiplier), reach_multiplier: money(t.reach_multiplier), spend_pace_multiplier: money(t.spend_pace_multiplier || 1) })),
     placements: ((placementsRes.data || []) as AdPlacement[]).map(p => ({ ...p, surcharge: money(p.surcharge), surcharge_percent: money(p.surcharge_percent) })),
     tierPlacements: linksRes.data || [],
     settings: settingsRes.data || null,
@@ -206,9 +207,10 @@ export async function fetchPromotableAssets(userId: string): Promise<PromotableA
       .eq('status', 'active')
       .order('created_at', { ascending: false }),
     supabase.from('communities')
-      .select('id,name,slug,category,avatar_url,banner_url,status')
+      .select('id,name,slug,category,avatar_url,banner_url,status,visibility')
       .eq('owner_id', userId)
       .eq('status', 'active')
+      .neq('visibility', 'hidden')
       .order('created_at', { ascending: false }),
     supabase.from('users')
       .select('id,full_name,username,role,avatar_url,profession,store_title,store_banner_url,store_description,marketer_level,marketer_status,advertiser_grade,advertiser_status,is_verified')
