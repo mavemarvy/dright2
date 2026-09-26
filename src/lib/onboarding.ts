@@ -14,6 +14,18 @@ export interface UsernameAvailability { normalized:string; available:boolean; re
 export interface AgeRule { profile_type:string; minimum_age:number; reason:string|null; country_overrides:Record<string,number>; }
 export interface PublicKycRequirement { user_type:string; is_required:boolean; required_for_action:string|null; description:string|null; required_document_types:string[]; required_checks:string[]; }
 
+export type SignupQuestionnaireMode = 'off'|'minimal'|'brief'|'full';
+export interface SignupOnboardingSettings {
+  questionnaire_mode: SignupQuestionnaireMode;
+  show_interests_during_signup: boolean;
+  show_documents_during_signup: boolean;
+}
+export const DEFAULT_SIGNUP_ONBOARDING_SETTINGS: SignupOnboardingSettings = {
+  questionnaire_mode: 'brief',
+  show_interests_during_signup: false,
+  show_documents_during_signup: false,
+};
+
 export const PROFILE_OPTIONS = [
   {value:'buyer',label:'Buyer',description:'Discover products, services, courses, jobs, tasks and communities.'},
   {value:'seller',label:'Seller / Vendor',description:'Sell products, digital goods and eligible services.'},
@@ -33,6 +45,19 @@ export async function checkUsernameAvailability(username:string):Promise<Usernam
   const {data,error}=await supabase.rpc('check_username_availability',{p_username:username});
   if(error) throw error;
   return data as UsernameAvailability;
+}
+
+export async function loadSignupOnboardingSettings():Promise<SignupOnboardingSettings>{
+  const {data,error}=await supabase.from('signup_onboarding_settings')
+    .select('questionnaire_mode,show_interests_during_signup,show_documents_during_signup')
+    .eq('singleton',true).maybeSingle();
+  if(error) throw error;
+  const mode=String(data?.questionnaire_mode??'brief');
+  return {
+    questionnaire_mode:(['off','minimal','brief','full'].includes(mode)?mode:'brief') as SignupQuestionnaireMode,
+    show_interests_during_signup:data?.show_interests_during_signup===true,
+    show_documents_during_signup:data?.show_documents_during_signup===true,
+  };
 }
 
 export async function loadSignupQuestionnaires(profileTypes:string[]):Promise<QuestionnaireDefinition[]>{

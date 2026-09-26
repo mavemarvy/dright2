@@ -3,6 +3,7 @@ import { Compass, Eye, EyeOff, ExternalLink, Loader2, PanelLeft, ShieldCheck, Us
 import { supabase } from '../../lib/supabase';
 import { useNavigationVisibility } from '../../contexts/NavigationVisibilityContext';
 import SupportEmailVisibilityControls from '../../components/admin/SupportEmailVisibilityControls';
+import SignupOnboardingControls from '../../components/admin/SignupOnboardingControls';
 
 interface NavigationRow {
   feature_key: string;
@@ -324,6 +325,8 @@ export default function AdminUserNavigationPage() {
           {error}
         </div>
       )}
+
+      <SignupOnboardingControls />
 
       <SupportEmailVisibilityControls canManage={canManage} />
 

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import AdminDrightStarterProductSettings from '../../components/admin/AdminDrightStarterProductSettings';
+import SignupOnboardingControls from '../../components/admin/SignupOnboardingControls';
 import {
   getAdminPlatformAccessPolicy,
   updateAdminPlatformAccessPolicy,
@@ -259,6 +260,7 @@ export default function AdminSystemSettingsPage() {
         </div>
       )}
 
+      <SignupOnboardingControls />
 
       {/* DRIGHT Platform Access Subscription */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-5">

@@ -15,6 +15,8 @@ import {
   loadAgeRules,
   loadPublicKycRequirements,
   loadSignupQuestionnaires,
+  loadSignupOnboardingSettings,
+  DEFAULT_SIGNUP_ONBOARDING_SETTINGS,
   uploadProfessionalDocument,
   calculateAge,
   minimumAgeForProfile,
@@ -22,7 +24,7 @@ import {
   saveSignupOnboardingDraft,
   claimPendingSignupOnboarding,
 } from '../lib/onboarding';
-import type { AgeRule, QuestionnaireDefinition, QuestionnaireQuestion, PublicKycRequirement, UsernameAvailability } from '../lib/onboarding';
+import type { AgeRule, QuestionnaireDefinition, QuestionnaireQuestion, PublicKycRequirement, SignupOnboardingSettings, SignupQuestionnaireMode, UsernameAvailability } from '../lib/onboarding';
 import { createKycProfile, createKycSubmission, uploadKycDocument } from '../lib/kycHooks';
 import {
   claimPendingDrightStarterPurchase,
@@ -37,8 +39,64 @@ import { KYC_DOC_TYPE_LABELS } from '../lib/kycTypes';
 type Answers = Record<string, Record<string, unknown>>;
 type ProFile = { file: File; documentType: string; title: string };
 
-const STEPS = ['Account', 'Identity', 'Use DRIGHT', 'Questionnaire', 'Interests', 'Documents', 'Review'];
+type SignupStepKey = 'account' | 'identity' | 'profiles' | 'questionnaire' | 'interests' | 'documents' | 'review';
+
+const STEP_LABELS: Record<SignupStepKey, string> = {
+  account: 'Account',
+  identity: 'Identity',
+  profiles: 'Use DRIGHT',
+  questionnaire: 'Quick questions',
+  interests: 'Interests',
+  documents: 'Documents',
+  review: 'Review',
+};
+
 const DISCOVERY_INTERESTS = ['Products', 'Services', 'Courses', 'Jobs', 'Tasks', 'Creators', 'Communities', 'Technology', 'Business', 'Fashion', 'Home', 'Education', 'Entertainment'];
+
+function questionnaireSubsetForSignup(
+  definitions: QuestionnaireDefinition[],
+  mode: SignupQuestionnaireMode,
+): QuestionnaireDefinition[] {
+  if (mode === 'off') return [];
+  if (mode === 'full') return definitions;
+
+  let remaining = mode === 'minimal' ? 1 : 2;
+  const ordered = [...definitions].sort((a, b) => {
+    if (a.applicable_profile_type === 'buyer' && b.applicable_profile_type !== 'buyer') return 1;
+    if (b.applicable_profile_type === 'buyer' && a.applicable_profile_type !== 'buyer') return -1;
+    return a.applicable_profile_type.localeCompare(b.applicable_profile_type);
+  });
+  const picked = new Map<string, QuestionnaireQuestion[]>();
+
+  const candidateQuestions = new Map(
+    ordered.map((definition) => {
+      const unconditional = definition.questions.filter((question) => {
+        const rule = question.conditional_rules as { question_key?: string } | null;
+        return !rule?.question_key;
+      });
+      return [definition.id, unconditional.length > 0 ? unconditional : definition.questions] as const;
+    }),
+  );
+
+  while (remaining > 0) {
+    let addedThisRound = false;
+    for (const definition of ordered) {
+      if (remaining <= 0) break;
+      const selected = picked.get(definition.id) ?? [];
+      const candidates = candidateQuestions.get(definition.id) ?? [];
+      const next = candidates.find((question) => !selected.some((item) => item.id === question.id));
+      if (!next) continue;
+      picked.set(definition.id, [...selected, next]);
+      remaining -= 1;
+      addedThisRound = true;
+    }
+    if (!addedThisRound) break;
+  }
+
+  return ordered
+    .map((definition) => ({ ...definition, questions: picked.get(definition.id) ?? [] }))
+    .filter((definition) => definition.questions.length > 0);
+}
 
 export default function SignUpPage() {
   const { signUp } = useAuth();
@@ -64,6 +122,7 @@ export default function SignUpPage() {
   const [dob, setDob] = useState('');
   const [profiles, setProfiles] = useState<string[]>(['buyer']);
   const [questionnaires, setQuestionnaires] = useState<QuestionnaireDefinition[]>([]);
+  const [signupSettings, setSignupSettings] = useState<SignupOnboardingSettings>(DEFAULT_SIGNUP_ONBOARDING_SETTINGS);
   const [answers, setAnswers] = useState<Answers>({});
   const [interests, setInterests] = useState<string[]>([]);
   const [proDocs, setProDocs] = useState<ProFile[]>([]);
@@ -96,10 +155,34 @@ export default function SignUpPage() {
   const requiredKycTypes = Array.from(new Set(selectedKycRules.filter((r) => r.is_required).flatMap((r) => r.required_document_types ?? [])));
   const kycRequired = selectedKycRules.some((r) => r.is_required);
 
+  const activeSteps = useMemo(() => {
+    const keys: SignupStepKey[] = ['account', 'identity', 'profiles'];
+    if (signupSettings.questionnaire_mode !== 'off') keys.push('questionnaire');
+    if (signupSettings.show_interests_during_signup) keys.push('interests');
+    if (signupSettings.show_documents_during_signup) keys.push('documents');
+    keys.push('review');
+    return keys.map((key) => ({ key, label: STEP_LABELS[key] }));
+  }, [
+    signupSettings.questionnaire_mode,
+    signupSettings.show_interests_during_signup,
+    signupSettings.show_documents_during_signup,
+  ]);
+
+  const currentStep = activeSteps[step]?.key ?? 'review';
+  const signupQuestionnaires = useMemo(
+    () => questionnaireSubsetForSignup(questionnaires, signupSettings.questionnaire_mode),
+    [questionnaires, signupSettings.questionnaire_mode],
+  );
+
+  useEffect(() => {
+    if (step >= activeSteps.length) setStep(Math.max(0, activeSteps.length - 1));
+  }, [activeSteps.length, step]);
+
   useEffect(() => {
     void Promise.all([
       loadAgeRules().then(setAgeRules),
       loadPublicKycRequirements().then(setKycRequirements),
+      loadSignupOnboardingSettings().then(setSignupSettings),
       getDrightStarterSignupPolicy().then((policy) => {
         setStarterProductRequired(policy.starterProductRequired);
         setStarterRequiredProfiles(policy.requiredProfiles);
@@ -177,11 +260,11 @@ export default function SignUpPage() {
   }, [username, countryIso]);
 
   useEffect(() => {
-    if (step === STEPS.length - 1) {
+    if (currentStep === 'review') {
       setTurnstileToken(null);
       setTurnstileError(null);
     }
-  }, [step]);
+  }, [currentStep]);
 
   const answerFor = (q: QuestionnaireDefinition, key: string) => answers[q.questionnaire_key]?.[key];
   const setAnswer = (q: QuestionnaireDefinition, key: string, value: unknown) => setAnswers((prev) => ({ ...prev, [q.questionnaire_key]: { ...(prev[q.questionnaire_key] ?? {}), [key]: value } }));
@@ -201,6 +284,17 @@ export default function SignUpPage() {
 
   const completeQuestionnaires = questionnaires.filter(questionnaireComplete).length;
   const deferredQuestionnaires = Math.max(0, questionnaires.length - completeQuestionnaires);
+  const questionnaireReviewText = signupSettings.questionnaire_mode === 'off'
+    ? 'Deferred during signup • complete later in Settings'
+    : signupSettings.questionnaire_mode === 'minimal'
+      ? '1 quick question during signup • full applications remain in Settings'
+      : signupSettings.questionnaire_mode === 'brief'
+        ? 'Up to 2 quick questions during signup • full applications remain in Settings'
+        : questionnaires.length === 0
+          ? 'None required'
+          : deferredQuestionnaires > 0
+            ? `${completeQuestionnaires} ready • ${deferredQuestionnaires} saved for later`
+            : `${completeQuestionnaires} ready to submit`;
 
   const ageFailure = () => {
     if (!dob) return null;
@@ -224,17 +318,17 @@ export default function SignUpPage() {
 
   const validateStep = () => {
     setError(null);
-    if (step === 0) {
+    if (currentStep === 'account') {
       if (!fullName.trim() || !email.trim() || password.length < 6) return setError('Enter your name, email and a password of at least 6 characters.'), false;
       if (password !== confirmPassword) return setError('Passwords do not match.'), false;
       if (!turnstileToken) return setError('Please complete the Cloudflare security verification before continuing.'), false;
       if (starterFlow && !starterGateVerified) return setError(starterGateMessage || 'Verified DRIGHT Starter payment is required before you can continue signup.'), false;
     }
-    if (step === 1) {
+    if (currentStep === 'identity') {
       if (!usernameStatus?.available) return setError('Choose a confirmed available username.'), false;
       if (!dob) return setError('Date of birth is required.'), false;
     }
-    if (step === 2) {
+    if (currentStep === 'profiles') {
       if (profiles.length === 0) return setError('Choose at least one way you want to use DRIGHT.'), false;
       if (selectedProfilesRequireStarter && !(starterFlow && starterGateVerified)) {
         return setError('A verified DRIGHT Starter purchase is required for the selected professional role. Buyer access remains free.'), false;
@@ -244,7 +338,7 @@ export default function SignUpPage() {
     }
     // Questionnaires and KYC documents are intentionally non-blocking at signup.
     // The server stores incomplete questionnaires as drafts and Settings prompts the user later.
-    if (step === 6) {
+    if (currentStep === 'review') {
       const failed = ageFailure();
       if (failed) return setError(`${PROFILE_OPTIONS.find((p) => p.value === failed.profile)?.label ?? failed.profile} requires a minimum age of ${failed.minimum}.`), false;
       if (!turnstileToken) return setError('Please complete the final Cloudflare security verification.'), false;
@@ -252,8 +346,8 @@ export default function SignUpPage() {
     return true;
   };
 
-  const next = () => { if (validateStep()) setStep((s) => Math.min(STEPS.length - 1, s + 1)); };
-  const skipCurrent = () => { setError(null); setStep((s) => Math.min(STEPS.length - 1, s + 1)); };
+  const next = () => { if (validateStep()) setStep((s) => Math.min(activeSteps.length - 1, s + 1)); };
+  const skipCurrent = () => { setError(null); setStep((s) => Math.min(activeSteps.length - 1, s + 1)); };
   const back = () => { setError(null); setStep((s) => Math.max(0, s - 1)); };
   const toggleProfile = (value: string) => setProfiles((prev) => prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value]);
   const selectedProfilesRequireStarter = starterProductRequired
@@ -381,7 +475,7 @@ export default function SignUpPage() {
   }
 
   if (success) {
-    return <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400"><motion.div initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 sm:p-10 text-center max-w-md w-full"><div className="w-16 h-16 bg-success rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 className="w-9 h-9 text-white" /></div><h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{awaitingEmail ? 'Verify your email' : 'Account created'}</h2><p className="text-gray-500 dark:text-gray-400 mt-2">{awaitingEmail ? 'Your private onboarding draft is securely saved for 24 hours. Verify your email with the Supabase confirmation email or the 6-digit code option. Incomplete questionnaires and KYC can then be finished in Settings → Profile.' : deferredQuestionnaires > 0 || (kycRequired && Object.keys(kycFiles).length === 0) ? 'Your account is ready. Any questionnaire or KYC item you skipped is saved for later in Settings → Profile.' : 'Your onboarding information is linked to your DRIGHT identity. You can review it later in Settings → Profile.'}</p>{awaitingEmail && <Link to={`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`} className="inline-flex mt-6 px-5 py-3 bg-primary-600 text-white rounded-xl font-semibold">Enter verification code</Link>}</motion.div></div>;
+    return <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400"><motion.div initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 sm:p-10 text-center max-w-md w-full"><div className="w-16 h-16 bg-success rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 className="w-9 h-9 text-white" /></div><h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{awaitingEmail ? 'Verify your email' : 'Account created'}</h2><p className="text-gray-500 dark:text-gray-400 mt-2">{awaitingEmail ? 'Your private onboarding draft is securely saved for 24 hours. Verify your email with the Supabase confirmation email or the 6-digit code option. Incomplete questionnaires and KYC can then be finished in Settings → Profile.' : signupSettings.questionnaire_mode === 'off' || deferredQuestionnaires > 0 || (kycRequired && Object.keys(kycFiles).length === 0) ? 'Your account is ready. Any questionnaire or KYC item you skipped is saved for later in Settings → Profile.' : 'Your onboarding information is linked to your DRIGHT identity. You can review it later in Settings → Profile.'}</p>{awaitingEmail && <Link to={`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`} className="inline-flex mt-6 px-5 py-3 bg-primary-600 text-white rounded-xl font-semibold">Enter verification code</Link>}</motion.div></div>;
   }
 
   return (
@@ -390,7 +484,7 @@ export default function SignUpPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl">
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-6 sm:p-10">
             <div className="text-center mb-5"><Link to="/welcome" className="inline-flex flex-col items-center"><DrightMark size={68} title="DRIGHT" /><DrightWordmark className="mt-2" /></Link><p className="text-gray-500 dark:text-gray-400 mt-2">Create your account</p></div>
-            <div className="mb-7"><div className="flex justify-between text-xs text-gray-400 mb-2"><span>{STEPS[step]}</span><span>{step + 1} / {STEPS.length}</span></div><div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden"><div className="h-full bg-primary-600 transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} /></div></div>
+            <div className="mb-7"><div className="flex justify-between text-xs text-gray-400 mb-2"><span>{activeSteps[step]?.label ?? 'Review'}</span><span>{step + 1} / {activeSteps.length}</span></div><div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden"><div className="h-full bg-primary-600 transition-all" style={{ width: `${((step + 1) / activeSteps.length) * 100}%` }} /></div></div>
             {error && <div className="bg-error-muted text-error rounded-xl p-4 mb-5">{error}</div>}
 
             {starterFlow && (
@@ -417,7 +511,7 @@ export default function SignUpPage() {
               </div>
             )}
 
-            {step === 0 && <div className="space-y-4">
+            {currentStep === 'account' && <div className="space-y-4">
               <Field label="Full Name" icon={<User />}><input value={fullName} onChange={(e) => setFullName(e.target.value)} className="field-input" placeholder="John Doe" autoComplete="name" /></Field>
               <Field label="Email address" icon={<Mail />}><input type="email" value={email} readOnly={starterFlow && starterEmailLocked} onChange={(e) => setEmail(e.target.value)} className={`field-input ${starterFlow && starterEmailLocked ? 'opacity-80 cursor-not-allowed' : ''}`} placeholder="you@example.com" autoComplete="email" /></Field>{starterFlow && <p className="helper -mt-3">Starter signup must use the exact email address attached to the verified purchase.</p>}
               <div><label className="label">Country</label><div className="mb-2 px-3 py-3 rounded-xl border border-primary-200 bg-primary-50/60 dark:bg-primary-950/30 dark:border-primary-900 flex items-center gap-3"><span className="text-xl">{countryFlag(country.iso2)}</span><span className="flex-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{country.name}</span><span className="text-sm text-primary-700 dark:text-primary-300">{country.callingCode}</span></div><div className="relative mb-2"><Search className="icon" /><input value={countryQuery} onChange={(e) => setCountryQuery(e.target.value)} className="base-input pl-12" placeholder="Search all countries, ISO codes or calling codes" autoComplete="country-name" /></div><div className="max-h-52 overflow-auto border border-gray-100 dark:border-gray-700 rounded-xl" role="listbox" aria-label="Country selection">{filteredCountries.map((c) => <button key={c.iso2} type="button" onClick={() => { setCountryIso(c.iso2); setCountryQuery(''); }} className={`w-full px-3 py-2.5 flex items-center gap-3 text-left text-sm ${countryIso === c.iso2 ? 'bg-primary-50 dark:bg-primary-950' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}><span className="text-xl">{countryFlag(c.iso2)}</span><span className="flex-1 text-gray-900 dark:text-gray-100">{c.name}</span><span className="text-gray-500 dark:text-gray-400">{c.callingCode}</span></button>)}</div><p className="helper">The selected country controls your international phone prefix, age rules and regional verification requirements.</p></div>
@@ -426,19 +520,19 @@ export default function SignUpPage() {
               <div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-3"><div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-4 h-4 text-primary-600" /><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Cloudflare security verification</span></div><TurnstileWidget action="signup" onVerified={handleTurnstileVerified} onError={handleTurnstileError} />{turnstileToken && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Security check completed</p>}{turnstileError && <p className="text-xs text-red-500 mt-1">{turnstileError}</p>}</div>
             </div>}
 
-            {step === 1 && <div className="space-y-5"><div><label className="label">Username</label><div className="relative"><AtSign className="icon" /><input value={username} onChange={(e) => setUsername(e.target.value)} className="base-input pl-12" placeholder="marvelous" autoCapitalize="none" autoComplete="username" /></div><div className="mt-2 text-xs">{usernameChecking ? <span className="text-gray-400">Checking…</span> : usernameStatus?.available ? <span className="text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> @{usernameStatus.normalized} is available</span> : usernameStatus ? <span className="text-red-600 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> Username unavailable</span> : null}</div>{suggestions.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{suggestions.map((s) => <button key={s} type="button" onClick={() => setUsername(s)} className="px-2.5 py-1 text-xs rounded-full border border-primary-200 text-primary-700 dark:text-primary-300">@{s}</button>)}</div>}</div><div><label className="label">Date of birth <span className="text-gray-400 font-normal">(private)</span></label><div className="relative"><Calendar className="icon" /><input type="date" value={dob} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDob(e.target.value)} className="base-input pl-12" /></div><p className="helper">Your DOB is used for eligibility and is not public by default.</p></div><div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900 text-sm flex items-center gap-3"><span className="text-xl">{countryFlag(country.iso2)}</span><div className="flex-1"><div className="font-semibold text-gray-900 dark:text-gray-100">{country.name}</div><div className="text-xs text-gray-500 dark:text-gray-400">Phone prefix {country.callingCode}</div></div><button type="button" onClick={() => setStep(0)} className="text-xs font-semibold text-primary-600 dark:text-primary-300">Change</button></div></div>}
+            {currentStep === 'identity' && <div className="space-y-5"><div><label className="label">Username</label><div className="relative"><AtSign className="icon" /><input value={username} onChange={(e) => setUsername(e.target.value)} className="base-input pl-12" placeholder="marvelous" autoCapitalize="none" autoComplete="username" /></div><div className="mt-2 text-xs">{usernameChecking ? <span className="text-gray-400">Checking…</span> : usernameStatus?.available ? <span className="text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> @{usernameStatus.normalized} is available</span> : usernameStatus ? <span className="text-red-600 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> Username unavailable</span> : null}</div>{suggestions.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{suggestions.map((s) => <button key={s} type="button" onClick={() => setUsername(s)} className="px-2.5 py-1 text-xs rounded-full border border-primary-200 text-primary-700 dark:text-primary-300">@{s}</button>)}</div>}</div><div><label className="label">Date of birth <span className="text-gray-400 font-normal">(private)</span></label><div className="relative"><Calendar className="icon" /><input type="date" value={dob} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDob(e.target.value)} className="base-input pl-12" /></div><p className="helper">Your DOB is used for eligibility and is not public by default.</p></div><div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900 text-sm flex items-center gap-3"><span className="text-xl">{countryFlag(country.iso2)}</span><div className="flex-1"><div className="font-semibold text-gray-900 dark:text-gray-100">{country.name}</div><div className="text-xs text-gray-500 dark:text-gray-400">Phone prefix {country.callingCode}</div></div><button type="button" onClick={() => setStep(0)} className="text-xs font-semibold text-primary-600 dark:text-primary-300">Change</button></div></div>}
 
-            {step === 2 && <div><div className="flex items-center gap-2 mb-2"><Briefcase className="w-5 h-5 text-primary-600" /><h2 className="font-bold text-gray-900 dark:text-gray-100">How do you want to use DRIGHT?</h2></div><p className="helper mb-4">One account can hold multiple capabilities. Buyer access remains free. Standard signup receives the Admin-configured standard trial; verified Starter buyers receive the separate Starter access period.</p>{selectedProfilesRequireStarter && !(starterFlow && starterGateVerified) && <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4"><p className="text-sm font-bold text-amber-900 dark:text-amber-100">Starter payment required for your selected role</p><p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Continue as Buyer only, or purchase DRIGHT Starter Access to unlock the selected professional capability.</p><Link to="/dright/starter" className="inline-flex mt-3 px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold">Open Starter Access</Link></div>}<div className="grid sm:grid-cols-2 gap-3">{PROFILE_OPTIONS.map((p) => <button key={p.value} type="button" onClick={() => toggleProfile(p.value)} className={`text-left p-4 rounded-2xl border-2 transition-colors ${profiles.includes(p.value) ? 'border-primary-500 bg-primary-50 dark:bg-primary-950' : 'border-gray-100 dark:border-gray-700'}`}><div className="flex items-center justify-between"><span className="font-semibold text-gray-900 dark:text-gray-100">{p.label}</span>{profiles.includes(p.value) && <CheckCircle2 className="w-5 h-5 text-primary-600" />}</div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{p.description}</p>{starterProductRequired && starterRequiredProfiles.includes(p.value) && <p className="text-[10px] font-bold text-amber-600 dark:text-amber-300 mt-2">Starter access required</p>}</button>)}</div></div>}
+            {currentStep === 'profiles' && <div><div className="flex items-center gap-2 mb-2"><Briefcase className="w-5 h-5 text-primary-600" /><h2 className="font-bold text-gray-900 dark:text-gray-100">How do you want to use DRIGHT?</h2></div><p className="helper mb-4">One account can hold multiple capabilities. Buyer access remains free. Standard signup receives the Admin-configured standard trial; verified Starter buyers receive the separate Starter access period.</p>{selectedProfilesRequireStarter && !(starterFlow && starterGateVerified) && <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4"><p className="text-sm font-bold text-amber-900 dark:text-amber-100">Starter payment required for your selected role</p><p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Continue as Buyer only, or purchase DRIGHT Starter Access to unlock the selected professional capability.</p><Link to="/dright/starter" className="inline-flex mt-3 px-3 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold">Open Starter Access</Link></div>}<div className="grid sm:grid-cols-2 gap-3">{PROFILE_OPTIONS.map((p) => <button key={p.value} type="button" onClick={() => toggleProfile(p.value)} className={`text-left p-4 rounded-2xl border-2 transition-colors ${profiles.includes(p.value) ? 'border-primary-500 bg-primary-50 dark:bg-primary-950' : 'border-gray-100 dark:border-gray-700'}`}><div className="flex items-center justify-between"><span className="font-semibold text-gray-900 dark:text-gray-100">{p.label}</span>{profiles.includes(p.value) && <CheckCircle2 className="w-5 h-5 text-primary-600" />}</div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{p.description}</p>{starterProductRequired && starterRequiredProfiles.includes(p.value) && <p className="text-[10px] font-bold text-amber-600 dark:text-amber-300 mt-2">Starter access required</p>}</button>)}</div></div>}
 
-            {step === 3 && <div className="space-y-6"><div className="rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 p-4 flex gap-3"><Clock3 className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" /><div><p className="font-semibold text-blue-900 dark:text-blue-100 text-sm">Answer now or finish later</p><p className="text-xs text-blue-700 dark:text-blue-300 mt-1">You can skip any questionnaire during signup. Incomplete answers are saved as drafts and will appear in Settings → Profile.</p></div></div>{questionnaires.length === 0 ? <div className="text-center py-8 text-gray-500 dark:text-gray-400">No additional questionnaire is required for the selected profile.</div> : questionnaires.map((q) => <section key={q.id}><div className="flex items-center justify-between gap-3"><h3 className="font-bold text-gray-900 dark:text-gray-100">{q.name}</h3><span className={`text-xs px-2 py-1 rounded-full ${questionnaireComplete(q) ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>{questionnaireComplete(q) ? 'Ready to submit' : 'Can finish later'}</span></div>{q.description && <p className="helper mb-3">{q.description}</p>}<div className="space-y-4 mt-3">{q.questions.filter((question) => visible(q, question)).map((question) => <QuestionField key={question.id} question={question} value={answerFor(q, question.question_key)} onChange={(value) => setAnswer(q, question.question_key, value)} />)}</div></section>)}<button type="button" onClick={skipCurrent} className="w-full py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold text-sm">Skip questionnaires for now</button></div>}
+            {currentStep === 'questionnaire' && <div className="space-y-6"><div className="rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 p-4 flex gap-3"><Clock3 className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" /><div><p className="font-semibold text-blue-900 dark:text-blue-100 text-sm">Answer now or finish later</p><p className="text-xs text-blue-700 dark:text-blue-300 mt-1">DRIGHT is using the admin-selected <span className="font-bold">{signupSettings.questionnaire_mode}</span> signup mode. You can skip these quick questions; complete applications remain available in Settings → Account Setup.</p></div></div>{signupQuestionnaires.length === 0 ? <div className="text-center py-8 text-gray-500 dark:text-gray-400">No quick signup question is needed. Any full application remains available later in Settings.</div> : signupQuestionnaires.map((q) => <section key={q.id}><div className="flex items-center justify-between gap-3"><h3 className="font-bold text-gray-900 dark:text-gray-100">{q.name}</h3><span className={`text-xs px-2 py-1 rounded-full ${questionnaireComplete(q) ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>{questionnaireComplete(q) ? 'Quick questions answered' : 'Can finish later'}</span></div>{q.description && <p className="helper mb-3">{q.description}</p>}<div className="space-y-4 mt-3">{q.questions.filter((question) => visible(q, question)).map((question) => <QuestionField key={question.id} question={question} value={answerFor(q, question.question_key)} onChange={(value) => setAnswer(q, question.question_key, value)} />)}</div></section>)}<button type="button" onClick={skipCurrent} className="w-full py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold text-sm">Skip questionnaires for now</button></div>}
 
-            {step === 4 && <div><div className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary-600" /><h2 className="font-bold text-gray-900 dark:text-gray-100">Interests</h2></div><p className="helper mb-4">Choose what should help personalize discovery and recommendations. You can change this later.</p><div className="flex flex-wrap gap-2">{DISCOVERY_INTERESTS.map((item) => <button key={item} type="button" onClick={() => toggleInterest(item)} className={`px-3 py-2 rounded-full text-sm border ${interests.includes(item) ? 'bg-primary-600 text-white border-primary-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}>{item}</button>)}</div></div>}
+            {currentStep === 'interests' && <div><div className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary-600" /><h2 className="font-bold text-gray-900 dark:text-gray-100">Interests</h2></div><p className="helper mb-4">Choose what should help personalize discovery and recommendations. You can change this later.</p><div className="flex flex-wrap gap-2">{DISCOVERY_INTERESTS.map((item) => <button key={item} type="button" onClick={() => toggleInterest(item)} className={`px-3 py-2 rounded-full text-sm border ${interests.includes(item) ? 'bg-primary-600 text-white border-primary-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}>{item}</button>)}</div></div>}
 
-            {step === 5 && <div className="space-y-6"><div className="rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 p-4 flex gap-3"><Clock3 className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" /><div><p className="font-semibold text-blue-900 dark:text-blue-100 text-sm">Documents can be completed later</p><p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Professional documents and KYC uploads do not block account creation. Required KYC only gates the actions that actually require verification.</p></div></div><section><h3 className="font-bold text-gray-900 dark:text-gray-100">Professional documents <span className="text-gray-400 font-normal">optional</span></h3><p className="helper">CVs, certificates and portfolio documents use separate private storage. Buyers do not need a CV just to create or use a buyer account.</p><div className="flex flex-col sm:flex-row gap-2 mt-3"><select value={proType} onChange={(e) => setProType(e.target.value)} className="input-base sm:max-w-[220px]"><option value="cv">CV</option><option value="resume">Resume</option><option value="certificate">Certificate</option><option value="qualification">Qualification</option><option value="portfolio">Portfolio document</option><option value="business_registration">Business registration</option><option value="media_kit">Media kit</option></select><label className="flex-1 cursor-pointer px-4 py-3 rounded-xl border-2 border-dashed border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-300 text-sm font-medium text-center"><Upload className="w-4 h-4 inline mr-1" /> Add document<input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setProDocs((prev) => [...prev, { file: f, documentType: proType, title: f.name }]); e.currentTarget.value = ''; }} /></label></div>{proDocs.length > 0 && <div className="mt-3 space-y-2">{proDocs.map((d, i) => <div key={`${d.file.name}-${i}`} className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100"><FileText className="w-4 h-4" /><span className="flex-1 truncate">{d.file.name}</span><button type="button" onClick={() => setProDocs((prev) => prev.filter((_, x) => x !== i))} className="text-red-500">Remove</button></div>)}</div>}</section><section><div className="flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary-600" /><h3 className="font-bold text-gray-900 dark:text-gray-100">KYC / identity verification</h3></div>{kycRequired ? <p className="helper mt-1">KYC is required for at least one selected capability, but you may complete it after signup in Settings → Profile.</p> : <p className="helper mt-1">No mandatory KYC rule currently applies. You can still verify later if you want a stronger trust level.</p>}{requiredKycTypes.length === 0 && kycRequired && <div className="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-sm">KYC is required for a selected capability, but the policy has no fixed document set. Settings → Profile will show the applicable manual requirements.</div>}<div className="space-y-3 mt-3">{requiredKycTypes.map((type) => <label key={type} className="block p-3 rounded-xl border border-gray-200 dark:border-gray-700"><div className="flex items-center justify-between gap-3"><span className="text-sm font-medium text-gray-900 dark:text-gray-100">{KYC_DOC_TYPE_LABELS[type] ?? type}</span><span className="text-xs text-gray-500 dark:text-gray-400">Optional now</span></div><input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="mt-2 block w-full text-sm text-gray-700 dark:text-gray-300" onChange={(e) => { const f = e.target.files?.[0]; if (f) setKycFiles((prev) => ({ ...prev, [type]: f })); }} />{kycFiles[type] && <p className="text-xs text-green-600 mt-1">Selected: {kycFiles[type].name}</p>}</label>)}</div></section><button type="button" onClick={skipCurrent} className="w-full py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold text-sm">Skip documents & KYC for now</button></div>}
+            {currentStep === 'documents' && <div className="space-y-6"><div className="rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 p-4 flex gap-3"><Clock3 className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" /><div><p className="font-semibold text-blue-900 dark:text-blue-100 text-sm">Documents can be completed later</p><p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Professional documents and KYC uploads do not block account creation. Required KYC only gates the actions that actually require verification.</p></div></div><section><h3 className="font-bold text-gray-900 dark:text-gray-100">Professional documents <span className="text-gray-400 font-normal">optional</span></h3><p className="helper">CVs, certificates and portfolio documents use separate private storage. Buyers do not need a CV just to create or use a buyer account.</p><div className="flex flex-col sm:flex-row gap-2 mt-3"><select value={proType} onChange={(e) => setProType(e.target.value)} className="input-base sm:max-w-[220px]"><option value="cv">CV</option><option value="resume">Resume</option><option value="certificate">Certificate</option><option value="qualification">Qualification</option><option value="portfolio">Portfolio document</option><option value="business_registration">Business registration</option><option value="media_kit">Media kit</option></select><label className="flex-1 cursor-pointer px-4 py-3 rounded-xl border-2 border-dashed border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-300 text-sm font-medium text-center"><Upload className="w-4 h-4 inline mr-1" /> Add document<input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setProDocs((prev) => [...prev, { file: f, documentType: proType, title: f.name }]); e.currentTarget.value = ''; }} /></label></div>{proDocs.length > 0 && <div className="mt-3 space-y-2">{proDocs.map((d, i) => <div key={`${d.file.name}-${i}`} className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100"><FileText className="w-4 h-4" /><span className="flex-1 truncate">{d.file.name}</span><button type="button" onClick={() => setProDocs((prev) => prev.filter((_, x) => x !== i))} className="text-red-500">Remove</button></div>)}</div>}</section><section><div className="flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary-600" /><h3 className="font-bold text-gray-900 dark:text-gray-100">KYC / identity verification</h3></div>{kycRequired ? <p className="helper mt-1">KYC is required for at least one selected capability, but you may complete it after signup in Settings → Profile.</p> : <p className="helper mt-1">No mandatory KYC rule currently applies. You can still verify later if you want a stronger trust level.</p>}{requiredKycTypes.length === 0 && kycRequired && <div className="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-sm">KYC is required for a selected capability, but the policy has no fixed document set. Settings → Profile will show the applicable manual requirements.</div>}<div className="space-y-3 mt-3">{requiredKycTypes.map((type) => <label key={type} className="block p-3 rounded-xl border border-gray-200 dark:border-gray-700"><div className="flex items-center justify-between gap-3"><span className="text-sm font-medium text-gray-900 dark:text-gray-100">{KYC_DOC_TYPE_LABELS[type] ?? type}</span><span className="text-xs text-gray-500 dark:text-gray-400">Optional now</span></div><input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="mt-2 block w-full text-sm text-gray-700 dark:text-gray-300" onChange={(e) => { const f = e.target.files?.[0]; if (f) setKycFiles((prev) => ({ ...prev, [type]: f })); }} />{kycFiles[type] && <p className="text-xs text-green-600 mt-1">Selected: {kycFiles[type].name}</p>}</label>)}</div></section><button type="button" onClick={skipCurrent} className="w-full py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold text-sm">Skip documents & KYC for now</button></div>}
 
-            {step === 6 && <div className="space-y-4"><h2 className="font-bold text-xl text-gray-900 dark:text-gray-100">Review & create account</h2><ReviewRow label="Username" value={`@${usernameStatus?.normalized ?? username}`} /><ReviewRow label="Country" value={`${countryFlag(country.iso2)} ${country.name} ${country.callingCode}`} /><ReviewRow label="Intended profiles" value={profiles.map((p) => PROFILE_OPTIONS.find((o) => o.value === p)?.label ?? p).join(', ')} /><ReviewRow label="Questionnaires" value={questionnaires.length === 0 ? 'None required' : deferredQuestionnaires > 0 ? `${completeQuestionnaires} ready • ${deferredQuestionnaires} saved for later` : `${completeQuestionnaires} ready to submit`} /><ReviewRow label="Professional documents" value={proDocs.length ? `${proDocs.length} selected` : 'Skipped • optional'} /><ReviewRow label="KYC" value={kycRequired ? Object.keys(kycFiles).length ? `${Object.keys(kycFiles).length} document(s) selected • remaining items can be completed later` : 'Required for selected capability • complete later in Settings' : 'Not currently required'} /><div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-3"><div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-4 h-4 text-primary-600" /><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Final Cloudflare security check</span></div><TurnstileWidget action="signup" onVerified={handleTurnstileVerified} onError={handleTurnstileError} />{turnstileError && <p className="text-xs text-red-500 mt-1">{turnstileError}</p>}</div><p className="text-xs text-gray-500 dark:text-gray-400">DOB and questionnaire drafts are stored server-side. If email confirmation is required, an opaque one-time token on this device resumes onboarding after sign-in. Selected file contents are never saved in browser storage.</p></div>}
+            {currentStep === 'review' && <div className="space-y-4"><h2 className="font-bold text-xl text-gray-900 dark:text-gray-100">Review & create account</h2><ReviewRow label="Username" value={`@${usernameStatus?.normalized ?? username}`} /><ReviewRow label="Country" value={`${countryFlag(country.iso2)} ${country.name} ${country.callingCode}`} /><ReviewRow label="Intended profiles" value={profiles.map((p) => PROFILE_OPTIONS.find((o) => o.value === p)?.label ?? p).join(', ')} /><ReviewRow label="Questionnaires" value={questionnaireReviewText} /><ReviewRow label="Professional documents" value={proDocs.length ? `${proDocs.length} selected` : 'Skipped • optional'} /><ReviewRow label="KYC" value={kycRequired ? Object.keys(kycFiles).length ? `${Object.keys(kycFiles).length} document(s) selected • remaining items can be completed later` : 'Required for selected capability • complete later in Settings' : 'Not currently required'} /><div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-3"><div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-4 h-4 text-primary-600" /><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Final Cloudflare security check</span></div><TurnstileWidget action="signup" onVerified={handleTurnstileVerified} onError={handleTurnstileError} />{turnstileError && <p className="text-xs text-red-500 mt-1">{turnstileError}</p>}</div><p className="text-xs text-gray-500 dark:text-gray-400">DOB and questionnaire drafts are stored server-side. If email confirmation is required, an opaque one-time token on this device resumes onboarding after sign-in. Selected file contents are never saved in browser storage.</p></div>}
 
-            <div className="flex gap-3 mt-8">{step > 0 && <button type="button" onClick={back} disabled={loading} className="px-5 py-3 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>}<button type="button" onClick={step === STEPS.length - 1 ? () => void handleCreate() : next} disabled={loading || (starterFlow && starterGateChecking)} className="flex-1 py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{step === STEPS.length - 1 ? 'Create Account' : 'Continue'}<ArrowRight className="w-5 h-5" /></>}</button></div>
+            <div className="flex gap-3 mt-8">{step > 0 && <button type="button" onClick={back} disabled={loading} className="px-5 py-3 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>}<button type="button" onClick={currentStep === 'review' ? () => void handleCreate() : next} disabled={loading || (starterFlow && starterGateChecking)} className="flex-1 py-3.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{currentStep === 'review' ? 'Create Account' : 'Continue'}<ArrowRight className="w-5 h-5" /></>}</button></div>
             <div className="mt-6 text-center"><p className="text-gray-500 dark:text-gray-400">Already have an account? <Link to="/sign-in" className="text-primary-600 dark:text-primary-300 font-semibold">Sign in</Link></p></div>
           </div>
         </motion.div>
