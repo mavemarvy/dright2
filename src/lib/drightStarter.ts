@@ -364,6 +364,7 @@ export interface DrightStarterAffiliateChallengeSettings {
   restrict_marketplace_until_complete: boolean;
   allow_own_listings_while_restricted: boolean;
   seller_profile_exempt: boolean;
+  apply_levels_to_existing_affiliates: boolean;
   updated_at?: string;
   updated_by?: string | null;
 }
@@ -441,6 +442,7 @@ export async function getDrightStarterAffiliateChallenge(): Promise<DrightStarte
     restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
     allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
     seller_profile_exempt: row.seller_profile_exempt !== false,
+    apply_levels_to_existing_affiliates: row.apply_levels_to_existing_affiliates !== false,
   };
 }
 
@@ -512,6 +514,7 @@ export async function getAdminDrightStarterAffiliateChallenge(): Promise<DrightS
     restrict_marketplace_until_complete: row.restrict_marketplace_until_complete === true,
     allow_own_listings_while_restricted: row.allow_own_listings_while_restricted !== false,
     seller_profile_exempt: row.seller_profile_exempt !== false,
+    apply_levels_to_existing_affiliates: row.apply_levels_to_existing_affiliates !== false,
     updated_at: row.updated_at ? String(row.updated_at) : undefined,
     updated_by: row.updated_by ? String(row.updated_by) : null,
   };
@@ -532,6 +535,7 @@ export async function updateAdminDrightStarterAffiliateChallenge(
       restrict_marketplace_until_complete: settings.restrict_marketplace_until_complete,
       allow_own_listings_while_restricted: settings.allow_own_listings_while_restricted,
       seller_profile_exempt: settings.seller_profile_exempt,
+      apply_levels_to_existing_affiliates: settings.apply_levels_to_existing_affiliates,
     },
   });
   if (error) throw error;
