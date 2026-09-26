@@ -36,6 +36,7 @@ import {
 } from '../lib/paymentSecurity';
 import RecoveryCodes from '../components/RecoveryCodes';
 import UserVerificationSection from '../components/UserVerificationSection';
+import OnboardingCenter from '../components/OnboardingCenter';
 import PayoutMethodManager from '../components/PayoutMethodManager';
 
 type Tab = 'profile' | 'account' | 'payment' | 'payouts' | 'privacy' | 'notifications' | 'verification';
@@ -51,7 +52,26 @@ const TABS: { key: Tab; label: string; icon: typeof User }[] = [
 ];
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<Tab>('profile');
+  const initialTab = (() => {
+    try {
+      const value = new URLSearchParams(window.location.search).get('tab') as Tab | null;
+      return value && TABS.some((item) => item.key === value) ? value : 'profile';
+    } catch {
+      return 'profile';
+    }
+  })();
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  const selectTab = (next: Tab) => {
+    setTab(next);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', next);
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // Browser URL updates are best-effort only.
+    }
+  };
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
@@ -68,7 +88,7 @@ export default function SettingsPage() {
         {TABS.map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => selectTab(t.key)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium whitespace-nowrap transition-colors ${
               tab === t.key
                 ? 'border-b-2 border-primary-500 text-primary-600'
@@ -296,6 +316,8 @@ function ProfileTab() {
           )}
         </div>
       </div>
+
+      <OnboardingCenter />
     </div>
   );
 }

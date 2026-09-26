@@ -42,6 +42,13 @@ import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext
 import { supabase } from '../lib/supabase';
 import { canCreateListing } from '../lib/listingAllowance';
 import {
+  getListingVerificationStatus,
+  uploadListingEvidence,
+  LISTING_EVIDENCE_LABELS,
+  prettyVerificationStatus,
+  type ListingVerificationStatus,
+} from '../lib/listingCompliance';
+import {
   fetchSystemConfig,
   calculatePricing,
   getTaskPercentForTier,
@@ -177,6 +184,10 @@ export default function UploadProductPage() {
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
   const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
   const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<Array<{ id: string; name: string }>>([]);
+  const [complianceScopeId, setComplianceScopeId] = useState(() => crypto.randomUUID());
+  const [listingVerification, setListingVerification] = useState<ListingVerificationStatus | null>(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  const [complianceUploading, setComplianceUploading] = useState<string | null>(null);
   const [sellerCommissionPolicy, setSellerCommissionPolicy] = useState<SellerCommissionPolicy | null>(null);
   const [attributeDefinitions, setAttributeDefinitions] = useState<import('../lib/listingEngine').MarketplaceAttributeDefinition[]>([]);
   const [dynamicAttributes, setDynamicAttributes] = useState<Record<string, unknown>>({});
@@ -246,6 +257,8 @@ export default function UploadProductPage() {
     setSelectedTaxonomyCategoryId(null);
     setSelectedTaxonomyPath([]);
     setDynamicAttributes({});
+    setComplianceScopeId(crypto.randomUUID());
+    setListingVerification(null);
   }, [productType]);
 
   useEffect(() => {
@@ -285,6 +298,52 @@ export default function UploadProductPage() {
     selectedTaxonomyCategoryId,
   ]);
 
+  useEffect(() => {
+    let active = true;
+    if (!selectedTaxonomyCategoryId) {
+      setListingVerification(null);
+      setComplianceLoading(false);
+      return () => { active = false; };
+    }
+
+    setComplianceLoading(true);
+    getListingVerificationStatus(productType, selectedTaxonomyCategoryId, complianceScopeId)
+      .then((status) => {
+        if (active) setListingVerification(status);
+      })
+      .catch((e) => {
+        if (active) {
+          setListingVerification(null);
+          setError(e instanceof Error ? e.message : 'Could not check listing verification requirements.');
+        }
+      })
+      .finally(() => {
+        if (active) setComplianceLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [productType, selectedTaxonomyCategoryId, complianceScopeId]);
+
+  const handleComplianceUpload = async (documentType: string, file: File) => {
+    if (!listingVerification?.requirement_id) return;
+    setComplianceUploading(documentType);
+    setError(null);
+    try {
+      await uploadListingEvidence({
+        file,
+        requirementId: listingVerification.requirement_id,
+        scopeId: complianceScopeId,
+        documentType,
+      });
+      const refreshed = await getListingVerificationStatus(productType, selectedTaxonomyCategoryId, complianceScopeId);
+      setListingVerification(refreshed);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not upload listing verification document.');
+    } finally {
+      setComplianceUploading(null);
+    }
+  };
+
   // Load draft on mount if draftId passed via navigation state
   useEffect(() => {
     const navState = location.state as { draftId?: string; publish?: boolean } | null;
@@ -319,6 +378,7 @@ export default function UploadProductPage() {
         setSelectedTaxonomyCategoryId(d.taxonomyCategoryId ?? null);
         setSelectedTaxonomyPath(d.taxonomyPath ?? []);
         setDynamicAttributes(d.dynamicAttributes ?? {});
+        setComplianceScopeId(d.complianceScopeId || crypto.randomUUID());
         if (d.imagePreviews && d.imagePreviews.length > 0) {
           setImagePreviews(d.imagePreviews);
         }
@@ -446,6 +506,10 @@ export default function UploadProductPage() {
         const price = parseFloat(form.price);
         if (isNaN(price) || price <= 0) { setError('Enter a valid price'); return false; }
       }
+      if (engineSettings?.taxonomy_enabled && !selectedTaxonomyCategoryId) {
+        setError('Select the most specific marketplace category before continuing.');
+        return false;
+      }
       if (engineSettings?.dynamic_forms_enabled) {
         const dynamicError = validateMarketplaceAttributes(attributeDefinitions, dynamicAttributes);
         if (dynamicError) { setError(dynamicError); return false; }
@@ -486,6 +550,7 @@ export default function UploadProductPage() {
       taxonomyCategoryId: selectedTaxonomyCategoryId,
       taxonomyPath: selectedTaxonomyPath.map(node => ({ id: node.id, name: node.name })),
       dynamicAttributes,
+      complianceScopeId,
     };
 
     const draftName = form.name || `Draft ${new Date().toLocaleDateString()}`;
@@ -526,6 +591,20 @@ export default function UploadProductPage() {
       setError('Stock quantity must be a non-negative number'); return;
     }
 
+    let currentVerification: ListingVerificationStatus;
+    try {
+      currentVerification = await getListingVerificationStatus(productType, selectedTaxonomyCategoryId, complianceScopeId);
+      setListingVerification(currentVerification);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not verify listing requirements.');
+      return;
+    }
+    if (currentVerification.required && !currentVerification.eligible) {
+      const reason = currentVerification.reasons?.find((item) => item.message)?.message;
+      setError(reason || currentVerification.message || 'Complete the required KYC and listing documents before submitting this item.');
+      return;
+    }
+
     const hasListingCapacity = await canCreateListing(productType, selectedTaxonomyCategoryId);
     if (!hasListingCapacity) {
       setError('Your listing allowance is exhausted. Buy additional listing capacity from Subscriptions & Capacity or wait for the monthly reset.');
@@ -555,6 +634,7 @@ export default function UploadProductPage() {
         image_url: imageUrl,
         category: form.category,
         listing_taxonomy_category_id: selectedTaxonomyCategoryId,
+        compliance_scope_id: currentVerification.required ? complianceScopeId : null,
         admin_task_percent: isFree ? 0 : adminTaskPercent,
         sales_team_task_percent: isFree ? 0 : salesTeamTaskPercent,
         affiliate_commission_percent: isFree ? 0 : (parseFloat(affiliateCommission) || 0),
@@ -925,6 +1005,85 @@ export default function UploadProductPage() {
                   <p className="text-xs text-gray-500 mt-2">
                     Legacy marketplace grouping remains <span className="font-medium">{selectedTaxonomyPath[0].name}</span> for backward compatibility.
                   </p>
+                )}
+
+                {complianceLoading && (
+                  <div className="mt-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-4 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary-600" />
+                    Checking listing verification requirements…
+                  </div>
+                )}
+
+                {!complianceLoading && listingVerification?.required && (
+                  <div className={`mt-4 rounded-2xl border-2 p-4 ${listingVerification.eligible
+                    ? 'border-green-200 dark:border-green-900 bg-green-50/70 dark:bg-green-950/20'
+                    : 'border-amber-200 dark:border-amber-900 bg-amber-50/70 dark:bg-amber-950/20'}`}>
+                    <div className="flex items-start gap-3">
+                      <ShieldAlert className={`w-5 h-5 shrink-0 mt-0.5 ${listingVerification.eligible ? 'text-green-600' : 'text-amber-600'}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-gray-900 dark:text-gray-100">{listingVerification.name || 'Listing verification required'}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                          {listingVerification.message || 'This category needs additional verification before it can be submitted.'}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${listingVerification.eligible
+                        ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300'
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}>
+                        {listingVerification.eligible ? 'Ready' : 'Action needed'}
+                      </span>
+                    </div>
+
+                    {listingVerification.require_kyc && (
+                      <div className="mt-4 rounded-xl bg-white/80 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3">
+                        <CheckCircle className={`w-4 h-4 ${listingVerification.kyc_status === 'approved' ? 'text-green-600' : 'text-amber-600'}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Identity verification</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{prettyVerificationStatus(listingVerification.kyc_status)}</p>
+                        </div>
+                        {listingVerification.kyc_status !== 'approved' && (
+                          <Link to="/settings?tab=verification" className="text-xs font-bold text-primary-600 dark:text-primary-400">Complete KYC</Link>
+                        )}
+                      </div>
+                    )}
+
+                    {(listingVerification.required_document_types ?? []).length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {(listingVerification.required_document_types ?? []).map((docType) => {
+                          const missing = (listingVerification.missing_documents ?? []).includes(docType);
+                          return (
+                            <div key={docType} className="rounded-xl bg-white/80 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 p-3">
+                              <div className="flex items-center gap-3">
+                                <FileText className={`w-4 h-4 shrink-0 ${missing ? 'text-amber-600' : 'text-green-600'}`} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{LISTING_EVIDENCE_LABELS[docType] || prettyVerificationStatus(docType)}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {missing ? 'Required before submission' : listingVerification.document_must_be_verified ? 'Verified' : 'Uploaded for admin review'}
+                                  </p>
+                                </div>
+                                {missing ? (
+                                  <label className={`cursor-pointer px-3 py-2 rounded-lg bg-primary-600 text-white text-xs font-bold ${complianceUploading === docType ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    {complianceUploading === docType ? 'Uploading…' : 'Upload'}
+                                    <input
+                                      type="file"
+                                      className="hidden"
+                                      accept=".pdf,image/jpeg,image/png,image/webp"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) void handleComplianceUpload(docType, file);
+                                        e.currentTarget.value = '';
+                                      }}
+                                    />
+                                  </label>
+                                ) : (
+                                  <span className="text-xs font-bold text-green-600 dark:text-green-400">Added</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
               {!isServiceType && (

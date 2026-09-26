@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, FileCheck2, Loader2, RefreshCw, Search, ShieldCheck, X, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Eye, FileCheck2, FileText, Loader2, RefreshCw, Search, ShieldCheck, X, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/currency';
+import SecureDocumentViewer from '../../components/admin/SecureDocumentViewer';
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'suspended' | 'all';
 type ListingType = 'all' | 'physical_product' | 'digital_product' | 'service' | 'course' | 'job' | 'campaign' | 'task' | 'promotion_campaign';
@@ -23,6 +24,23 @@ interface ListingReviewRow {
   metadata: Record<string, unknown> | null;
   owner_name?: string | null;
   owner_email?: string | null;
+}
+
+interface ListingEvidenceRow {
+  id: string;
+  requirement_id: string;
+  requirement_name: string;
+  document_type: string;
+  storage_bucket: string;
+  storage_path: string;
+  original_file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  status: string;
+  user_visible_reason: string | null;
+  reviewer_id: string | null;
+  reviewed_at: string | null;
+  created_at: string;
 }
 
 const TYPE_LABELS: Record<string,string> = {
@@ -53,6 +71,12 @@ export default function AdminListingVerificationPage(){
   const [error,setError]=useState<string|null>(null);
   const [rejecting,setRejecting]=useState<ListingReviewRow|null>(null);
   const [rejectReason,setRejectReason]=useState('');
+  const [evidenceOpen,setEvidenceOpen]=useState<string|null>(null);
+  const [evidenceLoading,setEvidenceLoading]=useState<string|null>(null);
+  const [evidenceByListing,setEvidenceByListing]=useState<Record<string,ListingEvidenceRow[]>>({});
+  const [evidenceReviewing,setEvidenceReviewing]=useState<{listingId:string;evidence:ListingEvidenceRow}|null>(null);
+  const [evidenceReason,setEvidenceReason]=useState('');
+  const [viewer,setViewer]=useState<{evidence:ListingEvidenceRow;url:string;expiresAt:Date}|null>(null);
 
   const loadQueue=useCallback(async()=>{
     setLoading(true);setError(null);
@@ -96,6 +120,48 @@ export default function AdminListingVerificationPage(){
     }catch(e){
       console.error('Listing review failed:',e);
       setError(e instanceof Error?e.message:'Listing review failed.');
+    }finally{setProcessingId(null);}
+  };
+
+  const loadEvidence=async(listingId:string,force=false)=>{
+    if(!force&&evidenceOpen===listingId){setEvidenceOpen(null);return;}
+    setEvidenceOpen(listingId);setEvidenceLoading(listingId);setError(null);
+    try{
+      const {data,error:evidenceError}=await supabase.rpc('get_admin_listing_evidence',{p_listing_id:listingId});
+      if(evidenceError)throw evidenceError;
+      setEvidenceByListing(prev=>({...prev,[listingId]:(Array.isArray(data)?data:[]) as ListingEvidenceRow[]}));
+    }catch(e){
+      setError(e instanceof Error?e.message:'Could not load listing verification evidence.');
+    }finally{setEvidenceLoading(null);}
+  };
+
+  const createEvidenceUrl=async(evidence:ListingEvidenceRow)=>{
+    const {data,error:urlError}=await supabase.storage.from(evidence.storage_bucket).createSignedUrl(evidence.storage_path,120);
+    if(urlError||!data?.signedUrl)throw urlError||new Error('Secure preview unavailable');
+    return data.signedUrl;
+  };
+
+  const openEvidence=async(evidence:ListingEvidenceRow)=>{
+    setError(null);
+    try{
+      const url=await createEvidenceUrl(evidence);
+      setViewer({evidence,url,expiresAt:new Date(Date.now()+120000)});
+    }catch(e){
+      setError(e instanceof Error?e.message:'Could not create the secure document preview.');
+    }
+  };
+
+  const reviewEvidence=async(listingId:string,evidence:ListingEvidenceRow,status:'verified'|'needs_resubmission',reason?:string)=>{
+    setProcessingId(evidence.id);setError(null);
+    try{
+      const {error:reviewError}=await supabase.rpc('review_listing_requirement_evidence',{
+        p_evidence_id:evidence.id,p_status:status,p_reason:status==='verified'?null:reason?.trim()||null,
+      });
+      if(reviewError)throw reviewError;
+      setEvidenceReviewing(null);setEvidenceReason('');
+      await loadEvidence(listingId,true);
+    }catch(e){
+      setError(e instanceof Error?e.message:'Evidence review failed.');
     }finally{setProcessingId(null);}
   };
 
@@ -154,6 +220,47 @@ export default function AdminListingVerificationPage(){
               return <span key={key} className="text-[11px] px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{key.replace(/_/g,' ')}: {String(value)}</span>;
             })}</div>
             {row.rejection_reason&&<div className="mt-3 rounded-xl bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300"><strong>Review reason:</strong> {row.rejection_reason}</div>}
+
+            {['physical_product','digital_product','service','course','job_product','product'].includes(row.listing_type)&&<>
+              <button type="button" onClick={()=>void loadEvidence(row.id)}
+                className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                <ShieldCheck className="w-4 h-4 text-primary-600"/>
+                Listing evidence
+                {evidenceOpen===row.id?<ChevronUpIcon/>:<ChevronDownIcon/>}
+              </button>
+
+              {evidenceOpen===row.id&&<div className="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3">
+                {evidenceLoading===row.id?<div className="py-4 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-primary-600"/></div>
+                :(evidenceByListing[row.id]?.length??0)===0?<p className="text-xs text-gray-500 dark:text-gray-400">No listing-specific ownership evidence is attached to this listing.</p>
+                :<div className="space-y-2">{evidenceByListing[row.id].map(evidence=><div key={evidence.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <FileText className="w-4 h-4 text-primary-600 shrink-0"/>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{evidence.original_file_name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{evidence.document_type.replace(/_/g,' ')} • {evidence.requirement_name}</p>
+                      </div>
+                    </div>
+                    <span className={`self-start text-xs font-semibold px-2 py-1 rounded-full ${evidence.status==='verified'?'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300':evidence.status==='rejected'||evidence.status==='needs_resubmission'?'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300':'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>{evidence.status.replace(/_/g,' ')}</span>
+                  </div>
+                  {evidence.user_visible_reason&&<p className="text-xs text-red-600 dark:text-red-300 mt-2">{evidence.user_visible_reason}</p>}
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button type="button" onClick={()=>void openEvidence(evidence)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                      <Eye className="w-3.5 h-3.5"/> View securely
+                    </button>
+                    {evidence.status!=='verified'&&<button type="button" onClick={()=>void reviewEvidence(row.id,evidence,'verified')} disabled={processingId===evidence.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50">
+                      {processingId===evidence.id?<Loader2 className="w-3.5 h-3.5 animate-spin"/>:<CheckCircle2 className="w-3.5 h-3.5"/>} Verify evidence
+                    </button>}
+                    <button type="button" onClick={()=>{setEvidenceReviewing({listingId:row.id,evidence});setEvidenceReason('');}}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold">
+                      Request replacement
+                    </button>
+                  </div>
+                </div>)}</div>}
+              </div>}
+            </>}
           </div>
           <div className="flex lg:flex-col gap-2 shrink-0">
             {row.status!=='approved'&&<button type="button" onClick={()=>void review(row,'approve')} disabled={busy}
@@ -182,6 +289,45 @@ export default function AdminListingVerificationPage(){
       </div>
     </div>}
 
-    <div className="mt-5 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500"><Clock3 className="w-3.5 h-3.5"/>Decisions are recorded in the immutable listing review history and notify the listing owner.</div>
+    {evidenceReviewing&&<div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Request listing evidence replacement">
+      <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-2xl p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div><h2 className="font-bold text-lg text-gray-900 dark:text-white">Request new document</h2><p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{evidenceReviewing.evidence.original_file_name}</p></div>
+          <button type="button" onClick={()=>setEvidenceReviewing(null)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5"/></button>
+        </div>
+        <label className="block text-sm font-medium mt-5 mb-2 text-gray-700 dark:text-gray-300">User-visible reason required</label>
+        <textarea value={evidenceReason} onChange={e=>setEvidenceReason(e.target.value)} rows={4} placeholder="Explain what document must be replaced and why."
+          className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-primary-500/30"/>
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" onClick={()=>setEvidenceReviewing(null)} className="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold">Cancel</button>
+          <button type="button" onClick={()=>void reviewEvidence(evidenceReviewing.listingId,evidenceReviewing.evidence,'needs_resubmission',evidenceReason)}
+            disabled={!evidenceReason.trim()||processingId===evidenceReviewing.evidence.id}
+            className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold disabled:opacity-50">Request replacement</button>
+        </div>
+      </div>
+    </div>}
+
+    <SecureDocumentViewer
+      open={viewer!==null}
+      onClose={()=>setViewer(null)}
+      title={viewer?.evidence.original_file_name||'Listing evidence'}
+      mimeType={viewer?.evidence.mime_type||null}
+      signedUrl={viewer?.url||null}
+      expiresAt={viewer?.expiresAt||null}
+      metadata={viewer?[{
+        label:'Document type',value:viewer.evidence.document_type.replace(/_/g,' ')
+      },{
+        label:'Status',value:viewer.evidence.status.replace(/_/g,' ')
+      },{
+        label:'Submitted',value:new Date(viewer.evidence.created_at).toLocaleString()
+      }]:[]}
+      watermark="DRIGHT LISTING VERIFICATION REVIEW"
+      onRefreshUrl={viewer?()=>createEvidenceUrl(viewer.evidence):undefined}
+    />
+
+    <div className="mt-5 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500"><Clock3 className="w-3.5 h-3.5"/>Decisions and evidence reviews are recorded in immutable review history.</div>
   </div>;
 }
+
+function ChevronDownIcon(){return <span aria-hidden="true" className="text-xs">▼</span>;}
+function ChevronUpIcon(){return <span aria-hidden="true" className="text-xs">▲</span>;}

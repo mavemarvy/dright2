@@ -113,7 +113,7 @@ export default function UserVerificationSection() {
 
   return (
     <div className="space-y-5">
-      <OnboardingCenter onChanged={() => void refetchProfile()} />
+      <OnboardingCenter compact onChanged={() => void refetchProfile()} />
 
       <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">

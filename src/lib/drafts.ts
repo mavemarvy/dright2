@@ -40,6 +40,7 @@ export interface DraftData {
   taxonomyCategoryId?: string | null;
   taxonomyPath?: Array<{ id: string; name: string }>;
   dynamicAttributes?: Record<string, unknown>;
+  complianceScopeId?: string | null;
 }
 
 export interface Draft {
