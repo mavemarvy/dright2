@@ -8,7 +8,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { emitEvent } from '../../lib/notificationEvents';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatCurrency } from '../../lib/currency';
+import { formatCurrency, getCurrencySymbol } from '../../lib/currency';
 
 interface PayoutRecord {
   id: string;
@@ -192,7 +192,7 @@ export default function AdminPayoutsPage() {
     const limit = Number(automationDraft.auto_payout_limit_ngn);
     const retries = Number(automationDraft.max_retries);
     if (!Number.isFinite(limit) || limit < 0 || limit > 100000000) {
-      setAutomationError('Automatic payout limit must be between ₦0 and ₦100,000,000.');
+      setAutomationError(`Automatic payout limit must be between ${formatCurrency(0, 'NGN')} and ${formatCurrency(100000000, 'NGN')}.`);
       return;
     }
     if (!Number.isInteger(retries) || retries < 0 || retries > 10) {
@@ -472,7 +472,7 @@ export default function AdminPayoutsPage() {
               <label className="block max-w-md">
                 <span className="text-sm font-medium text-gray-700">Automatic payout limit</span>
                 <div className="mt-1 relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">₦</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">{getCurrencySymbol('NGN')}</span>
                   <input
                     type="number"
                     min="0"

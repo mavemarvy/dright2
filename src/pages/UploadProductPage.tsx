@@ -184,7 +184,7 @@ export default function UploadProductPage() {
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
   const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
   const [selectedTaxonomyPath, setSelectedTaxonomyPath] = useState<Array<{ id: string; name: string }>>([]);
-  const [complianceScopeId, setComplianceScopeId] = useState(() => crypto.randomUUID());
+  const [complianceScopeId, setComplianceScopeId] = useState<string>(() => crypto.randomUUID());
   const [listingVerification, setListingVerification] = useState<ListingVerificationStatus | null>(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [complianceUploading, setComplianceUploading] = useState<string | null>(null);

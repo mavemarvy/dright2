@@ -123,7 +123,7 @@ export default function WithdrawPage() {
     }
     const canonicalAmount = toCanonicalWithdrawalAmount(amt);
     if (!canonicalAmount || canonicalAmount < 100) {
-      setError('Withdrawal must equal at least ₦100 at the current exchange rate');
+      setError(`Withdrawal must equal at least ${format(100, walletCurrency)} at the current exchange rate`);
       return;
     }
     if (canonicalAmount > balance) {
