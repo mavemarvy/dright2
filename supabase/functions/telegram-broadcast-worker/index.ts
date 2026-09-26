@@ -75,7 +75,7 @@ async function promotionTrackingUrl(
     return target;
   }
 
-  return `${SUPABASE_URL}/functions/v1/promotion-click-redirect?token=${data.token}`;
+  return `https://dright.store/r/${data.token}`;
 }
 
 async function sendPromotion(destination: { type: "chat" | "subscriber"; id: string }, campaign: any) {
