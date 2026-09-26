@@ -136,6 +136,19 @@ class ProviderError extends Error {
   }
 }
 
+async function getAIMasterStatus() {
+  const { data, error } = await supabase
+    .from("ai_master_settings")
+    .select("enabled,disabled_message")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (error || !data) return { enabled: true, disabledMessage: "AI features are temporarily turned off by DRIGHT." };
+  return {
+    enabled: data.enabled !== false,
+    disabledMessage: String(data.disabled_message || "AI features are temporarily turned off by DRIGHT."),
+  };
+}
+
 async function authUser(req: Request) {
   const header = req.headers.get("Authorization");
   if (!header?.startsWith("Bearer ")) return null;
@@ -440,8 +453,11 @@ async function ensureSupportEscalation(userId: string, prompt: string, aiSummary
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method === "GET") {
+    const master = await getAIMasterStatus();
     return json({
-      success: Object.values(KEYS).some(Boolean),
+      success: master.enabled && Object.values(KEYS).some(Boolean),
+      masterEnabled: master.enabled,
+      disabledMessage: master.disabledMessage,
       providers: Object.fromEntries(PRIORITY.map(provider => [provider, {
         configured: !!KEYS[provider],
         model: CONFIG[provider].models[0],
@@ -457,6 +473,11 @@ Deno.serve(async (req: Request) => {
 
   const user = await authUser(req);
   if (!user) return json({ success: false, error: "Authentication required." }, 401);
+
+  const master = await getAIMasterStatus();
+  if (!master.enabled) {
+    return json({ success: false, error: { code: "AI_DISABLED", message: master.disabledMessage } }, 503);
+  }
 
   let body: Req;
   try {
