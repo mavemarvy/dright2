@@ -190,6 +190,22 @@ async function upsertSubscriber(message: any, active = true) {
 
 async function sendPrivateWelcome(message: any) {
   await upsertSubscriber(message, true);
+  await supabase.from("telegram_broadcast_subscribers").update({
+    is_active: true,
+    subscribed_news: true,
+    subscribed_promotions: true,
+    subscribed_recommendations: true,
+    updated_at: new Date().toISOString(),
+    last_seen_at: new Date().toISOString(),
+  }).eq("telegram_user_id", String(message.from.id));
+  await supabase.from("telegram_broadcast_subscribers").update({
+    is_active: true,
+    subscribed_news: true,
+    subscribed_promotions: true,
+    subscribed_recommendations: true,
+    updated_at: new Date().toISOString(),
+    last_seen_at: new Date().toISOString(),
+  }).eq("telegram_user_id", String(message.from.id));
   await telegram("sendMessage", {
     chat_id: message.chat.id,
     parse_mode: "HTML",

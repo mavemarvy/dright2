@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Bell, Moon, Clock, VolumeX, Mail, Smartphone, MessageSquare,
@@ -6,6 +6,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { useNotificationPreferences, useNotificationMutes, ALL_CATEGORIES,
   type DeliveryChannel } from '../lib/notificationPreferences';
 
@@ -55,6 +56,26 @@ export default function NotificationPreferencesPage() {
   const { prefs, loading, update, toggleCategory, setDeliveryChannel } = useNotificationPreferences(user?.id || null);
   const { mutes, unmute } = useNotificationMutes(user?.id || null);
   const [savedToast] = useState(false);
+  const [promotionEmailSubscribed, setPromotionEmailSubscribed] = useState(false);
+  const [promotionEmailSaving, setPromotionEmailSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void supabase.rpc('get_promotion_email_subscription')
+      .then(({ data, error }) => {
+        if (!error) setPromotionEmailSubscribed(Boolean(data?.subscribed));
+      });
+  }, [user?.id]);
+
+  const setPromotionEmailConsent = async (next: boolean) => {
+    if (!user?.id || promotionEmailSaving) return;
+    setPromotionEmailSaving(true);
+    const { data, error } = await supabase.rpc('set_promotion_email_subscription', {
+      p_subscribed: next,
+    });
+    if (!error) setPromotionEmailSubscribed(Boolean(data?.subscribed));
+    setPromotionEmailSaving(false);
+  };
 
   if (loading) {
     return (
@@ -169,7 +190,7 @@ export default function NotificationPreferencesPage() {
             <div className="space-y-3">
               {([
                 { key: 'in_app' as DeliveryChannel, label: 'In-App', icon: Bell, available: true },
-                { key: 'email' as DeliveryChannel, label: 'Email', icon: Mail, available: false },
+                { key: 'email' as DeliveryChannel, label: 'Email', icon: Mail, available: true },
                 { key: 'push' as DeliveryChannel, label: 'Push Notifications', icon: Smartphone, available: false },
                 { key: 'sms' as DeliveryChannel, label: 'SMS', icon: MessageSquare, available: false },
               ]).map(ch => (
@@ -189,6 +210,27 @@ export default function NotificationPreferencesPage() {
                 </div>
               ))}
             </div>
+          </SettingCard>
+        </div>
+
+        <div className="mb-4">
+          <SettingCard
+            icon={Mail}
+            title="Promotional Emails"
+            description="Optional sponsored DRIGHT promotions. This is separate from important account and transaction emails."
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Receive sponsored promotions by email</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Only enabled after you opt in. You can unsubscribe here at any time.</p>
+              </div>
+              <Toggle
+                checked={promotionEmailSubscribed}
+                onChange={(value) => void setPromotionEmailConsent(value)}
+                label="Toggle promotional email subscription"
+              />
+            </div>
+            {promotionEmailSaving && <p className="mt-2 text-xs text-gray-400">Saving preference…</p>}
           </SettingCard>
         </div>
 

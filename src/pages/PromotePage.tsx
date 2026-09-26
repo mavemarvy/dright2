@@ -24,6 +24,7 @@ import {
   goalsForAssets,
   initializePromotionPayment,
   updateCampaignLifecycle,
+  fetchPromotionCampaignAnalytics,
 } from '../lib/universalPromotion';
 import { AdPreviewStudio } from '../components/promotion/PromotionSurfaces';
 
@@ -116,14 +117,16 @@ export default function PromotePage() {
     tierPlacements.filter(item => item.tier_code === tier && item.is_included).map(item => item.placement_code),
   ), [tier, tierPlacements]);
 
+  const currentTierRank = tiers.find(item => item.code === tier)?.tier_rank ?? 1;
   const eligiblePlacements = useMemo(() => {
     const selectedTypes = selectedAssets.map(item => item.asset_type);
     return placements.filter(item =>
       item.enabled &&
+      item.minimum_tier_rank <= currentTierRank &&
       allowedCodes.has(item.code) &&
       (selectedTypes.length === 0 || selectedTypes.every(type => item.supported_asset_types.includes(type)))
     );
-  }, [allowedCodes, placements, selectedAssets]);
+  }, [allowedCodes, currentTierRank, placements, selectedAssets]);
 
   useEffect(() => {
     setSelectedPlacements(current => current.filter(code => eligiblePlacements.some(item => item.code === code)));
@@ -132,6 +135,7 @@ export default function PromotePage() {
   const previewPlacements = eligiblePlacements.filter(item => selectedPlacements.includes(item.code));
   const manualTotal = selectedAssets.reduce((sum, item) => sum + Number(allocations[assetKey(item)] || 0), 0);
   const currentTier = tiers.find(item => item.code === tier);
+  const placementPercentTotal = eligiblePlacements.filter(item => selectedPlacements.includes(item.code)).reduce((sum, item) => sum + Number(item.surcharge_percent || 0), 0);
   const resetQuote = () => setQuote(null);
 
   const toggleAsset = (item: PromotableAsset) => {
@@ -255,16 +259,16 @@ export default function PromotePage() {
               <div className="grid gap-2 sm:grid-cols-2">{goals.map(item => <button key={item.value} onClick={() => { setGoal(item.value); resetQuote(); }} className={`rounded-2xl border p-3 text-left ${goal === item.value ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700'}`}><Target className="h-4 w-4 text-primary-600" /><p className="mt-2 text-sm font-bold text-gray-900 dark:text-white">{item.label}</p><p className="mt-1 text-xs text-gray-500">{item.description}</p></button>)}</div>
             </Panel>
 
-            <Panel number="3" title="Choose Normal, Plus or Platinum" subtitle="More inventory increases potential reach, but never bypasses relevance, caps or quality rules.">
-              <div className="grid gap-3 md:grid-cols-3">{tiers.map(item => <button key={item.code} onClick={() => { setTier(item.code); setSelectedPlacements([]); resetQuote(); }} className={`rounded-2xl border-2 p-4 text-left ${tier === item.code ? `${TIER_STYLE[item.code]} bg-primary-50/60 dark:bg-gray-950` : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950'}`}><div className="flex items-center justify-between"><b className="text-gray-900 dark:text-white">{item.name}</b>{tier === item.code && <Check className="h-4 w-4 text-primary-600" />}</div><p className="mt-2 text-xs leading-5 text-gray-500">{item.description}</p><p className="mt-3 text-[10px] font-semibold text-gray-400">Reach multiplier ×{Number(item.reach_multiplier).toFixed(2)}</p></button>)}</div>
+            <Panel number="3" title="Choose Normal, Premium or Platinum" subtitle="Premium and Platinum receive stronger delivery priority and estimated reach, while relevance, caps and quality rules still apply.">
+              <div className="grid gap-3 md:grid-cols-3">{tiers.map(item => <button key={item.code} onClick={() => { setTier(item.code); setSelectedPlacements([]); resetQuote(); }} className={`rounded-2xl border-2 p-4 text-left ${tier === item.code ? `${TIER_STYLE[item.code]} bg-primary-50/60 dark:bg-gray-950` : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950'}`}><div className="flex items-center justify-between"><b className="text-gray-900 dark:text-white">{item.name}</b>{tier === item.code && <Check className="h-4 w-4 text-primary-600" />}</div><p className="mt-2 text-xs leading-5 text-gray-500">{item.description}</p><p className="mt-3 text-[10px] font-semibold text-gray-400">Visibility ×{Number(item.reach_multiplier).toFixed(2)} · spend pace ×{Number(item.spend_pace_multiplier || 1).toFixed(2)}</p></button>)}</div>
             </Panel>
 
             <Panel number="4" title="Choose placements" subtitle="DRIGHT only exposes placements compatible with the selected tier and every selected asset.">
               <div className="grid gap-2 sm:grid-cols-2">{eligiblePlacements.map(item => {
                 const checked = selectedPlacements.includes(item.code);
-                return <label key={item.code} className={`flex cursor-pointer gap-3 rounded-2xl border p-3 ${checked ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700'}`}><input type="checkbox" checked={checked} onChange={() => { setSelectedPlacements(current => checked ? current.filter(code => code !== item.code) : [...current, item.code]); resetQuote(); }} className="mt-1 accent-primary-600" /><div><p className="text-sm font-bold text-gray-900 dark:text-white">{item.name}{item.premium ? ' · Premium' : ''}</p><p className="mt-1 text-xs text-gray-500">{item.description}</p><p className="mt-1 text-[10px] text-gray-400">Frequency cap {item.frequency_cap} / {item.frequency_window_hours}h · density interval {item.density_organic_interval}</p></div></label>;
+                return <label key={item.code} className={`flex cursor-pointer gap-3 rounded-2xl border p-3 ${checked ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700'}`}><input type="checkbox" checked={checked} onChange={() => { setSelectedPlacements(current => checked ? current.filter(code => code !== item.code) : [...current, item.code]); resetQuote(); }} className="mt-1 accent-primary-600" /><div><p className="text-sm font-bold text-gray-900 dark:text-white">{item.name}{item.premium ? ' · Premium' : ''}</p><p className="mt-1 text-xs text-gray-500">{item.description}</p><p className="mt-1 text-[10px] text-gray-400">+{Number(item.surcharge_percent || 0).toFixed(2)}% of media budget · Frequency cap {item.frequency_cap} / {item.frequency_window_hours}h · density interval {item.density_organic_interval}</p></div></label>;
               })}</div>
-              <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-gray-500"><span className="rounded-full bg-gray-100 px-3 py-1 dark:bg-gray-800">Community Ads unavailable until Community ownership exists</span><span className="rounded-full bg-gray-100 px-3 py-1 dark:bg-gray-800">Email Ads unavailable until compliant marketing consent exists</span></div>
+              <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-gray-500"><span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">Community Ads available for eligible assets</span><span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">Email Ads deliver only to opted-in DRIGHT users</span></div>
             </Panel>
 
             <Panel number="5" title="Audience & creative" subtitle="Target safely, then preview how your own asset will look in every selected placement.">
@@ -295,6 +299,7 @@ export default function PromotePage() {
                 <SummaryRow label="Tier" value={currentTier?.name || tier} />
                 <SummaryRow label="Assets" value={String(selectedAssets.length)} />
                 <SummaryRow label="Placements" value={String(selectedPlacements.length)} />
+                <SummaryRow label="Placement add-on" value={`+${placementPercentTotal.toFixed(2)}%`} />
                 <button onClick={reviewSecureTotal} disabled={working} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings2 className="h-4 w-4" />}Review secure total</button>
               </> : <>
                 <p className="mt-2 text-xs font-semibold text-emerald-600">Server-authoritative quote · {quote.campaign_id.slice(0, 8)}</p>
@@ -343,11 +348,33 @@ function Dashboard({ campaigns }: { campaigns: UniversalCampaign[] }) {
 function Mine({ campaigns, onLifecycle }: { campaigns: UniversalCampaign[]; onLifecycle: (id: string, status: 'paused' | 'active' | 'cancelled') => Promise<void> }) {
   const [filter, setFilter] = useState('all');
   const rows = campaigns.filter(item => filter === 'all' || item.status === filter);
-  return <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6"><div className="mb-4 flex justify-end"><select value={filter} onChange={event => setFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-gray-700 dark:bg-gray-900"><option value="all">All campaigns</option><option value="pending">Pending payment</option><option value="active">Active</option><option value="paused">Paused</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></div><div className="space-y-3">{rows.map(item => <div key={item.id} className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex gap-2"><span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black uppercase text-gray-500 dark:bg-gray-800">{STATUS_LABEL[item.status] || item.status}</span><span className="rounded-full bg-primary-50 px-2 py-1 text-[10px] font-black uppercase text-primary-600 dark:bg-primary-950">{item.tier_code}</span></div><p className="mt-2 font-black capitalize text-gray-900 dark:text-white">{item.goal.replace(/_/g, ' ')}</p><p className="font-mono text-[10px] text-gray-400">{item.id}</p></div><div className="flex gap-2">{item.status === 'active' && <Action title="Pause" onClick={() => void onLifecycle(item.id, 'paused')}><Pause className="h-4 w-4" /></Action>}{item.status === 'paused' && <Action title="Resume" onClick={() => void onLifecycle(item.id, 'active')}><Play className="h-4 w-4" /></Action>}{['pending', 'active', 'paused'].includes(item.status) && <Action title="Cancel" danger onClick={() => void onLifecycle(item.id, 'cancelled')}><Trash2 className="h-4 w-4" /></Action>}</div></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="Media budget" value={amount(item.media_budget, item.billing_currency)} /><Metric label="Actual spend" value={amount(item.actual_spend, item.billing_currency)} /><Metric label="Impressions" value={item.actual_impressions.toLocaleString()} /><Metric label="Conversions" value={item.actual_conversions.toLocaleString()} /></div></div>)}{rows.length === 0 && <Empty text="No campaigns match this filter." />}</div></main>;
+  return <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6"><div className="mb-4 flex justify-end"><select value={filter} onChange={event => setFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-gray-700 dark:bg-gray-900"><option value="all">All campaigns</option><option value="pending">Pending payment</option><option value="active">Active</option><option value="paused">Paused</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></div><div className="space-y-3">{rows.map(item => <div key={item.id} className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex gap-2"><span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black uppercase text-gray-500 dark:bg-gray-800">{STATUS_LABEL[item.status] || item.status}</span><span className="rounded-full bg-primary-50 px-2 py-1 text-[10px] font-black uppercase text-primary-600 dark:bg-primary-950">{item.tier_code}</span></div><p className="mt-2 font-black capitalize text-gray-900 dark:text-white">{item.goal.replace(/_/g, ' ')}</p><p className="font-mono text-[10px] text-gray-400">{item.id}</p></div><div className="flex gap-2">{item.status === 'active' && <Action title="Pause" onClick={() => void onLifecycle(item.id, 'paused')}><Pause className="h-4 w-4" /></Action>}{item.status === 'paused' && <Action title="Resume" onClick={() => void onLifecycle(item.id, 'active')}><Play className="h-4 w-4" /></Action>}{['pending', 'active', 'paused'].includes(item.status) && <Action title="Cancel" danger onClick={() => void onLifecycle(item.id, 'cancelled')}><Trash2 className="h-4 w-4" /></Action>}</div></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="Media budget" value={amount(item.media_budget, item.billing_currency)} /><Metric label="Actual spend" value={amount(item.actual_spend, item.billing_currency)} /><Metric label="Impressions" value={item.actual_impressions.toLocaleString()} /><Metric label="Conversions" value={item.actual_conversions.toLocaleString()} /><ExternalDistribution campaignId={item.id} /></div></div>)}{rows.length === 0 && <Empty text="No campaigns match this filter." />}</div></main>;
+}
+
+
+function ExternalDistribution({ campaignId }: { campaignId: string }) {
+  const [external, setExternal] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchPromotionCampaignAnalytics(campaignId).then(data => {
+      if (!live) return;
+      const value = (data?.external_distribution || null) as Record<string, number> | null;
+      setExternal(value);
+    });
+    return () => { live = false; };
+  }, [campaignId]);
+
+  if (!external) return null;
+  return <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-gray-50 p-3 text-xs dark:bg-gray-950 sm:grid-cols-4">
+    <Metric label="Telegram deliveries" value={Number(external.telegram_deliveries || 0).toLocaleString()} />
+    <Metric label="Telegram clicks" value={Number(external.telegram_clicks || 0).toLocaleString()} />
+    <Metric label="Email deliveries" value={Number(external.email_deliveries || 0).toLocaleString()} />
+    <Metric label="Email clicks" value={Number(external.email_clicks || 0).toLocaleString()} />
+  </div>;
 }
 
 function CampaignCard({ campaign }: { campaign: UniversalCampaign }) {
-  return <article className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className="rounded-full bg-primary-50 px-2 py-1 text-[10px] font-black uppercase text-primary-600 dark:bg-primary-950">{campaign.tier_code}</span><p className="mt-2 font-black capitalize text-gray-900 dark:text-white">{campaign.goal.replace(/_/g, ' ')}</p><p className="font-mono text-[10px] text-gray-400">{campaign.id}</p></div><div className="text-right"><p className="font-black text-gray-900 dark:text-white">{amount(campaign.actual_spend, campaign.billing_currency)}</p><p className="text-[10px] text-gray-400">actual spend</p></div></div><div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6"><Metric label="Impressions" value={campaign.actual_impressions.toLocaleString()} /><Metric label="Clicks" value={campaign.actual_clicks.toLocaleString()} /><Metric label="Conversions" value={campaign.actual_conversions.toLocaleString()} /><Metric label="Reach" value={campaign.actual_reach.toLocaleString()} /><Metric label="Assets" value={String(campaign.campaign_assets?.length || 0)} /><Metric label="Placements" value={String(campaign.campaign_placements?.length || 0)} /></div>{(campaign.campaign_assets?.length || 0) > 1 && <div className="mt-3 overflow-x-auto"><table className="min-w-full text-left text-xs"><thead className="text-gray-400"><tr><th className="py-2">Asset</th><th>Budget</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>Conversions</th></tr></thead><tbody>{campaign.campaign_assets?.map(asset => <tr key={asset.id} className="border-t border-gray-200 dark:border-gray-800"><td className="max-w-52 truncate py-2 font-semibold">{asset.title_snapshot || asset.asset_id}</td><td>{amount(asset.allocation_amount, campaign.billing_currency)}</td><td>{amount(asset.actual_spend, campaign.billing_currency)}</td><td>{asset.actual_impressions}</td><td>{asset.actual_clicks}</td><td>{asset.actual_conversions}</td></tr>)}</tbody></table></div>}</article>;
+  return <article className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className="rounded-full bg-primary-50 px-2 py-1 text-[10px] font-black uppercase text-primary-600 dark:bg-primary-950">{campaign.tier_code}</span><p className="mt-2 font-black capitalize text-gray-900 dark:text-white">{campaign.goal.replace(/_/g, ' ')}</p><p className="font-mono text-[10px] text-gray-400">{campaign.id}</p></div><div className="text-right"><p className="font-black text-gray-900 dark:text-white">{amount(campaign.actual_spend, campaign.billing_currency)}</p><p className="text-[10px] text-gray-400">actual spend</p></div></div><div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6"><Metric label="Impressions" value={campaign.actual_impressions.toLocaleString()} /><Metric label="Clicks" value={campaign.actual_clicks.toLocaleString()} /><Metric label="Conversions" value={campaign.actual_conversions.toLocaleString()} /><Metric label="Reach" value={campaign.actual_reach.toLocaleString()} /><Metric label="Assets" value={String(campaign.campaign_assets?.length || 0)} /><Metric label="Placements" value={String(campaign.campaign_placements?.length || 0)} /></div><ExternalDistribution campaignId={campaign.id} />{(campaign.campaign_assets?.length || 0) > 1 && <div className="mt-3 overflow-x-auto"><table className="min-w-full text-left text-xs"><thead className="text-gray-400"><tr><th className="py-2">Asset</th><th>Budget</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>Conversions</th></tr></thead><tbody>{campaign.campaign_assets?.map(asset => <tr key={asset.id} className="border-t border-gray-200 dark:border-gray-800"><td className="max-w-52 truncate py-2 font-semibold">{asset.title_snapshot || asset.asset_id}</td><td>{amount(asset.allocation_amount, campaign.billing_currency)}</td><td>{amount(asset.actual_spend, campaign.billing_currency)}</td><td>{asset.actual_impressions}</td><td>{asset.actual_clicks}</td><td>{asset.actual_conversions}</td></tr>)}</tbody></table></div>}</article>;
 }
 
 function Kpi({ label, value, icon: Icon }: { label: string; value: string; icon: React.ComponentType<{ className?: string }> }) {

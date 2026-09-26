@@ -17,6 +17,7 @@ export interface PromotionTier {
   is_enabled: boolean;
   pricing_multiplier: number;
   reach_multiplier: number;
+  spend_pace_multiplier: number;
 }
 
 export interface AdPlacement {
@@ -28,6 +29,7 @@ export interface AdPlacement {
   contextual: boolean;
   premium: boolean;
   surcharge: number;
+  surcharge_percent: number;
   density_organic_interval: number;
   frequency_cap: number;
   frequency_window_hours: number;
@@ -85,6 +87,7 @@ export interface CampaignPlacementRecord {
   placement_code: string;
   tier_code: PromotionTierCode;
   placement_fee: number;
+  placement_fee_percent: number;
   status: string;
   actual_spend: number;
   actual_impressions: number;
@@ -176,8 +179,8 @@ export async function fetchPromotionConfiguration() {
   ]);
 
   return {
-    tiers: ((tiersRes.data || []) as PromotionTier[]).map(t => ({ ...t, pricing_multiplier: money(t.pricing_multiplier), reach_multiplier: money(t.reach_multiplier) })),
-    placements: ((placementsRes.data || []) as AdPlacement[]).map(p => ({ ...p, surcharge: money(p.surcharge) })),
+    tiers: ((tiersRes.data || []) as PromotionTier[]).map(t => ({ ...t, pricing_multiplier: money(t.pricing_multiplier), reach_multiplier: money(t.reach_multiplier), spend_pace_multiplier: money(t.spend_pace_multiplier || 1) })),
+    placements: ((placementsRes.data || []) as AdPlacement[]).map(p => ({ ...p, surcharge: money(p.surcharge), surcharge_percent: money(p.surcharge_percent) })),
     tierPlacements: linksRes.data || [],
     settings: settingsRes.data || null,
     pricing: pricingRes.data || null,
@@ -185,7 +188,7 @@ export async function fetchPromotionConfiguration() {
 }
 
 export async function fetchPromotableAssets(userId: string): Promise<PromotableAsset[]> {
-  const [productsRes, jobsRes, campaignsRes, profileRes] = await Promise.all([
+  const [productsRes, jobsRes, campaignsRes, communitiesRes, profileRes] = await Promise.all([
     supabase.from('products')
       .select('id,name,category,image_url,price,product_type,approval_status,is_active,is_hidden')
       .eq('uploaded_by', userId)
@@ -202,6 +205,12 @@ export async function fetchPromotableAssets(userId: string): Promise<PromotableA
       .select('id,name,task_type,status,reward_per_completion')
       .eq('creator_id', userId)
       .eq('status', 'active')
+      .order('created_at', { ascending: false }),
+    supabase.from('communities')
+      .select('id,name,slug,category,avatar_url,banner_url,status,visibility')
+      .eq('owner_id', userId)
+      .eq('status', 'active')
+      .neq('visibility', 'hidden')
       .order('created_at', { ascending: false }),
     supabase.from('users')
       .select('id,full_name,username,role,avatar_url,profession,store_title,store_banner_url,store_description,marketer_level,marketer_status,advertiser_grade,advertiser_status,is_verified')
@@ -239,6 +248,19 @@ export async function fetchPromotableAssets(userId: string): Promise<PromotableA
       asset_type: 'campaign', asset_id: row.id, title: row.name,
       subtitle: row.task_type || 'Campaign / task', image_url: null,
       destination: `/creator-campaigns/${row.id}`, status: 'Eligible', public_id: row.id,
+    });
+  }
+
+  for (const row of communitiesRes.data || []) {
+    assets.push({
+      asset_type: 'community',
+      asset_id: row.id,
+      title: row.name,
+      subtitle: row.category || 'Community',
+      image_url: row.banner_url || row.avatar_url || null,
+      destination: `/communities/${row.slug}`,
+      status: 'Eligible',
+      public_id: row.id,
     });
   }
 
@@ -290,6 +312,7 @@ export function goalsForAssets(assets: PromotableAsset[]): Array<{ value: Promot
   if ([...types].some(t => ['product', 'store', 'course'].includes(t))) add('more_sales', 'More sales', 'Reach users likely to purchase or enroll.');
   if (types.has('store')) add('more_store_visits', 'More store visits', 'Bring relevant shoppers to your DRIGHT store.');
   if (types.has('profile')) add('more_profile_visits', 'More profile visits', 'Increase professional profile discovery.');
+  if (types.has('community')) add('more_community_visits', 'More community visits', 'Increase discovery and visits for your community.');
   if (types.has('job')) {
     add('more_job_applications', 'More applications', 'Increase legitimate candidate discovery and applications.');
     add('more_qualified_applicants', 'More qualified applicants', 'Optimize for candidates matching the job context.');
@@ -340,7 +363,7 @@ export async function fetchUniversalCampaigns(userId: string): Promise<Universal
     platform_fee: money(c.platform_fee), tax_amount: money(c.tax_amount), total_payable: money(c.total_payable),
     actual_spend: money(c.actual_spend),
     campaign_assets: ((assetsRes.data || []).filter(a => a.campaign_id === c.id) as CampaignAssetRecord[]).map(a => ({ ...a, allocation_amount: money(a.allocation_amount), allocation_percent: money(a.allocation_percent), actual_spend: money(a.actual_spend) })),
-    campaign_placements: ((placementsRes.data || []).filter(p => p.campaign_id === c.id) as CampaignPlacementRecord[]).map(p => ({ ...p, placement_fee: money(p.placement_fee), actual_spend: money(p.actual_spend) })),
+    campaign_placements: ((placementsRes.data || []).filter(p => p.campaign_id === c.id) as CampaignPlacementRecord[]).map(p => ({ ...p, placement_fee: money(p.placement_fee), placement_fee_percent: money(p.placement_fee_percent), actual_spend: money(p.actual_spend) })),
   }));
 }
 
