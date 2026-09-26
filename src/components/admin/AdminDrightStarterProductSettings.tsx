@@ -609,10 +609,10 @@ export default function AdminDrightStarterProductSettings() {
                           />
                           <input
                             type="number"
-                            min="0"
+                            min={level.level_number === 0 ? 1 : 0}
                             disabled={lastLevel}
                             value={lastLevel ? 0 : level.sales_to_next}
-                            onChange={(event) => setAffiliateLevels(current => current.map(item => item.level_number === level.level_number ? { ...item, sales_to_next: Math.max(0, Math.trunc(Number(event.target.value) || 0)) } : item))}
+                            onChange={(event) => setAffiliateLevels(current => current.map(item => item.level_number === level.level_number ? { ...item, sales_to_next: Math.max(level.level_number === 0 ? 1 : 0, Math.trunc(Number(event.target.value) || 0)) } : item))}
                             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500 disabled:bg-gray-100 disabled:text-gray-400"
                           />
                           <div>
