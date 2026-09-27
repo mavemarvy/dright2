@@ -72,7 +72,8 @@ const ALL_NAV_SECTIONS: NavSection[] = [
       { path: '/admin/broadcast', label: 'Broadcast & Community', icon: Megaphone, page: 'promotions' },
       { path: '/admin/coupons', label: 'Coupons', icon: Ticket, page: 'coupons' },
       { path: '/admin/giveaways', label: 'Giveaways', icon: Gift, page: 'giveaways' },
-      { path: '/admin/growth-outreach', label: 'Growth & Outreach', icon: Megaphone, page: 'marketing_dashboard' },\n      { path: '/admin/marketing-dashboard', label: 'Marketing Dashboard', icon: Megaphone, page: 'marketing_dashboard' },
+      { path: '/admin/growth-outreach', label: 'Growth & Outreach', icon: Megaphone, page: 'marketing_dashboard' },
+      { path: '/admin/marketing-dashboard', label: 'Marketing Dashboard', icon: Megaphone, page: 'marketing_dashboard' },
     ],
   },
   {
