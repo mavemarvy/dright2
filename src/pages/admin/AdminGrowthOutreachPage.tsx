@@ -493,10 +493,10 @@ function RulesTab({ rules,setRules,reload }: { rules:AutoReplyRule[]; setRules:(
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <Field label="Trigger phrases">
-          <textarea value={rule.keywords.join('\n')} onChange={e=>setRules(rules.map((r,i)=>i===index?{...r,keywords:e.target.value.split('\n').map(v=>v.trim()).filter(Boolean)}:r))} rows={5} className="inputarea" />
+          <textarea value={rule.keywords.join('\n')} onChange={e=>setRules(rules.map((r,i)=>i===index?{...r,keywords:e.target.value.split('\n').map(v=>v.trim()).filter(Boolean)}:r))} rows={5} className="w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100" />
         </Field>
         <Field label="Automatic reply text">
-          <textarea value={rule.reply_body_template || ''} onChange={e=>setRules(rules.map((r,i)=>i===index?{...r,reply_body_template:e.target.value}:r))} rows={5} disabled={!rule.send_reply} className="inputarea disabled:opacity-50" />
+          <textarea value={rule.reply_body_template || ''} onChange={e=>setRules(rules.map((r,i)=>i===index?{...r,reply_body_template:e.target.value}:r))} rows={5} disabled={!rule.send_reply} className="w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 disabled:opacity-50" />
         </Field>
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -504,7 +504,7 @@ function RulesTab({ rules,setRules,reload }: { rules:AutoReplyRule[]; setRules:(
         <NumberField label="Cooldown hours" value={rule.cooldown_hours} onChange={v=>setRules(rules.map((r,i)=>i===index?{...r,cooldown_hours:v}:r))} />
         <NumberField label="Max replies/thread" value={rule.max_replies_per_conversation} onChange={v=>setRules(rules.map((r,i)=>i===index?{...r,max_replies_per_conversation:v}:r))} />
         <Field label="Set status">
-          <select value={rule.set_status || ''} onChange={e=>setRules(rules.map((r,i)=>i===index?{...r,set_status:(e.target.value||null) as ConversationStatus|null}:r))} className="inputcontrol">
+          <select value={rule.set_status || ''} onChange={e=>setRules(rules.map((r,i)=>i===index?{...r,set_status:(e.target.value||null) as ConversationStatus|null}:r))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
             <option value="">No change</option>{Object.entries(STATUS_META).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
           </select>
         </Field>
@@ -554,12 +554,12 @@ function TemplatesTab({ templates,setTemplates,reload }: { templates:EmailTempla
     <div className="rounded-3xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center justify-between gap-3"><div><h2 className="font-black text-gray-900 dark:text-white">{template.name}</h2><p className="text-xs text-gray-400">Segment: {template.segment}</p></div><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={template.enabled} onChange={e=>patch({enabled:e.target.checked})}/> Enabled</label></div>
       <div className="mt-4 grid gap-3">
-        <Field label="Subject"><input value={template.subject_template} onChange={e=>patch({subject_template:e.target.value})} className="inputcontrol" /></Field>
-        <Field label="Preheader"><input value={template.preheader_template || ''} onChange={e=>patch({preheader_template:e.target.value})} className="inputcontrol" /></Field>
-        <Field label="Headline"><input value={template.headline_template} onChange={e=>patch({headline_template:e.target.value})} className="inputcontrol" /></Field>
-        <Field label="Body"><textarea value={template.body_template} onChange={e=>patch({body_template:e.target.value})} rows={5} className="inputarea" /></Field>
-        <Field label="Benefits — one per line"><textarea value={template.benefits.join('\n')} onChange={e=>patch({benefits:e.target.value.split('\n').map(v=>v.trim()).filter(Boolean)})} rows={4} className="inputarea" /></Field>
-        <div className="grid gap-3 md:grid-cols-2"><Field label="CTA label"><input value={template.cta_label} onChange={e=>patch({cta_label:e.target.value})} className="inputcontrol" /></Field><Field label="CTA URL"><input value={template.cta_url} onChange={e=>patch({cta_url:e.target.value})} className="inputcontrol" /></Field></div>
+        <Field label="Subject"><input value={template.subject_template} onChange={e=>patch({subject_template:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100" /></Field>
+        <Field label="Preheader"><input value={template.preheader_template || ''} onChange={e=>patch({preheader_template:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100" /></Field>
+        <Field label="Headline"><input value={template.headline_template} onChange={e=>patch({headline_template:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100" /></Field>
+        <Field label="Body"><textarea value={template.body_template} onChange={e=>patch({body_template:e.target.value})} rows={5} className="w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100" /></Field>
+        <Field label="Benefits — one per line"><textarea value={template.benefits.join('\n')} onChange={e=>patch({benefits:e.target.value.split('\n').map(v=>v.trim()).filter(Boolean)})} rows={4} className="w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100" /></Field>
+        <div className="grid gap-3 md:grid-cols-2"><Field label="CTA label"><input value={template.cta_label} onChange={e=>patch({cta_label:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100" /></Field><Field label="CTA URL"><input value={template.cta_url} onChange={e=>patch({cta_url:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100" /></Field></div>
       </div>
       <button onClick={()=>void save()} disabled={saving} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving?<Loader2 className="h-4 w-4 animate-spin"/>:<LayoutTemplate className="h-4 w-4"/>} Save template</button>
     </div>
@@ -601,10 +601,10 @@ function SettingsTab({ settings,setSettings,reload }: { settings:OutreachSetting
     <section className="rounded-3xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center gap-2"><Mail className="h-5 w-5 text-primary-600"/><h2 className="font-black text-gray-900 dark:text-white">Partnership identity</h2></div>
       <div className="mt-4 space-y-3">
-        <Field label="Sender name"><input value={settings.reply_from_name} onChange={e=>setSettings({...settings,reply_from_name:e.target.value})} className="inputcontrol"/></Field>
-        <Field label="Sending address"><input value={settings.reply_from_email} onChange={e=>setSettings({...settings,reply_from_email:e.target.value})} className="inputcontrol"/></Field>
-        <Field label="Reply-To / Inbox"><input value={settings.reply_to_email} onChange={e=>setSettings({...settings,reply_to_email:e.target.value,inbox_email:e.target.value})} className="inputcontrol"/></Field>
-        <Field label="Logo URL"><input value={settings.logo_url} onChange={e=>setSettings({...settings,logo_url:e.target.value})} className="inputcontrol"/></Field>
+        <Field label="Sender name"><input value={settings.reply_from_name} onChange={e=>setSettings({...settings,reply_from_name:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"/></Field>
+        <Field label="Sending address"><input value={settings.reply_from_email} onChange={e=>setSettings({...settings,reply_from_email:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"/></Field>
+        <Field label="Reply-To / Inbox"><input value={settings.reply_to_email} onChange={e=>setSettings({...settings,reply_to_email:e.target.value,inbox_email:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"/></Field>
+        <Field label="Logo URL"><input value={settings.logo_url} onChange={e=>setSettings({...settings,logo_url:e.target.value})} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"/></Field>
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
           <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Current routing</p>
           <p className="mt-2 text-sm font-bold text-gray-900 dark:text-white">{settings.reply_from_name} &lt;{settings.reply_from_email}&gt;</p>
@@ -620,5 +620,5 @@ function Field({label,children}:{label:string;children:React.ReactNode}) {
   return <label className="block"><span className="mb-1.5 block text-xs font-bold text-gray-500">{label}</span>{children}</label>;
 }
 function NumberField({label,value,onChange}:{label:string;value:number;onChange:(value:number)=>void}) {
-  return <Field label={label}><input type="number" min={0} value={value} onChange={e=>onChange(Math.max(0,Number(e.target.value)||0))} className="inputcontrol"/></Field>;
+  return <Field label={label}><input type="number" min={0} value={value} onChange={e=>onChange(Math.max(0,Number(e.target.value)||0))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"/></Field>;
 }
