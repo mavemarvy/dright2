@@ -113,14 +113,124 @@ function buildEmail(row: OutboxRow) {
   const unsubscribeUrl = typeof meta.unsubscribe_url === "string"
     ? String(meta.unsubscribe_url)
     : manageMarketing;
-  const footer = marketing
-    ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is a promotional message from DRIGHT. <a href="${escapeHtml(unsubscribeUrl)}" style="color:#2563eb">Unsubscribe</a> or <a href="${escapeHtml(manageMarketing)}" style="color:#2563eb">manage marketing preferences</a>.</p>`
-    : critical || transactional
-      ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is an important transactional or security message from DRIGHT.</p>`
-      : `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You can change email notification preferences in <a href="${manage}" style="color:#2563eb">DRIGHT Settings</a>.</p>`;
+
+  if (marketing) {
+    const template = meta.template_record && typeof meta.template_record === "object"
+      ? meta.template_record as Record<string, unknown>
+      : {};
+    const prospectName = typeof meta.prospect_name === "string" ? String(meta.prospect_name).trim() : "";
+    const companyName = typeof meta.company_name === "string" ? String(meta.company_name).trim() : "";
+    const preheader = typeof meta.preheader === "string"
+      ? String(meta.preheader)
+      : typeof template.preheader_template === "string"
+        ? String(template.preheader_template)
+        : "A partnership opportunity from DRIGHT.";
+    const headline = typeof meta.headline === "string"
+      ? String(meta.headline)
+      : typeof template.headline_template === "string"
+        ? String(template.headline_template)
+        : row.subject;
+    const marketingBody = typeof meta.body === "string"
+      ? String(meta.body)
+      : typeof template.body_template === "string"
+        ? String(template.body_template)
+        : row.message;
+    const rawBenefits = Array.isArray(meta.benefits)
+      ? meta.benefits
+      : Array.isArray(template.benefits)
+        ? template.benefits
+        : [];
+    const benefits = rawBenefits.slice(0, 3).map((item) => String(item));
+    const ctaLabel = typeof meta.cta_label === "string"
+      ? String(meta.cta_label)
+      : typeof template.cta_label === "string"
+        ? String(template.cta_label)
+        : "Join DRIGHT";
+    const templateUrl = typeof template.cta_url === "string" ? String(template.cta_url) : "";
+    const marketingActionUrl = rawAction
+      ? actionUrl
+      : templateUrl || "https://www.dright.store/sign-up";
+    const greeting = prospectName ? `Hi ${prospectName},` : "Hello,";
+    const contextLine = companyName
+      ? `We are reaching out because ${companyName} appears relevant to DRIGHT's growing marketplace network.`
+      : "";
+    const benefitRows = benefits.length
+      ? benefits.map((item) => `
+          <tr>
+            <td style="width:26px;vertical-align:top;padding:7px 0"><div style="width:20px;height:20px;border-radius:6px;background:#eef2ff;color:#3346c8;text-align:center;font-size:12px;line-height:20px;font-weight:800">✓</div></td>
+            <td style="padding:7px 0 7px 8px;color:#344054;font-size:14px;line-height:1.5">${escapeHtml(item)}</td>
+          </tr>`).join("")
+      : "";
+    const textBenefits = benefits.length ? "\n\n" + benefits.map((item) => `• ${item}`).join("\n") : "";
+    const text = `${greeting}\n\n${contextLine ? contextLine + "\n\n" : ""}${marketingBody}${textBenefits}\n\n${ctaLabel}: ${marketingActionUrl}\n\nYou can reply directly to this email to reach DRIGHT Partnerships.\n\nUnsubscribe: ${unsubscribeUrl}\nDRIGHT — https://www.dright.store`;
+
+    return {
+      subject: row.subject,
+      text,
+      html: `<!doctype html>
+<html>
+  <body style="margin:0;background:#f3f5f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#172033">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</div>
+    <div style="max-width:650px;margin:0 auto;padding:28px 14px">
+      <div style="background:#ffffff;border:1px solid #e4e8ee;border-radius:24px;overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,.06)">
+        <div style="padding:22px 26px;background:#0a0c10">
+          <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">
+            <tr>
+              <td style="width:52px;vertical-align:middle">
+                <img src="https://www.dright.store/dright-logo.webp" width="48" height="48" alt="DRIGHT" style="display:block;width:48px;height:48px;border-radius:13px;object-fit:contain">
+              </td>
+              <td style="padding-left:12px;vertical-align:middle">
+                <div style="color:#ffffff;font-size:19px;font-weight:900;letter-spacing:.09em">DRIGHT</div>
+                <div style="color:#9fa9b8;font-size:10px;font-weight:700;letter-spacing:.17em;margin-top:4px">PARTNERSHIPS & OPPORTUNITIES</div>
+              </td>
+            </tr>
+          </table>
+        </div>
+        <div style="padding:34px 28px 30px">
+          <p style="margin:0 0 12px;color:#667085;font-size:14px">${escapeHtml(greeting)}</p>
+          <h1 style="margin:0;color:#111827;font-size:28px;line-height:1.22;letter-spacing:-.02em">${escapeHtml(headline)}</h1>
+          ${contextLine ? `<p style="margin:16px 0 0;color:#667085;font-size:14px;line-height:1.65">${escapeHtml(contextLine)}</p>` : ""}
+          <p style="margin:18px 0 0;color:#344054;font-size:15px;line-height:1.72">${escapeHtml(marketingBody)}</p>
+
+          ${benefitRows ? `
+          <div style="margin-top:22px;padding:17px 18px;background:#f8fafc;border:1px solid #edf0f4;border-radius:16px">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">${benefitRows}</table>
+          </div>` : ""}
+
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:25px">
+            <tr>
+              <td style="background:#3157e8;border-radius:12px">
+                <a href="${escapeHtml(marketingActionUrl)}" style="display:inline-block;padding:13px 21px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:800">${escapeHtml(ctaLabel)}</a>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:20px 0 0;color:#697386;font-size:13px;line-height:1.65">Prefer to talk first? Reply directly to this email and it will reach the DRIGHT Partnerships inbox.</p>
+
+          <div style="margin-top:28px;padding-top:20px;border-top:1px solid #edf0f4">
+            <p style="margin:0;color:#111827;font-size:13px;font-weight:800">DRIGHT — Global Marketplace</p>
+            <p style="margin:6px 0 0;color:#8a94a6;font-size:12px;line-height:1.6">
+              <a href="https://www.dright.store" style="color:#52637a;text-decoration:none">www.dright.store</a>
+              &nbsp;•&nbsp;
+              <a href="${escapeHtml(unsubscribeUrl)}" style="color:#52637a;text-decoration:underline">Unsubscribe</a>
+            </p>
+          </div>
+        </div>
+      </div>
+      <p style="text-align:center;color:#a0a8b5;font-size:10px;margin:14px 0 0">Sent by DRIGHT Partnerships</p>
+    </div>
+  </body>
+</html>`,
+    };
+  }
+
+  const footer = critical || transactional
+    ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is an important transactional or security message from DRIGHT.</p>`
+    : `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You can change email notification preferences in <a href="${manage}" style="color:#2563eb">DRIGHT Settings</a>.</p>`;
 
   return {
     subject: `DRIGHT — ${row.subject}`,
+    text: `${row.subject}\n\n${row.message}\n\nOpen DRIGHT: ${actionUrl}`,
     html: `<!doctype html>
 <html>
   <body style="margin:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#18202b">
@@ -133,11 +243,11 @@ function buildEmail(row: OutboxRow) {
         <div style="padding:28px 24px">
           <h1 style="font-size:22px;line-height:1.3;margin:0 0 12px">${heading}</h1>
           <p style="font-size:15px;line-height:1.65;margin:0;color:#465264">${body}</p>
-          <a href="${escapeHtml(actionUrl)}" style="display:inline-block;margin-top:22px;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:10px">${marketing ? "Explore DRIGHT opportunities" : "Open DRIGHT"}</a>
+          <a href="${escapeHtml(actionUrl)}" style="display:inline-block;margin-top:22px;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:10px">Open DRIGHT</a>
           ${footer}
         </div>
       </div>
-      <p style="text-align:center;color:#9aa3af;font-size:11px;margin:16px 0 0">${marketing ? "DRIGHT marketing & opportunities" : "DRIGHT notification delivery"}</p>
+      <p style="text-align:center;color:#9aa3af;font-size:11px;margin:16px 0 0">DRIGHT notification delivery</p>
     </div>
   </body>
 </html>`,
@@ -322,6 +432,17 @@ async function processOne(id: string) {
 
     unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?token=${encodeURIComponent(String(suppression.unsubscribe_token))}`;
     row.metadata = { ...rowMeta, unsubscribe_url: unsubscribeUrl, marketing_email: true };
+
+    const segment = typeof row.metadata?.segment === "string" ? String(row.metadata.segment) : "general";
+    const { data: templateRecord } = await db
+      .from("outreach_email_templates")
+      .select("*")
+      .eq("segment", segment)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (templateRecord) {
+      row.metadata = { ...row.metadata, template_record: templateRecord };
+    }
   }
 
   // Prevent repeated login alerts from hammering the same mailbox and damaging
@@ -420,6 +541,7 @@ async function processOne(id: string) {
         to: [row.recipient_email],
         subject: email.subject,
         html: email.html,
+        text: email.text,
         ...(replyTo ? { reply_to: replyTo } : {}),
         ...(isMarketing && unsubscribeUrl ? {
           headers: {
