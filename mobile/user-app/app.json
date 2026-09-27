@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "DRIGHT",
+    "slug": "dright-user-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "dright",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dright.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "com.dright.app",
+      "versionCode": 1
+    }
+  }
+}

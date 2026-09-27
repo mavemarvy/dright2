@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "DRIGHT Admin",
+    "slug": "dright-admin-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "dright-admin",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dright.admin",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "com.dright.admin",
+      "versionCode": 1
+    }
+  }
+}
