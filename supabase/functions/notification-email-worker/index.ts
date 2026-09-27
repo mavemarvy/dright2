@@ -9,7 +9,28 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const resendApiKey = Deno.env.get("RESEND_API_KEY") || "";
-const resendFrom = Deno.env.get("RESEND_FROM_EMAIL") || "support@dright.store";
+function senderForRow(row: OutboxRow): string {
+  const category = String(row.category || "").toLowerCase();
+  const type = String(row.notification_type || "").toLowerCase();
+
+  if (category === "support" || type.includes("support_ticket") || type.includes("customer_support")) {
+    return "DRIGHT Support <support@dright.store>";
+  }
+  if (category === "security" || type.includes("security") || type.includes("verification") || type.includes("password")) {
+    return "DRIGHT Security <security@dright.store>";
+  }
+  if (category === "wallet" || category === "orders" || type.includes("withdrawal") || type.includes("payment") || type.includes("payout")) {
+    return "DRIGHT Payments <payments@dright.store>";
+  }
+  if (category === "affiliate" || category === "referrals" || type.includes("affiliate") || type.includes("referral")) {
+    return "DRIGHT Affiliates <affiliates@dright.store>";
+  }
+  if (["marketplace", "store", "jobs", "services", "promotions"].includes(category)) {
+    return "DRIGHT Marketplace <marketplace@dright.store>";
+  }
+
+  return "DRIGHT Notifications <notifications@dright.store>";
+}
 const appUrl = (Deno.env.get("APP_URL") || "https://dright.store").replace(/\/$/, "");
 
 const db = createClient(supabaseUrl, serviceRoleKey, {
@@ -78,9 +99,15 @@ function buildEmail(row: OutboxRow) {
   const label = escapeHtml(categoryLabel(row.category));
   const manage = `${appUrl}/settings?tab=notifications`;
 
-  const footer = critical || transactional
-    ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is an important transactional or security message from DRIGHT.</p>`
-    : `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You can change email notification preferences in <a href="${manage}" style="color:#2563eb">DRIGHT Settings</a>.</p>`;
+  const marketing = meta.marketing_email === true;
+  const manageMarketing = typeof meta.manage_preferences_url === "string"
+    ? String(meta.manage_preferences_url)
+    : `${appUrl}/settings?tab=privacy`;
+  const footer = marketing
+    ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You received this promotional email because marketing email is enabled for your DRIGHT account. <a href="${escapeHtml(manageMarketing)}" style="color:#2563eb">Manage marketing preferences</a>.</p>`
+    : critical || transactional
+      ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is an important transactional or security message from DRIGHT.</p>`
+      : `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You can change email notification preferences in <a href="${manage}" style="color:#2563eb">DRIGHT Settings</a>.</p>`;
 
   return {
     subject: `DRIGHT — ${row.subject}`,
@@ -132,6 +159,18 @@ async function markRetry(row: OutboxRow, error: string) {
       },
     }).eq("notification_id", row.notification_id).eq("channel", "email");
   }
+
+  const externalDeliveryId = typeof row.metadata?.external_delivery_id === "string"
+    ? String(row.metadata.external_delivery_id)
+    : null;
+  if (terminal && externalDeliveryId) {
+    await db.from("promotion_external_deliveries").update({
+      status: "failed",
+      provider: "resend",
+      metadata: { ...(row.metadata || {}), last_error: error.slice(0, 500) },
+      updated_at: new Date().toISOString(),
+    }).eq("id", externalDeliveryId);
+  }
 }
 
 async function processOne(id: string) {
@@ -156,6 +195,58 @@ async function processOne(id: string) {
     return { id, success: false, error: "Resend is not configured" };
   }
 
+  // Prevent repeated login alerts from hammering the same mailbox and damaging
+  // sender reputation. The in-app notification remains available; only the
+  // duplicate email delivery is suppressed.
+  const eventType = typeof row.metadata?.event_type === "string"
+    ? String(row.metadata.event_type).toLowerCase()
+    : "";
+  if (eventType === "new_login" && row.priority !== "critical") {
+    const cooldownStart = new Date(Date.now() - 15 * 60_000).toISOString();
+    const { data: recentDuplicates } = await db
+      .from("notification_email_outbox")
+      .select("id,metadata,sent_at")
+      .eq("user_id", row.user_id)
+      .eq("recipient_email", row.recipient_email)
+      .eq("notification_type", row.notification_type)
+      .eq("subject", row.subject)
+      .eq("status", "sent")
+      .gte("sent_at", cooldownStart)
+      .neq("id", row.id)
+      .order("sent_at", { ascending: false })
+      .limit(5);
+
+    const duplicate = (recentDuplicates || []).some((item: Record<string, unknown>) => {
+      const metadata = item.metadata && typeof item.metadata === "object"
+        ? item.metadata as Record<string, unknown>
+        : {};
+      return String(metadata.event_type || "").toLowerCase() === "new_login";
+    });
+
+    if (duplicate) {
+      const skippedAt = new Date().toISOString();
+      await db.from("notification_email_outbox").update({
+        status: "skipped",
+        last_error: "Suppressed duplicate new_login email within 15-minute cooldown",
+        updated_at: skippedAt,
+      }).eq("id", row.id);
+
+      if (row.notification_id) {
+        await db.from("notification_delivery_logs").update({
+          status: "expired",
+          metadata: {
+            outbox_id: row.id,
+            provider: "resend",
+            suppressed: true,
+            suppression_reason: "duplicate_new_login_15m",
+          },
+        }).eq("notification_id", row.notification_id).eq("channel", "email");
+      }
+
+      return { id, success: true, skipped: true, reason: "duplicate_new_login_15m" };
+    }
+  }
+
   // Rate-limit per recipient. Critical/transactional email has a larger ceiling,
   // but cannot be used as an unlimited email relay.
   const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString();
@@ -168,7 +259,7 @@ async function processOne(id: string) {
 
   const important = row.priority === "critical" ||
     ["security", "wallet", "orders"].includes(row.category);
-  const hourlyLimit = important ? 50 : 20;
+  const hourlyLimit = important ? 10 : 5;
 
   if ((sentLastHour || 0) >= hourlyLimit) {
     await db.from("notification_email_outbox").update({
@@ -181,7 +272,7 @@ async function processOne(id: string) {
   }
 
   const email = buildEmail(row);
-  const from = resendFrom.includes("<") ? resendFrom : `DRIGHT <${resendFrom}>`;
+  const from = senderForRow(row);
 
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -229,6 +320,21 @@ async function processOne(id: string) {
           provider_message_id: messageId,
         },
       }).eq("notification_id", row.notification_id).eq("channel", "email");
+    }
+
+    const externalDeliveryId = typeof row.metadata?.external_delivery_id === "string"
+      ? String(row.metadata.external_delivery_id)
+      : null;
+    if (externalDeliveryId) {
+      await db.from("promotion_external_deliveries").update({
+        status: "sent",
+        provider: "resend",
+        provider_message_id: messageId,
+        delivered_count: 1,
+        audience_size_snapshot: 1,
+        sent_at: sentAt,
+        updated_at: sentAt,
+      }).eq("id", externalDeliveryId);
     }
 
     await db.from("email_logs").insert({
