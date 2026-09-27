@@ -12,6 +12,18 @@ dist
 dist-ssr
 *.local
 
+# Environment
+.env
+.env.*
+!.env.example
+
+# Expo / EAS
+.expo/
+**/.expo/
+**/.eas/
+**/android/
+**/ios/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
