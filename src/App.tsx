@@ -163,7 +163,8 @@ const AdminSalesOperationsPage = lazy(() => import('./pages/admin/AdminSalesOper
 const AdminSalesTeamPage = lazy(() => import('./pages/admin/AdminSalesTeamPage'));
 const SalesTeamMarketerApplicationsPage = lazy(() => import('./pages/admin/SalesTeamMarketerApplicationsPage'));
 const AdminCustomerCarePage = lazy(() => import('./pages/admin/AdminCustomerCarePage'));
-const AdminMarketingDashboardPage = lazy(() => import('./pages/admin/AdminMarketingDashboardPage'));\nconst AdminGrowthOutreachPage = lazy(() => import('./pages/admin/AdminGrowthOutreachPage'));
+const AdminMarketingDashboardPage = lazy(() => import('./pages/admin/AdminMarketingDashboardPage'));
+const AdminGrowthOutreachPage = lazy(() => import('./pages/admin/AdminGrowthOutreachPage'));
 const AdminAdminPerformancePage = lazy(() => import('./pages/admin/AdminAdminPerformancePage'));
 const AdminAiInsightsPage = lazy(() => import('./pages/admin/AdminAiInsightsPage'));
 const AdminIntegrationHubPage = lazy(() => import('./pages/admin/AdminIntegrationHubPage'));
