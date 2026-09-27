@@ -13,6 +13,9 @@ function senderForRow(row: OutboxRow): string {
   const category = String(row.category || "").toLowerCase();
   const type = String(row.notification_type || "").toLowerCase();
 
+  if (category === "outreach" || category === "promotions" || type.includes("marketing_outreach")) {
+    return "DRIGHT Opportunities <opportunities@dright.store>";
+  }
   if (category === "support" || type.includes("support_ticket") || type.includes("customer_support")) {
     return "DRIGHT Support <support@dright.store>";
   }
@@ -25,7 +28,7 @@ function senderForRow(row: OutboxRow): string {
   if (category === "affiliate" || category === "referrals" || type.includes("affiliate") || type.includes("referral")) {
     return "DRIGHT Affiliates <affiliates@dright.store>";
   }
-  if (["marketplace", "store", "jobs", "services", "promotions"].includes(category)) {
+  if (["marketplace", "store", "jobs", "services"].includes(category)) {
     return "DRIGHT Marketplace <marketplace@dright.store>";
   }
 
@@ -73,6 +76,7 @@ function categoryLabel(category: string): string {
     reviews: "Social",
     messages: "Messages",
     promotions: "Marketing & Promotions",
+    outreach: "Offers & Opportunities",
     marketplace: "Marketplace",
     store: "Store",
     jobs: "Jobs",
@@ -99,12 +103,18 @@ function buildEmail(row: OutboxRow) {
   const label = escapeHtml(categoryLabel(row.category));
   const manage = `${appUrl}/settings?tab=notifications`;
 
-  const marketing = meta.marketing_email === true;
+  const marketing = meta.marketing_email === true ||
+    row.category === "outreach" ||
+    row.category === "promotions" ||
+    row.notification_type.includes("marketing_outreach");
   const manageMarketing = typeof meta.manage_preferences_url === "string"
     ? String(meta.manage_preferences_url)
     : `${appUrl}/settings?tab=privacy`;
+  const unsubscribeUrl = typeof meta.unsubscribe_url === "string"
+    ? String(meta.unsubscribe_url)
+    : manageMarketing;
   const footer = marketing
-    ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You received this promotional email because marketing email is enabled for your DRIGHT account. <a href="${escapeHtml(manageMarketing)}" style="color:#2563eb">Manage marketing preferences</a>.</p>`
+    ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is a promotional message from DRIGHT. <a href="${escapeHtml(unsubscribeUrl)}" style="color:#2563eb">Unsubscribe</a> or <a href="${escapeHtml(manageMarketing)}" style="color:#2563eb">manage marketing preferences</a>.</p>`
     : critical || transactional
       ? `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">This is an important transactional or security message from DRIGHT.</p>`
       : `<p style="margin:22px 0 0;color:#7c8595;font-size:12px">You can change email notification preferences in <a href="${manage}" style="color:#2563eb">DRIGHT Settings</a>.</p>`;
@@ -123,11 +133,11 @@ function buildEmail(row: OutboxRow) {
         <div style="padding:28px 24px">
           <h1 style="font-size:22px;line-height:1.3;margin:0 0 12px">${heading}</h1>
           <p style="font-size:15px;line-height:1.65;margin:0;color:#465264">${body}</p>
-          <a href="${escapeHtml(actionUrl)}" style="display:inline-block;margin-top:22px;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:10px">Open DRIGHT</a>
+          <a href="${escapeHtml(actionUrl)}" style="display:inline-block;margin-top:22px;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:10px">${marketing ? "Explore DRIGHT opportunities" : "Open DRIGHT"}</a>
           ${footer}
         </div>
       </div>
-      <p style="text-align:center;color:#9aa3af;font-size:11px;margin:16px 0 0">DRIGHT notification delivery</p>
+      <p style="text-align:center;color:#9aa3af;font-size:11px;margin:16px 0 0">${marketing ? "DRIGHT marketing & opportunities" : "DRIGHT notification delivery"}</p>
     </div>
   </body>
 </html>`,
@@ -193,6 +203,59 @@ async function processOne(id: string) {
   if (!resendApiKey) {
     await markRetry(row, "RESEND_API_KEY is not configured");
     return { id, success: false, error: "Resend is not configured" };
+  }
+
+  const rowMeta = row.metadata || {};
+  const isMarketing = rowMeta.marketing_email === true ||
+    row.category === "outreach" ||
+    row.category === "promotions" ||
+    row.notification_type.includes("marketing_outreach");
+  let unsubscribeUrl: string | null = null;
+
+  if (isMarketing) {
+    const normalizedEmail = row.recipient_email.trim().toLowerCase();
+    let { data: suppression } = await db
+      .from("marketing_email_suppressions")
+      .select("recipient_email,unsubscribe_token,unsubscribed_at")
+      .eq("recipient_email", normalizedEmail)
+      .maybeSingle();
+
+    if (!suppression) {
+      const { data: created, error: createError } = await db
+        .from("marketing_email_suppressions")
+        .insert({ recipient_email: normalizedEmail, source: "dright_outreach" })
+        .select("recipient_email,unsubscribe_token,unsubscribed_at")
+        .single();
+
+      if (createError) {
+        const retry = await db
+          .from("marketing_email_suppressions")
+          .select("recipient_email,unsubscribe_token,unsubscribed_at")
+          .eq("recipient_email", normalizedEmail)
+          .maybeSingle();
+        suppression = retry.data;
+      } else {
+        suppression = created;
+      }
+    }
+
+    if (suppression?.unsubscribed_at) {
+      const skippedAt = new Date().toISOString();
+      await db.from("notification_email_outbox").update({
+        status: "skipped",
+        last_error: "Recipient unsubscribed from DRIGHT marketing email",
+        updated_at: skippedAt,
+      }).eq("id", row.id);
+      return { id, success: true, skipped: true, reason: "marketing_unsubscribed" };
+    }
+
+    if (!suppression?.unsubscribe_token) {
+      await markRetry(row, "Unable to create marketing unsubscribe token");
+      return { id, success: false, error: "Unable to create unsubscribe token" };
+    }
+
+    unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?token=${encodeURIComponent(String(suppression.unsubscribe_token))}`;
+    row.metadata = { ...rowMeta, unsubscribe_url: unsubscribeUrl, marketing_email: true };
   }
 
   // Prevent repeated login alerts from hammering the same mailbox and damaging
@@ -286,6 +349,13 @@ async function processOne(id: string) {
         to: [row.recipient_email],
         subject: email.subject,
         html: email.html,
+        ...(isMarketing && unsubscribeUrl ? {
+          headers: {
+            "List-Unsubscribe": `<${unsubscribeUrl}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+            "X-Entity-Ref-ID": `dright-marketing-${row.id}`,
+          },
+        } : {}),
       }),
     });
 
