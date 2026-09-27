@@ -16,7 +16,6 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
-  UserCheck,
   Users,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
