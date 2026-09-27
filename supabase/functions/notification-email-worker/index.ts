@@ -211,8 +211,74 @@ async function processOne(id: string) {
     row.category === "promotions" ||
     row.notification_type.includes("marketing_outreach");
   let unsubscribeUrl: string | null = null;
+  let marketingSettings: {
+    marketing_send_enabled: boolean;
+    marketing_domain_verified: boolean;
+    marketing_from_name: string;
+    marketing_from_email: string;
+    marketing_reply_to: string;
+    marketing_hourly_cap: number;
+    marketing_daily_cap: number;
+    warmup_stage: string;
+  } | null = null;
 
   if (isMarketing) {
+    const { data: settings, error: settingsError } = await db
+      .from("email_delivery_settings")
+      .select("marketing_send_enabled,marketing_domain_verified,marketing_from_name,marketing_from_email,marketing_reply_to,marketing_hourly_cap,marketing_daily_cap,warmup_stage")
+      .eq("singleton", true)
+      .maybeSingle();
+
+    if (settingsError || !settings) {
+      await markRetry(row, settingsError?.message || "Marketing email settings are unavailable");
+      return { id, success: false, error: "Marketing email settings unavailable" };
+    }
+
+    marketingSettings = settings as typeof marketingSettings;
+
+    if (!marketingSettings?.marketing_send_enabled || !marketingSettings?.marketing_domain_verified) {
+      await db.from("notification_email_outbox").update({
+        status: "skipped",
+        last_error: "Marketing outreach paused until the dedicated sending domain is verified and enabled",
+        updated_at: new Date().toISOString(),
+      }).eq("id", row.id);
+      return { id, success: true, skipped: true, reason: "marketing_sender_not_ready" };
+    }
+
+    const oneHourAgoMarketing = new Date(Date.now() - 60 * 60_000).toISOString();
+    const oneDayAgoMarketing = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    const [{ count: marketingHourCount }, { count: marketingDayCount }] = await Promise.all([
+      db.from("notification_email_outbox")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "sent")
+        .in("category", ["outreach", "promotions"])
+        .gte("sent_at", oneHourAgoMarketing),
+      db.from("notification_email_outbox")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "sent")
+        .in("category", ["outreach", "promotions"])
+        .gte("sent_at", oneDayAgoMarketing),
+    ]);
+
+    if ((marketingHourCount || 0) >= Number(marketingSettings.marketing_hourly_cap || 1)) {
+      await db.from("notification_email_outbox").update({
+        status: "retry",
+        next_attempt_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+        last_error: "DRIGHT marketing warm-up hourly cap reached",
+        updated_at: new Date().toISOString(),
+      }).eq("id", row.id);
+      return { id, success: true, rateLimited: true, reason: "marketing_hourly_cap" };
+    }
+
+    if ((marketingDayCount || 0) >= Number(marketingSettings.marketing_daily_cap || 1)) {
+      await db.from("notification_email_outbox").update({
+        status: "retry",
+        next_attempt_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+        last_error: "DRIGHT marketing warm-up daily cap reached",
+        updated_at: new Date().toISOString(),
+      }).eq("id", row.id);
+      return { id, success: true, rateLimited: true, reason: "marketing_daily_cap" };
+    }
     const normalizedEmail = row.recipient_email.trim().toLowerCase();
     let { data: suppression } = await db
       .from("marketing_email_suppressions")
@@ -335,7 +401,12 @@ async function processOne(id: string) {
   }
 
   const email = buildEmail(row);
-  const from = senderForRow(row);
+  const from = isMarketing && marketingSettings
+    ? `${marketingSettings.marketing_from_name} <${marketingSettings.marketing_from_email}>`
+    : senderForRow(row);
+  const replyTo = isMarketing && marketingSettings
+    ? marketingSettings.marketing_reply_to
+    : undefined;
 
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -349,6 +420,7 @@ async function processOne(id: string) {
         to: [row.recipient_email],
         subject: email.subject,
         html: email.html,
+        ...(replyTo ? { reply_to: replyTo } : {}),
         ...(isMarketing && unsubscribeUrl ? {
           headers: {
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
