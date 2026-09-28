@@ -73,6 +73,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
       { path: '/admin/coupons', label: 'Coupons', icon: Ticket, page: 'coupons' },
       { path: '/admin/giveaways', label: 'Giveaways', icon: Gift, page: 'giveaways' },
       { path: '/admin/growth-outreach', label: 'Growth & Outreach', icon: Megaphone, page: 'marketing_dashboard' },
+      { path: '/admin/prospect-acquisition', label: 'Prospect Acquisition', icon: Users, page: 'marketing_dashboard' },
       { path: '/admin/marketing-dashboard', label: 'Marketing Dashboard', icon: Megaphone, page: 'marketing_dashboard' },
     ],
   },
