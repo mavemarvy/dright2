@@ -175,7 +175,7 @@ async function processInbound(event: any) {
 
   const { data: lastOutreach } = await db
     .from("notification_email_outbox")
-    .select("subject,metadata,sent_at")
+    .select("subject,metadata,sent_at,campaign_id,campaign_recipient_id")
     .eq("recipient_email", sender.email)
     .eq("status", "sent")
     .in("category", ["outreach", "promotions"])
@@ -270,6 +270,17 @@ async function processInbound(event: any) {
       automated,
     },
   });
+
+  if (!automated && lastOutreach?.campaign_recipient_id) {
+    await db.from("outreach_campaign_recipients").update({
+      status: "replied",
+      updated_at: now,
+    }).eq("id", lastOutreach.campaign_recipient_id);
+
+    if (lastOutreach.campaign_id) {
+      await db.rpc("recount_outreach_campaign", { p_campaign_id: lastOutreach.campaign_id });
+    }
+  }
 
   if (automated) {
     return { stored: true, conversation_id: conversation.id, auto_reply: false, reason: "automated_sender" };
