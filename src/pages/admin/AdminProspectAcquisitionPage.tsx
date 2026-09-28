@@ -57,11 +57,6 @@ type Campaign = {
   remaining_count:number;
 };
 
-function fmt(value:string|null) {
-  if(!value) return '—';
-  return new Date(value).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-}
-
 function Metric({label,value,icon:Icon}:{label:string;value:number;icon:typeof Users}) {
   return <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
     <div className="flex items-center gap-2 text-xs text-gray-400"><Icon className="h-4 w-4 text-primary-500"/>{label}</div>
