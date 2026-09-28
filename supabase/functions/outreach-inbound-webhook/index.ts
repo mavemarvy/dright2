@@ -277,6 +277,16 @@ async function processInbound(event: any) {
       updated_at: now,
     }).eq("id", lastOutreach.campaign_recipient_id);
 
+    const prospectId = typeof outreachMeta.prospect_id === "string"
+      ? String(outreachMeta.prospect_id)
+      : null;
+    if (prospectId) {
+      await db.from("outreach_prospects").update({
+        qualification_status: "replied",
+        updated_at: now,
+      }).eq("id", prospectId);
+    }
+
     if (lastOutreach.campaign_id) {
       await db.rpc("recount_outreach_campaign", { p_campaign_id: lastOutreach.campaign_id });
     }
