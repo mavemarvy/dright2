@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   Ban,
+  BarChart3,
   Bot,
   CheckCircle2,
   Clock3,
@@ -14,6 +15,8 @@ import {
   Search,
   Send,
   Settings,
+  Pause,
+  Play,
   ShieldCheck,
   Sparkles,
   Users,
@@ -97,6 +100,34 @@ type EmailTemplate = {
   cta_url: string;
 };
 
+type CampaignStatus = 'draft'|'scheduled'|'running'|'paused'|'completed'|'cancelled';
+
+type Campaign = {
+  id: string;
+  name: string;
+  segment: string;
+  status: CampaignStatus;
+  source_type: string;
+  source_label: string | null;
+  hourly_limit: number;
+  daily_limit: number;
+  adaptive_throttle: boolean;
+  max_audience_size: number;
+  target_count: number;
+  scheduled_count: number;
+  queued_count: number;
+  sent_count: number;
+  failed_count: number;
+  skipped_count: number;
+  replied_count: number;
+  unsubscribed_count: number;
+  remaining_count: number;
+  start_at: string | null;
+  stop_at: string | null;
+  last_dispatch_at: string | null;
+  created_at: string;
+};
+
 const STATUS_META: Record<ConversationStatus, { label: string; cls: string }> = {
   new: { label: 'New', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   interested: { label: 'Interested', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -122,8 +153,9 @@ function statusIcon(status: ConversationStatus) {
 }
 
 export default function AdminGrowthOutreachPage() {
-  const [tab, setTab] = useState<'inbox'|'rules'|'templates'|'settings'>('inbox');
+  const [tab, setTab] = useState<'campaigns'|'inbox'|'rules'|'templates'|'settings'>('campaigns');
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [rules, setRules] = useState<AutoReplyRule[]>([]);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [settings, setSettings] = useState<OutreachSettings | null>(null);
@@ -142,17 +174,20 @@ export default function AdminGrowthOutreachPage() {
     setLoading(true);
     setError(null);
     try {
-      const [convRes, ruleRes, settingsRes, templateRes] = await Promise.all([
+      const [convRes, campaignRes, ruleRes, settingsRes, templateRes] = await Promise.all([
         supabase.from('outreach_conversations').select('*').order('last_message_at', { ascending:false, nullsFirst:false }),
+        supabase.from('outreach_campaigns').select('*').order('created_at', { ascending:false }),
         supabase.from('outreach_auto_reply_rules').select('*').order('priority', { ascending:true }),
         supabase.from('outreach_settings').select('*').eq('singleton', true).maybeSingle(),
         supabase.from('outreach_email_templates').select('*').order('segment', { ascending:true }),
       ]);
       if (convRes.error) throw convRes.error;
+      if (campaignRes.error) throw campaignRes.error;
       if (ruleRes.error) throw ruleRes.error;
       if (settingsRes.error) throw settingsRes.error;
       if (templateRes.error) throw templateRes.error;
       setConversations((convRes.data || []) as Conversation[]);
+      setCampaigns((campaignRes.data || []) as Campaign[]);
       setRules((ruleRes.data || []) as AutoReplyRule[]);
       setSettings((settingsRes.data || null) as OutreachSettings | null);
       setTemplates((templateRes.data || []) as EmailTemplate[]);
@@ -195,6 +230,8 @@ export default function AdminGrowthOutreachPage() {
   useEffect(() => {
     const channel = supabase.channel('admin-growth-outreach-live')
       .on('postgres_changes', { event:'*', schema:'public', table:'outreach_conversations' }, () => void load())
+      .on('postgres_changes', { event:'*', schema:'public', table:'outreach_campaigns' }, () => void load())
+      .on('postgres_changes', { event:'*', schema:'public', table:'outreach_campaign_recipients' }, () => void load())
       .on('postgres_changes', { event:'*', schema:'public', table:'outreach_messages' }, payload => {
         const row = payload.new as Partial<OutreachMessage>;
         if (selectedId && row.conversation_id === selectedId) void loadMessages(selectedId);
@@ -220,7 +257,9 @@ export default function AdminGrowthOutreachPage() {
     unread: conversations.reduce((sum, item) => sum + Number(item.unread_count || 0), 0),
     interested: conversations.filter(item => item.status === 'interested').length,
     needsReply: conversations.filter(item => item.status === 'needs_reply').length,
-  }), [conversations]);
+    campaignSent: campaigns.reduce((sum,item)=>sum+Number(item.sent_count||0),0),
+    campaignRemaining: campaigns.reduce((sum,item)=>sum+Number(item.remaining_count||0),0),
+  }), [conversations,campaigns]);
 
   const updateConversation = async (id: string, changes: Partial<Conversation>) => {
     setWorking(`conversation:${id}`);
@@ -279,7 +318,9 @@ export default function AdminGrowthOutreachPage() {
       {error && <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{error}</div>}
       {saved && <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">{saved}</div>}
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <Metric label="Emails sent" value={stats.campaignSent} icon={Send} />
+        <Metric label="Remaining" value={stats.campaignRemaining} icon={Clock3} />
         <Metric label="Conversations" value={stats.total} icon={Users} />
         <Metric label="Unread replies" value={stats.unread} icon={Inbox} />
         <Metric label="Interested" value={stats.interested} icon={CheckCircle2} />
@@ -288,6 +329,7 @@ export default function AdminGrowthOutreachPage() {
 
       <div className="mb-5 flex gap-2 overflow-x-auto">
         {([
+          ['campaigns','Campaigns',BarChart3],
           ['inbox','Partnership Inbox',Inbox],
           ['rules','Auto Replies',Bot],
           ['templates','Email Templates',LayoutTemplate],
@@ -301,6 +343,8 @@ export default function AdminGrowthOutreachPage() {
 
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary-600" /></div>
+      ) : tab === 'campaigns' ? (
+        <CampaignsTab campaigns={campaigns} reload={load} />
       ) : tab === 'inbox' ? (
         <InboxTab
           conversations={filtered}
@@ -332,7 +376,98 @@ export default function AdminGrowthOutreachPage() {
 function Metric({ label, value, icon:Icon }: { label:string; value:number; icon:typeof Users }) {
   return <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
     <div className="mb-1 flex items-center gap-2 text-xs text-gray-400"><Icon className="h-4 w-4 text-primary-500" />{label}</div>
-    <p className="text-2xl font-black text-gray-900 dark:text-white">{value}</p>
+    <p className="text-2xl font-black text-gray-900 dark:text-white">{Number(value||0).toLocaleString()}</p>
+  </div>;
+}
+
+function CampaignsTab({ campaigns,reload }: { campaigns:Campaign[]; reload:()=>Promise<void> }) {
+  const [working,setWorking] = useState<string|null>(null);
+  const totals = campaigns.reduce((acc,item)=>({
+    target:acc.target+Number(item.target_count||0),
+    sent:acc.sent+Number(item.sent_count||0),
+    remaining:acc.remaining+Number(item.remaining_count||0),
+    queued:acc.queued+Number(item.queued_count||0),
+    replied:acc.replied+Number(item.replied_count||0),
+    failed:acc.failed+Number(item.failed_count||0),
+  }),{target:0,sent:0,remaining:0,queued:0,replied:0,failed:0});
+
+  const setStatus = async (campaign:Campaign,status:CampaignStatus) => {
+    setWorking(campaign.id);
+    await supabase.from('outreach_campaigns').update({status,updated_at:new Date().toISOString()}).eq('id',campaign.id);
+    setWorking(null);
+    await reload();
+  };
+
+  return <div className="space-y-4">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <Metric label="Audience" value={totals.target} icon={Users}/>
+      <Metric label="Sent" value={totals.sent} icon={Send}/>
+      <Metric label="Remaining" value={totals.remaining} icon={Clock3}/>
+      <Metric label="Queued" value={totals.queued} icon={Mail}/>
+      <Metric label="Replies" value={totals.replied} icon={MessageSquare}/>
+      <Metric label="Failed" value={totals.failed} icon={Ban}/>
+    </div>
+
+    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300">
+      Campaign storage supports up to <strong>100,000,000 recipients per campaign</strong>. The queue can be much larger than the current send rate; delivery is released automatically according to sender reputation and configured limits. Only legitimate, relevant contacts should be imported.
+    </div>
+
+    {campaigns.length===0 ? (
+      <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-10 text-center text-sm text-gray-400 dark:border-gray-800 dark:bg-gray-900">No outreach campaigns yet.</div>
+    ) : campaigns.map(campaign=>{
+      const progress = campaign.target_count>0 ? Math.min(100,(Number(campaign.sent_count||0)/Number(campaign.target_count))*100) : 0;
+      const processed = Number(campaign.sent_count||0)+Number(campaign.failed_count||0)+Number(campaign.skipped_count||0)+Number(campaign.unsubscribed_count||0);
+      return <section key={campaign.id} className="rounded-3xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-black text-gray-900 dark:text-white">{campaign.name}</h2>
+              <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${campaign.status==='running'?'bg-emerald-100 text-emerald-700':campaign.status==='paused'?'bg-amber-100 text-amber-700':campaign.status==='completed'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-600'}`}>{campaign.status}</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">{campaign.segment.replaceAll('_',' ')} · {campaign.source_label || campaign.source_type}</p>
+          </div>
+          <div className="flex gap-2">
+            {campaign.status==='running' || campaign.status==='scheduled' ? (
+              <button onClick={()=>void setStatus(campaign,'paused')} disabled={working===campaign.id} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-600 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300"><Pause className="h-3.5 w-3.5"/> Pause</button>
+            ) : campaign.status==='paused' || campaign.status==='draft' ? (
+              <button onClick={()=>void setStatus(campaign,'running')} disabled={working===campaign.id} className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><Play className="h-3.5 w-3.5"/> Run</button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+          <div className="h-full rounded-full bg-primary-600 transition-all" style={{width:`${progress}%`}}/>
+        </div>
+        <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-gray-400">
+          <span>{progress.toFixed(1)}% sent</span>
+          <span>{processed.toLocaleString()} processed of {Number(campaign.target_count||0).toLocaleString()}</span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+          <CampaignValue label="Audience" value={campaign.target_count}/>
+          <CampaignValue label="Sent" value={campaign.sent_count}/>
+          <CampaignValue label="Remaining" value={campaign.remaining_count}/>
+          <CampaignValue label="Scheduled" value={campaign.scheduled_count}/>
+          <CampaignValue label="Queued" value={campaign.queued_count}/>
+          <CampaignValue label="Replies" value={campaign.replied_count}/>
+          <CampaignValue label="Failed" value={campaign.failed_count}/>
+          <CampaignValue label="Unsubscribed" value={campaign.unsubscribed_count}/>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-gray-100 pt-4 text-[11px] text-gray-400 dark:border-gray-800">
+          <span>Campaign cap: {Number(campaign.max_audience_size||0).toLocaleString()}</span>
+          <span>Campaign rate ceiling: {Number(campaign.hourly_limit||0).toLocaleString()}/hour · {Number(campaign.daily_limit||0).toLocaleString()}/day</span>
+          <span>Last dispatch: {fmt(campaign.last_dispatch_at)}</span>
+        </div>
+      </section>;
+    })}
+  </div>;
+}
+
+function CampaignValue({label,value}:{label:string;value:number}) {
+  return <div className="rounded-2xl bg-gray-50 p-3 dark:bg-gray-800">
+    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+    <p className="mt-1 text-base font-black text-gray-900 dark:text-white">{Number(value||0).toLocaleString()}</p>
   </div>;
 }
 
