@@ -57,6 +57,16 @@ type Campaign = {
   remaining_count:number;
 };
 
+type ProspectDashboard = {
+  total_prospects:number;
+  qualified:number;
+  queued:number;
+  contacted:number;
+  replied:number;
+  unsubscribed:number;
+  invalid:number;
+};
+
 function Metric({label,value,icon:Icon}:{label:string;value:number;icon:typeof Users}) {
   return <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
     <div className="flex items-center gap-2 text-xs text-gray-400"><Icon className="h-4 w-4 text-primary-500"/>{label}</div>
@@ -68,6 +78,7 @@ export default function AdminProspectAcquisitionPage() {
   const [prospects,setProspects] = useState<Prospect[]>([]);
   const [runs,setRuns] = useState<AcquisitionRun[]>([]);
   const [campaigns,setCampaigns] = useState<Campaign[]>([]);
+  const [dashboard,setDashboard] = useState<ProspectDashboard>({total_prospects:0,qualified:0,queued:0,contacted:0,replied:0,unsubscribed:0,invalid:0});
   const [loading,setLoading] = useState(true);
   const [search,setSearch] = useState('');
   const [status,setStatus] = useState('all');
@@ -81,7 +92,7 @@ export default function AdminProspectAcquisitionPage() {
     setLoading(true);
     setNotice(null);
     try {
-      const [pRes,rRes,cRes] = await Promise.all([
+      const [pRes,rRes,cRes,dRes] = await Promise.all([
         supabase.from('outreach_prospects')
           .select('*')
           .order('qualification_score',{ascending:false})
@@ -95,13 +106,16 @@ export default function AdminProspectAcquisitionPage() {
           .select('id,name,segment,status,target_count,sent_count,remaining_count')
           .in('status',['draft','scheduled','running','paused'])
           .order('created_at',{ascending:false}),
+        supabase.from('outreach_prospect_dashboard').select('*').maybeSingle(),
       ]);
       if(pRes.error) throw pRes.error;
       if(rRes.error) throw rRes.error;
       if(cRes.error) throw cRes.error;
+      if(dRes.error) throw dRes.error;
       setProspects((pRes.data||[]) as Prospect[]);
       setRuns((rRes.data||[]) as AcquisitionRun[]);
       setCampaigns((cRes.data||[]) as Campaign[]);
+      setDashboard((dRes.data||{total_prospects:0,qualified:0,queued:0,contacted:0,replied:0,unsubscribed:0,invalid:0}) as ProspectDashboard);
       if(!campaignId && cRes.data?.[0]?.id) setCampaignId(cRes.data[0].id);
     } catch(reason) {
       setNotice(reason instanceof Error ? reason.message : 'Unable to load prospect acquisition data.');
@@ -121,13 +135,13 @@ export default function AdminProspectAcquisitionPage() {
   },[load]);
 
   const totals = useMemo(()=>({
-    total:prospects.length,
-    qualified:prospects.filter(p=>p.qualification_status==='qualified').length,
-    queued:prospects.filter(p=>p.qualification_status==='queued').length,
-    contacted:prospects.filter(p=>p.qualification_status==='contacted').length,
-    replied:prospects.filter(p=>p.qualification_status==='replied').length,
-    invalid:prospects.filter(p=>p.qualification_status==='invalid'||p.verification_status==='invalid'||p.verification_status==='bounced').length,
-  }),[prospects]);
+    total:Number(dashboard.total_prospects||0),
+    qualified:Number(dashboard.qualified||0),
+    queued:Number(dashboard.queued||0),
+    contacted:Number(dashboard.contacted||0),
+    replied:Number(dashboard.replied||0),
+    invalid:Number(dashboard.invalid||0),
+  }),[dashboard]);
 
   const filtered = useMemo(()=>{
     const q=search.trim().toLowerCase();
