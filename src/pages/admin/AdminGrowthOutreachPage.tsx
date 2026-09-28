@@ -117,6 +117,9 @@ type Campaign = {
   scheduled_count: number;
   queued_count: number;
   sent_count: number;
+  delivered_count: number;
+  bounced_count: number;
+  complained_count: number;
   failed_count: number;
   skipped_count: number;
   replied_count: number;
@@ -388,8 +391,11 @@ function CampaignsTab({ campaigns,reload }: { campaigns:Campaign[]; reload:()=>P
     remaining:acc.remaining+Number(item.remaining_count||0),
     queued:acc.queued+Number(item.queued_count||0),
     replied:acc.replied+Number(item.replied_count||0),
+    delivered:acc.delivered+Number(item.delivered_count||0),
+    bounced:acc.bounced+Number(item.bounced_count||0),
+    complained:acc.complained+Number(item.complained_count||0),
     failed:acc.failed+Number(item.failed_count||0),
-  }),{target:0,sent:0,remaining:0,queued:0,replied:0,failed:0});
+  }),{target:0,sent:0,remaining:0,queued:0,replied:0,delivered:0,bounced:0,complained:0,failed:0});
 
   const setStatus = async (campaign:Campaign,status:CampaignStatus) => {
     setWorking(campaign.id);
@@ -399,13 +405,15 @@ function CampaignsTab({ campaigns,reload }: { campaigns:Campaign[]; reload:()=>P
   };
 
   return <div className="space-y-4">
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
       <Metric label="Audience" value={totals.target} icon={Users}/>
       <Metric label="Sent" value={totals.sent} icon={Send}/>
+      <Metric label="Delivered" value={totals.delivered} icon={CheckCircle2}/>
       <Metric label="Remaining" value={totals.remaining} icon={Clock3}/>
       <Metric label="Queued" value={totals.queued} icon={Mail}/>
       <Metric label="Replies" value={totals.replied} icon={MessageSquare}/>
-      <Metric label="Failed" value={totals.failed} icon={Ban}/>
+      <Metric label="Bounced" value={totals.bounced} icon={Ban}/>
+      <Metric label="Complaints" value={totals.complained} icon={ShieldCheck}/>
     </div>
 
     <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-300">
@@ -443,14 +451,16 @@ function CampaignsTab({ campaigns,reload }: { campaigns:Campaign[]; reload:()=>P
           <span>{processed.toLocaleString()} processed of {Number(campaign.target_count||0).toLocaleString()}</span>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-10">
           <CampaignValue label="Audience" value={campaign.target_count}/>
           <CampaignValue label="Sent" value={campaign.sent_count}/>
+          <CampaignValue label="Delivered" value={campaign.delivered_count}/>
           <CampaignValue label="Remaining" value={campaign.remaining_count}/>
           <CampaignValue label="Scheduled" value={campaign.scheduled_count}/>
           <CampaignValue label="Queued" value={campaign.queued_count}/>
           <CampaignValue label="Replies" value={campaign.replied_count}/>
-          <CampaignValue label="Failed" value={campaign.failed_count}/>
+          <CampaignValue label="Bounced" value={campaign.bounced_count}/>
+          <CampaignValue label="Complaints" value={campaign.complained_count}/>
           <CampaignValue label="Unsubscribed" value={campaign.unsubscribed_count}/>
         </div>
 
