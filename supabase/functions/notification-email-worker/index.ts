@@ -197,10 +197,10 @@ function buildEmail(row: OutboxRow) {
             <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">${benefitRows}</table>
           </div>` : ""}
 
-          <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:25px">
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:25px;width:100%">
             <tr>
-              <td style="background:#3157e8;border-radius:12px">
-                <a href="${escapeHtml(marketingActionUrl)}" style="display:inline-block;padding:13px 21px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:800">${escapeHtml(ctaLabel)}</a>
+              <td style="background:#3157e8;border-radius:12px;text-align:center">
+                <a href="${escapeHtml(marketingActionUrl)}" style="display:block;padding:14px 22px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:800">${escapeHtml(ctaLabel)}</a>
               </td>
             </tr>
           </table>
@@ -214,10 +214,10 @@ function buildEmail(row: OutboxRow) {
               &nbsp;•&nbsp;
               <a href="${escapeHtml(unsubscribeUrl)}" style="color:#52637a;text-decoration:underline">Unsubscribe</a>
             </p>
+            <p style="margin:10px 0 0;color:#9aa3af;font-size:11px;line-height:1.55">You’re receiving this because your public business presence appears relevant to this DRIGHT partnership opportunity.</p>
           </div>
         </div>
       </div>
-      <p style="text-align:center;color:#a0a8b5;font-size:10px;margin:14px 0 0">Sent by DRIGHT Partnerships</p>
     </div>
   </body>
 </html>`,
