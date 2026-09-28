@@ -52,12 +52,30 @@ async function syncCampaignRecipient(
     (typeof row.metadata?.campaign_id === "string" ? String(row.metadata.campaign_id) : null);
   if (!recipientId) return;
 
+  const updatedAt = new Date().toISOString();
   await db.from("outreach_campaign_recipients").update({
     status,
     provider_message_id: providerMessageId,
     last_error: lastError,
-    updated_at: new Date().toISOString(),
+    updated_at: updatedAt,
   }).eq("id", recipientId);
+
+  const prospectId = typeof row.metadata?.prospect_id === "string"
+    ? String(row.metadata.prospect_id)
+    : null;
+  if (prospectId && status === "sent") {
+    await db.from("outreach_prospects").update({
+      qualification_status: "contacted",
+      last_contacted_at: updatedAt,
+      updated_at: updatedAt,
+    }).eq("id", prospectId);
+  }
+  if (prospectId && status === "unsubscribed") {
+    await db.from("outreach_prospects").update({
+      qualification_status: "unsubscribed",
+      updated_at: updatedAt,
+    }).eq("id", prospectId);
+  }
 
   if (campaignId) {
     await db.rpc("recount_outreach_campaign", { p_campaign_id: campaignId });
