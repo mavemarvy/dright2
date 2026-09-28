@@ -40,6 +40,30 @@ const db = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+async function syncCampaignRecipient(
+  row: OutboxRow,
+  status: "sent" | "failed" | "skipped" | "unsubscribed",
+  providerMessageId: string | null = null,
+  lastError: string | null = null,
+) {
+  const recipientId = row.campaign_recipient_id ||
+    (typeof row.metadata?.campaign_recipient_id === "string" ? String(row.metadata.campaign_recipient_id) : null);
+  const campaignId = row.campaign_id ||
+    (typeof row.metadata?.campaign_id === "string" ? String(row.metadata.campaign_id) : null);
+  if (!recipientId) return;
+
+  await db.from("outreach_campaign_recipients").update({
+    status,
+    provider_message_id: providerMessageId,
+    last_error: lastError,
+    updated_at: new Date().toISOString(),
+  }).eq("id", recipientId);
+
+  if (campaignId) {
+    await db.rpc("recount_outreach_campaign", { p_campaign_id: campaignId });
+  }
+}
+
 type OutboxRow = {
   id: string;
   notification_id: string | null;
@@ -54,6 +78,8 @@ type OutboxRow = {
   status: string;
   attempts: number;
   next_attempt_at: string;
+  campaign_id: string | null;
+  campaign_recipient_id: string | null;
 };
 
 function escapeHtml(value: unknown): string {
@@ -283,6 +309,10 @@ async function markRetry(row: OutboxRow, error: string) {
   const externalDeliveryId = typeof row.metadata?.external_delivery_id === "string"
     ? String(row.metadata.external_delivery_id)
     : null;
+  if (terminal) {
+    await syncCampaignRecipient(row, "failed", null, error.slice(0, 1000));
+  }
+
   if (terminal && externalDeliveryId) {
     await db.from("promotion_external_deliveries").update({
       status: "failed",
@@ -348,11 +378,12 @@ async function processOne(id: string) {
 
     if (!marketingSettings?.marketing_send_enabled || !marketingSettings?.marketing_domain_verified) {
       await db.from("notification_email_outbox").update({
-        status: "skipped",
+        status: "retry",
+        next_attempt_at: new Date(Date.now() + 60 * 60_000).toISOString(),
         last_error: "Marketing outreach paused until the dedicated sending domain is verified and enabled",
         updated_at: new Date().toISOString(),
       }).eq("id", row.id);
-      return { id, success: true, skipped: true, reason: "marketing_sender_not_ready" };
+      return { id, success: true, rateLimited: true, reason: "marketing_sender_not_ready" };
     }
 
     const oneHourAgoMarketing = new Date(Date.now() - 60 * 60_000).toISOString();
@@ -422,6 +453,7 @@ async function processOne(id: string) {
         last_error: "Recipient unsubscribed from DRIGHT marketing email",
         updated_at: skippedAt,
       }).eq("id", row.id);
+      await syncCampaignRecipient(row, "unsubscribed", null, "Recipient unsubscribed from DRIGHT marketing email");
       return { id, success: true, skipped: true, reason: "marketing_unsubscribed" };
     }
 
@@ -573,6 +605,8 @@ async function processOne(id: string) {
       sent_at: sentAt,
       updated_at: sentAt,
     }).eq("id", row.id);
+
+    await syncCampaignRecipient(row, "sent", messageId, null);
 
     if (row.notification_id) {
       await db.from("notification_delivery_logs").update({
