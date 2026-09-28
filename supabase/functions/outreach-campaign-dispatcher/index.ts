@@ -108,6 +108,7 @@ async function dispatchCampaign(campaign: Campaign, globalHourAvailable:number, 
         campaign_id:campaign.id,
         campaign_recipient_id:recipient.id,
         campaign_name:campaign.name,
+        prospect_id:typeof recipient.metadata?.prospect_id === "string" ? recipient.metadata.prospect_id : undefined,
       },
     }).select("id").single();
 
