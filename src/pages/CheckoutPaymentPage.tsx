@@ -13,7 +13,7 @@ import { detectCountry, sortProvidersByCountry, getCountryInfo } from '../lib/co
 import PaymentProviderCard from '../components/PaymentProviderCard';
 import { initializePayment } from '../lib/paystackService';
 import { createInvoice } from '../lib/invoiceLib';
-import { formatCurrency } from '../lib/currency';
+import { formatCurrency, formatDisplayCurrency } from '../lib/currency';
 
 interface CheckoutData {
   orderId: string;
@@ -36,6 +36,10 @@ interface CheckoutData {
   estimatedDelivery: string;
   sellerTrustScore: number | null;
   sellerVerified: boolean;
+  sourceCurrency: string;
+  sourceBasePrice: number;
+  sourceFinalPrice: number;
+  sourceToUsdRate: number;
 }
 
 export default function CheckoutPaymentPage() {
@@ -136,6 +140,22 @@ export default function CheckoutPaymentPage() {
       if (order.order_type === 'PHYSICAL') deliveryEstimate = '3-7 business days';
       else if (order.order_type === 'SERVICE') deliveryEstimate = 'Per service tier';
 
+      const productSpecs = product.specifications && typeof product.specifications === 'object'
+        ? product.specifications as Record<string, unknown>
+        : {};
+      const sourceCurrency = String(
+        order.source_currency || productSpecs.price_currency || productSpecs.source_currency || 'USD'
+      ).toUpperCase();
+      const sourceToUsdRate = Number(order.source_to_usd_rate || 1);
+      const sourceBasePrice = Number(order.source_base_price ?? product.price ?? order.base_price ?? 0);
+      const sourceFinalPrice = Number(
+        order.source_final_price ?? (
+          sourceCurrency === 'USD'
+            ? order.final_price
+            : (sourceToUsdRate > 0 ? Number(order.final_price || 0) / sourceToUsdRate : product.price)
+        )
+      );
+
       setCheckoutData({
         orderId: order.id,
         productId: product.id,
@@ -144,7 +164,7 @@ export default function CheckoutPaymentPage() {
         sellerId: order.seller_id,
         sellerName: seller?.full_name || seller?.email || 'Seller',
         quantity: 1,
-        basePrice: Number(order.base_price) || Number(product.price),
+        basePrice: Number(order.base_price) || 0,
         tierPrice: Number(order.tier_price) || 0,
         customizationPrice: Number(order.customization_price) || 0,
         adminTaskAmount: Number(order.admin_task_amount) || 0,
@@ -157,6 +177,10 @@ export default function CheckoutPaymentPage() {
         estimatedDelivery: deliveryEstimate,
         sellerTrustScore: null,
         sellerVerified: false,
+        sourceCurrency,
+        sourceBasePrice,
+        sourceFinalPrice,
+        sourceToUsdRate: Number.isFinite(sourceToUsdRate) && sourceToUsdRate > 0 ? sourceToUsdRate : 1,
       });
 
       // Fetch seller trust score and verification
@@ -219,6 +243,17 @@ export default function CheckoutPaymentPage() {
   const referralDiscount = checkoutData?.affiliateCommissionAmount || 0;
   const couponAmount = couponApplied ? couponDiscount : 0;
   const grandTotal = Math.max(0, (checkoutData?.finalPrice || 0) - couponAmount);
+  const sourceCurrency = checkoutData?.sourceCurrency || 'USD';
+  const sourceRate = checkoutData?.sourceToUsdRate || 1;
+  const canonicalToSource = (amount: number) => sourceCurrency === 'USD'
+    ? amount
+    : (sourceRate > 0 ? amount / sourceRate : amount);
+  const sourceCouponAmount = canonicalToSource(couponAmount);
+  const sourceGrandTotal = Math.max(0, (checkoutData?.sourceFinalPrice || 0) - sourceCouponAmount);
+  const sourceProductPrice = checkoutData?.sourceBasePrice || 0;
+  const sourceTierPrice = canonicalToSource(tierPrice);
+  const sourceCustomizationPrice = canonicalToSource(customizationPrice);
+  const formatSource = (amount: number) => formatDisplayCurrency(amount, sourceCurrency);
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -274,19 +309,19 @@ export default function CheckoutPaymentPage() {
     try {
       // Create invoice before payment
       const invoiceResult = await createInvoice(user.id, {
-        amount: productPrice + tierPrice + customizationPrice,
-        // Marketplace order values are canonical USD. Paystack conversion to
-        // NGN happens server-side at payment initialization.
-        currency: 'USD',
+        amount: sourceProductPrice + sourceTierPrice + sourceCustomizationPrice,
+        // Invoice the buyer in the product's configured source currency. The
+        // order/ledger remains canonical USD internally.
+        currency: sourceCurrency,
         invoice_type: 'product',
         order_id: checkoutData.orderId,
         line_items: [
-          { description: checkoutData.productName, amount: productPrice, quantity: 1 },
-          ...(tierPrice > 0 ? [{ description: 'Service Tier', amount: tierPrice }] : []),
-          ...(customizationPrice > 0 ? [{ description: 'Customization', amount: customizationPrice }] : []),
+          { description: checkoutData.productName, amount: sourceProductPrice, quantity: 1 },
+          ...(sourceTierPrice > 0 ? [{ description: 'Service Tier', amount: sourceTierPrice }] : []),
+          ...(sourceCustomizationPrice > 0 ? [{ description: 'Customization', amount: sourceCustomizationPrice }] : []),
         ],
         billing_details: billingDetails,
-        discount_amount: referralDiscount + couponAmount,
+        discount_amount: canonicalToSource(referralDiscount + couponAmount),
       });
 
       const result = await initializePayment({
@@ -451,7 +486,7 @@ export default function CheckoutPaymentPage() {
                 )}
               </div>
               <p className="text-2xl sm:text-3xl font-black tracking-tight text-primary-700 dark:text-primary-300">
-                {checkoutData.isFreeOrder ? 'FREE' : formatCurrencyFn(grandTotal)}
+                {checkoutData.isFreeOrder ? 'FREE' : formatSource(sourceGrandTotal)}
               </p>
             </div>
           </div>
@@ -518,7 +553,7 @@ export default function CheckoutPaymentPage() {
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span className="text-sm font-medium text-emerald-700">Coupon "{couponCode}" applied</span>
                   </div>
-                  <span className="text-sm font-bold text-emerald-600">-{formatCurrencyFn(couponAmount)}</span>
+                  <span className="text-sm font-bold text-emerald-600">-{formatSource(sourceCouponAmount)}</span>
                 </div>
               ) : (
                 <div className="flex gap-2">
@@ -583,7 +618,7 @@ export default function CheckoutPaymentPage() {
                   {paying ? (
                     <><Loader2 className="w-5 h-5 animate-spin" /> Opening {selectedProviderName}…</>
                   ) : (
-                    <><Lock className="w-5 h-5" /> Proceed to {selectedProviderName} · {formatCurrencyFn(grandTotal)}</>
+                    <><Lock className="w-5 h-5" /> Proceed to {selectedProviderName} · {formatSource(sourceGrandTotal)}</>
                   )}
                 </button>
                 <p className="mt-2 text-[10px] sm:text-[11px] text-center text-gray-400 dark:text-gray-500">
@@ -638,7 +673,7 @@ export default function CheckoutPaymentPage() {
               <div className="flex justify-between items-center">
                 <span className="font-bold text-gray-900">Order Total</span>
                 <span className="text-2xl font-bold text-primary-600">
-                  {checkoutData.isFreeOrder ? 'FREE' : formatCurrencyFn(grandTotal)}
+                  {checkoutData.isFreeOrder ? 'FREE' : formatSource(sourceGrandTotal)}
                 </span>
               </div>
 
@@ -669,7 +704,7 @@ export default function CheckoutPaymentPage() {
                 ) : checkoutData.isFreeOrder ? (
                   <><CheckCircle2 className="w-5 h-5" />Complete Free Order</>
                 ) : (
-                  <><Lock className="w-5 h-5" />Pay {formatCurrencyFn(grandTotal)}</>
+                  <><Lock className="w-5 h-5" />Pay {formatSource(sourceGrandTotal)}</>
                 )}
               </button>
 
@@ -699,7 +734,7 @@ export default function CheckoutPaymentPage() {
           <div className="flex-1 min-w-0">
             <p className="text-xs text-gray-500">Order Total</p>
             <p className="text-lg font-bold text-primary-600">
-              {checkoutData.isFreeOrder ? 'FREE' : formatCurrencyFn(grandTotal)}
+              {checkoutData.isFreeOrder ? 'FREE' : formatSource(sourceGrandTotal)}
             </p>
           </div>
           <button
@@ -712,7 +747,7 @@ export default function CheckoutPaymentPage() {
             ) : checkoutData.isFreeOrder ? (
               <><CheckCircle2 className="w-5 h-5" />Complete</>
             ) : (
-              <><Lock className="w-4 h-4" />Pay {formatCurrencyFn(grandTotal)}</>
+              <><Lock className="w-4 h-4" />Pay {formatSource(sourceGrandTotal)}</>
             )}
           </button>
         </div>
