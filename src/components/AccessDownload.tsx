@@ -5,6 +5,7 @@ import {
   FileText, Clock, Award, Play, ExternalLink, Lock,
 } from 'lucide-react';
 import VideoPlayer from './VideoPlayer';
+import { supabase } from '../lib/supabase';
 
 interface AccessDownloadProps {
   orderId: string;
@@ -41,7 +42,7 @@ export default function AccessDownload({ orderId, downloadToken, productName, pr
     setError(null);
     setResult(null);
     try {
-      const { data: { session }, error: sessionError } = await (await import('../lib/supabase')).supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
         setError('Your session has expired. Please sign in again.');
         return;
