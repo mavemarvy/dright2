@@ -1,6 +1,6 @@
 import { BadgeCheck, ExternalLink, Store } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import AdminDrightStarterProductSettings from '../../components/admin/AdminDrightStarterProductSettings';
+import AdminDrightStarterProductSettings from '../../components/admin/AdminDrightStarterProductSettings';\nimport AdminDrightClientOnboarding from '../../components/admin/AdminDrightClientOnboarding';
 import AdminDrightOfficialProductManager from '../../components/admin/AdminDrightOfficialProductManager';
 
 export default function AdminDrightStorePage() {
