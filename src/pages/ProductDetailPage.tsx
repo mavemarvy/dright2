@@ -772,8 +772,72 @@ export default function ProductDetailPage() {
               </div>
             </div>
           </div>
-          <p className="mt-4 text-xs leading-5 text-slate-500">
-            These are supporting third-party references. The DRIGHT course itself contains the structured modules, exercises, knowledge checks, notes and capstone.
+          <div className="mt-7 border-t border-slate-200 pt-6">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-fuchsia-600 to-orange-500 text-white flex items-center justify-center shrink-0">
+                <PlayCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-fuchsia-700">Instagram Tutorial Up Here</p>
+                <h3 className="mt-1 text-lg md:text-xl font-black text-slate-950">Dedicated Instagram Ads visual tutorials</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Buyers can preview dedicated Instagram advertising instruction before purchasing, with one Nigerian-market tutorial and one US agency tutorial.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid lg:grid-cols-2 gap-5">
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <VideoPlayer
+                  url="https://www.youtube.com/watch?v=haUZvNZWae0"
+                  title="Nigeria Instagram Ads Step-by-Step"
+                />
+                <div className="pt-3">
+                  <p className="font-black text-slate-900">Nigeria • Instagram Ads Step-by-Step</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    AYO IS MARKETING demonstrates how to create sponsored Instagram ads for a Nigerian audience and business context.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <VideoPlayer
+                  url="https://www.youtube.com/watch?v=iTstnwkiizk"
+                  title="USA Instagram Ads Step-by-Step"
+                />
+                <div className="pt-3">
+                  <p className="font-black text-slate-900">USA • Instagram Ads Step-by-Step</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    Atlanta-based LYFE Marketing walks through Instagram campaign setup, ad sets, placements and ad creative step by step.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-2">
+              {[
+                ['1', 'Connect business assets'],
+                ['2', 'Choose objective'],
+                ['3', 'Set audience'],
+                ['4', 'Choose Instagram placements'],
+                ['5', 'Build Feed, Story or Reel creative'],
+                ['6', 'Preview, publish and measure'],
+              ].map(([step, label]) => (
+                <div key={step} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="text-[10px] font-black tracking-wider text-fuchsia-600">STEP {step}</div>
+                  <div className="mt-2 h-16 rounded-lg bg-slate-950 p-2.5">
+                    <div className="h-2 w-12 rounded-full bg-fuchsia-400/80" />
+                    <div className="mt-2 h-2 rounded-full bg-white/15" />
+                    <div className="mt-1.5 h-2 w-3/4 rounded-full bg-white/10" />
+                  </div>
+                  <p className="mt-2 text-xs font-bold leading-5 text-slate-700">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="mt-5 text-xs leading-5 text-slate-500">
+            These videos are supporting third-party visual references. The paid DRIGHT course provides the structured modules, screenshot-style walkthroughs, practice challenges, knowledge checks, notes and capstone.
           </p>
         </section>
       )}
