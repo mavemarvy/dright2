@@ -39,6 +39,7 @@ export default function AdminDrightStorePage() {
       </div>
 
       <AdminDrightStarterProductSettings />
+      <AdminDrightClientOnboarding />
       <AdminDrightOfficialProductManager />
     </div>
   );
