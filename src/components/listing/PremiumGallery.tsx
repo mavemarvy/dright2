@@ -8,9 +8,11 @@ interface PremiumGalleryProps {
   images: string[];
   alt: string;
   videoUrl?: string | null;
+  imageFit?: 'cover' | 'contain';
+  aspect?: 'square' | 'video';
 }
 
-export default function PremiumGallery({ images, alt, videoUrl }: PremiumGalleryProps) {
+export default function PremiumGallery({ images, alt, videoUrl, imageFit = 'cover', aspect = 'square' }: PremiumGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
@@ -105,7 +107,7 @@ export default function PremiumGallery({ images, alt, videoUrl }: PremiumGallery
         {/* Main Display */}
         <div
           ref={imageRef}
-          className="relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 aspect-square select-none cursor-zoom-in"
+          className={`relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 ${aspect === 'video' ? 'aspect-video' : 'aspect-square'} select-none cursor-zoom-in`}
           onMouseMove={handleMouseMove}
           onMouseEnter={() => currentMedia.type === 'image' && setZoomed(true)}
           onMouseLeave={() => setZoomed(false)}
@@ -140,7 +142,7 @@ export default function PremiumGallery({ images, alt, videoUrl }: PremiumGallery
                 <img
                   src={currentMedia.url}
                   alt={`${alt} — Image ${currentIndex + 1}`}
-                  className="w-full h-full object-cover pointer-events-none transition-transform duration-200"
+                  className={`w-full h-full ${imageFit === 'contain' ? 'object-contain' : 'object-cover'} pointer-events-none transition-transform duration-200`}
                   style={zoomed ? {
                     transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
                     transform: 'scale(2)',
@@ -216,7 +218,7 @@ export default function PremiumGallery({ images, alt, videoUrl }: PremiumGallery
                     <Play className="w-5 h-5 text-white fill-white" />
                   </div>
                 ) : (
-                  <img src={item.url} alt={`${alt} thumbnail ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  <img src={item.url} alt={`${alt} thumbnail ${idx + 1}`} className={`w-full h-full ${imageFit === 'contain' ? 'object-contain' : 'object-cover'}`} loading="lazy" />
                 )}
               </button>
             ))}
