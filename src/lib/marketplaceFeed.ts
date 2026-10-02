@@ -45,11 +45,15 @@ export async function fetchMarketplaceFeedV2(
 
   let items = (payload.items || []) as MarketplaceFeedPage['items'];
 
-  // The Starter catalog mirror lives in the generic products table for ranking,
-  // but its authoritative commercial currency is NGN, not the marketplace USD base.
-  // Enrich the ranked item from the first-party settings RPC so ProductCard never
-  // converts ₦5,000 as though it were $5,000.
-  const { data: starterData } = await supabase.rpc('get_public_dright_starter_product');
+  // Ranked-feed RPCs intentionally return a compact product payload. First-party
+  // DRIGHT products, however, can be priced in NGN or another source currency.
+  // Re-hydrate every Official Store item from its authoritative settings before
+  // rendering so a source amount is never treated as canonical USD.
+  const [{ data: starterData }, { data: officialData }] = await Promise.all([
+    supabase.rpc('get_public_dright_starter_product'),
+    supabase.rpc('get_public_dright_official_products'),
+  ]);
+
   const starterPayload = starterData && typeof starterData === 'object'
     ? starterData as Record<string, any>
     : null;
@@ -58,26 +62,79 @@ export async function fetchMarketplaceFeedV2(
     ? String(starterProduct.marketplace_product_id)
     : null;
 
-  if (starterId) {
-    items = items.map(item => item.id === starterId
-      ? {
-          ...item,
-          sku: 'DRIGHT-STARTER-ACCESS',
-          affiliate_commission_percent: Number(starterProduct.affiliate_commission_percent ?? 0),
-          specifications: {
-            ...(item.specifications || {}),
-            system_product_kind: 'dright_starter_access',
-            source_currency: String(starterProduct.currency || 'NGN').toUpperCase(),
-            display_currency: String(starterProduct.currency || 'NGN').toUpperCase(),
-            official_rating_enabled: Boolean(starterProduct.official_rating_enabled),
-            official_rating: Number(starterProduct.official_rating ?? 0),
-            special_route: '/dright/starter',
-            official_store: true,
-            first_party: true,
-          },
-        }
-      : item);
+  const officialByProductId = new Map<string, Record<string, any>>();
+  if (Array.isArray(officialData)) {
+    for (const row of officialData) {
+      if (!row || typeof row !== 'object') continue;
+      const productId = String((row as Record<string, any>).marketplace_product_id || '');
+      if (productId) officialByProductId.set(productId, row as Record<string, any>);
+    }
   }
+
+  items = items.map((item) => {
+    if (starterId && item.id === starterId) {
+      const currency = String(starterProduct.currency || 'NGN').toUpperCase();
+      return {
+        ...item,
+        price: Number(starterProduct.price ?? item.price ?? 0),
+        is_free: Number(starterProduct.price ?? item.price ?? 0) === 0,
+        image_url: starterProduct.image_url || item.image_url || '/dright-logo.webp',
+        sku: 'DRIGHT-STARTER-ACCESS',
+        affiliate_commission_percent: Number(starterProduct.affiliate_commission_percent ?? 0),
+        seller_name: 'Official DRIGHT Store',
+        seller_avatar: '/dright-logo.webp',
+        seller_verified: true,
+        store_name: 'Official DRIGHT Store',
+        specifications: {
+          ...(item.specifications || {}),
+          system_product_kind: 'dright_starter_access',
+          price_currency: currency,
+          source_currency: currency,
+          display_currency: currency,
+          official_rating_enabled: Boolean(starterProduct.official_rating_enabled),
+          official_rating: Number(starterProduct.official_rating ?? 0),
+          special_route: '/dright/starter',
+          official_store: true,
+          first_party: true,
+        },
+      };
+    }
+
+    const official = officialByProductId.get(item.id);
+    if (!official) return item;
+
+    const currency = String(official.currency || 'NGN').toUpperCase();
+    const authoritativePrice = Number(official.price ?? item.price ?? 0);
+    return {
+      ...item,
+      name: String(official.name || item.name),
+      description: official.description ?? item.description,
+      price: authoritativePrice,
+      is_free: authoritativePrice === 0,
+      image_url: official.image_url || item.image_url,
+      product_type: official.product_type || item.product_type,
+      category: official.category || item.category,
+      is_featured: official.is_featured === true,
+      affiliate_commission_percent: Number(official.affiliate_commission_percent ?? item.affiliate_commission_percent ?? 0),
+      seller_name: 'Official DRIGHT Store',
+      seller_avatar: '/dright-logo.webp',
+      seller_verified: true,
+      store_name: 'Official DRIGHT Store',
+      specifications: {
+        ...(item.specifications || {}),
+        price_currency: currency,
+        source_currency: currency,
+        display_currency: currency,
+        official_store: true,
+        first_party: true,
+        official_product_id: String(official.id || ''),
+        official_rating_enabled: official.official_rating_enabled === true,
+        official_rating: Number(official.official_rating ?? 0),
+        official_badge_enabled: official.official_badge_enabled !== false,
+        platform_fee_percent: 0,
+      },
+    };
+  });
 
   return {
     items,
