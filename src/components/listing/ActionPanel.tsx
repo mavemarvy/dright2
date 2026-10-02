@@ -4,7 +4,7 @@ import {
   ShoppingCart, Heart, Share2, Loader2, Check, ShoppingBag,
   MessageSquare, Send, Store,
 } from 'lucide-react';
-import { formatCurrency } from '../../lib/currency';
+import { formatDisplayCurrency } from '../../lib/currency';
 import { getListingConfig } from './listingTypes';
 
 interface ActionPanelProps {
@@ -28,13 +28,14 @@ interface ActionPanelProps {
   isOwner?: boolean;
   applied?: boolean;
   saveLabel?: string;
+  sourceCurrency?: string;
 }
 
 export default function ActionPanel({
   listingType, price, isFree, finalPrice, originalPrice, stockQuantity,
   quantity, onIncrement, onDecrement, onBuyNow, onAddToCart, onContactSeller,
   onApply, checkoutLoading, isOutOfStock, hasPurchased, sellerId,
-  isOwner, applied,
+  isOwner, applied, sourceCurrency = 'USD',
 }: ActionPanelProps) {
   const config = getListingConfig(listingType);
   const [saved, setSaved] = useState(false);
@@ -87,9 +88,9 @@ export default function ActionPanel({
           ) : (
             <div className="space-y-1">
               <div className="flex items-baseline gap-3">
-                <p className="text-3xl font-bold text-gray-900">{formatCurrency(displayPrice)}</p>
+                <p className="text-3xl font-bold text-gray-900">{formatDisplayCurrency(displayPrice, sourceCurrency)}</p>
                 {originalPrice && originalPrice > displayPrice && (
-                  <span className="text-lg text-gray-400 line-through">{formatCurrency(originalPrice)}</span>
+                  <span className="text-lg text-gray-400 line-through">{formatDisplayCurrency(originalPrice, sourceCurrency)}</span>
                 )}
               </div>
               {discountPct > 0 && (
@@ -97,7 +98,7 @@ export default function ActionPanel({
                   <span className="px-2 py-0.5 rounded-full bg-error-muted text-error font-bold text-xs">
                     -{discountPct}%
                   </span>
-                  <span className="text-success font-medium">Save {formatCurrency(savings)}</span>
+                  <span className="text-success font-medium">Save {formatDisplayCurrency(savings, sourceCurrency)}</span>
                 </div>
               )}
               {isService && (
@@ -198,7 +199,7 @@ export default function ActionPanel({
             >
               {checkoutLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>
                 {isService ? <ShoppingBag className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
-                {isFree ? 'Get for Free' : `${config.primaryActionLabel} — ${formatCurrency(displayPrice)}`}
+                {isFree ? 'Get for Free' : `${config.primaryActionLabel} — ${formatDisplayCurrency(displayPrice, sourceCurrency)}`}
               </>}
             </button>
           </>
