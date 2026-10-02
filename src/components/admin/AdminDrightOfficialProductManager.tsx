@@ -69,6 +69,8 @@ export default function AdminDrightOfficialProductManager() {
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pricingSavingId, setPricingSavingId] = useState<string | null>(null);
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, { price: string; commission: string }>>({});
   const [message, setMessage] = useState<string | null>(null);
 
   const load = async () => {
@@ -79,6 +81,10 @@ export default function AdminDrightOfficialProductManager() {
         fetchMarketplaceEngineSettings(),
       ]);
       setProducts(items);
+      setPriceDrafts(Object.fromEntries(items.map((item) => [
+        item.id,
+        { price: String(item.price), commission: String(item.affiliate_commission_percent) },
+      ])));
       setEngine(settings);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to load official products.');
@@ -216,6 +222,35 @@ export default function AdminDrightOfficialProductManager() {
       setMessage(error instanceof Error ? error.message : 'Unable to create official product.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const savePricing = async (product: DrightOfficialProduct) => {
+    const draft = priceDrafts[product.id];
+    if (!draft) return;
+    const price = Number(draft.price);
+    const commission = Number(draft.commission);
+    if (!Number.isFinite(price) || price < 0) {
+      setMessage('Price must be 0 or greater.');
+      return;
+    }
+    if (!Number.isFinite(commission) || commission < 0 || commission > 100) {
+      setMessage('Affiliate commission must be between 0% and 100%.');
+      return;
+    }
+    setPricingSavingId(product.id);
+    setMessage(null);
+    try {
+      await updateAdminDrightOfficialProduct(product.id, {
+        price,
+        affiliate_commission_percent: commission,
+      });
+      setMessage(`${product.name} price and affiliate commission updated.`);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to update product pricing.');
+    } finally {
+      setPricingSavingId(null);
     }
   };
 
@@ -419,6 +454,50 @@ export default function AdminDrightOfficialProductManager() {
                 <span className="font-black text-gray-900">{formatCurrencyValue(product.price, product.currency)}</span>
                 <span>{product.affiliate_commission_percent}% affiliate</span>
                 {product.official_rating_enabled && <span>{product.official_rating.toFixed(1)} official rating</span>}
+              </div>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-[minmax(120px,180px)_minmax(120px,180px)_auto] gap-2 items-end">
+                <Field label={`Price (${product.currency})`}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={priceDrafts[product.id]?.price ?? String(product.price)}
+                    onChange={(e) => setPriceDrafts((current) => ({
+                      ...current,
+                      [product.id]: {
+                        price: e.target.value,
+                        commission: current[product.id]?.commission ?? String(product.affiliate_commission_percent),
+                      },
+                    }))}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Affiliate commission %">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={priceDrafts[product.id]?.commission ?? String(product.affiliate_commission_percent)}
+                    onChange={(e) => setPriceDrafts((current) => ({
+                      ...current,
+                      [product.id]: {
+                        price: current[product.id]?.price ?? String(product.price),
+                        commission: e.target.value,
+                      },
+                    }))}
+                    className={inputClass}
+                  />
+                </Field>
+                <button
+                  type="button"
+                  onClick={() => void savePricing(product)}
+                  disabled={pricingSavingId === product.id}
+                  className="min-h-[42px] rounded-xl bg-slate-950 text-white px-4 py-2.5 text-xs font-black inline-flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {pricingSavingId === product.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save pricing
+                </button>
               </div>
             </div>
             <div className="flex sm:flex-col gap-2 shrink-0">
