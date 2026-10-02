@@ -12,6 +12,7 @@ import {
 } from '../../lib/drightOfficialStore';
 import MarketingMaterialsEditor from '../listing/MarketingMaterialsEditor';
 import {
+  loadListingMarketingMaterials,
   persistListingMarketingMaterials,
   type MarketingMaterialDraft,
 } from '../../lib/marketingMaterials';
@@ -27,6 +28,7 @@ import {
   type MarketplaceListingTypeCode,
 } from '../../lib/listingEngine';
 import { formatCurrencyValue } from '../../lib/currency';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 type ProductType = 'PHYSICAL' | 'DIGITAL' | 'SERVICE' | 'COURSE';
 
@@ -100,6 +102,7 @@ const DEFAULT_FORM = {
 
 export default function AdminDrightOfficialProductManager() {
   const { user } = useAuth();
+  const { supportedCurrencies } = useCurrency();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState<DrightOfficialProduct[]>([]);
   const [form, setForm] = useState(DEFAULT_FORM);
@@ -115,9 +118,10 @@ export default function AdminDrightOfficialProductManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pricingSavingId, setPricingSavingId] = useState<string | null>(null);
-  const [priceDrafts, setPriceDrafts] = useState<Record<string, { price: string; commission: string }>>({});
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, { price: string; currency: string; commission: string }>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ProductEditDraft | null>(null);
+  const [editMarketingMaterials, setEditMarketingMaterials] = useState<MarketingMaterialDraft[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editUploading, setEditUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -132,7 +136,7 @@ export default function AdminDrightOfficialProductManager() {
       setProducts(items);
       setPriceDrafts(Object.fromEntries(items.map((item) => [
         item.id,
-        { price: String(item.price), commission: String(item.affiliate_commission_percent) },
+        { price: String(item.price), currency: item.currency, commission: String(item.affiliate_commission_percent) },
       ])));
       setEngine(settings);
     } catch (error) {
@@ -279,8 +283,13 @@ export default function AdminDrightOfficialProductManager() {
     if (!draft) return;
     const price = Number(draft.price);
     const commission = Number(draft.commission);
+    const currency = String(draft.currency || product.currency).toUpperCase();
     if (!Number.isFinite(price) || price < 0) {
       setMessage('Price must be 0 or greater.');
+      return;
+    }
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      setMessage('Choose a valid product currency.');
       return;
     }
     if (!Number.isFinite(commission) || commission < 0 || commission > 100) {
@@ -292,9 +301,10 @@ export default function AdminDrightOfficialProductManager() {
     try {
       await updateAdminDrightOfficialProduct(product.id, {
         price,
+        currency,
         affiliate_commission_percent: commission,
       });
-      setMessage(`${product.name} price and affiliate commission updated.`);
+      setMessage(`${product.name} price, currency and affiliate commission updated.`);
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to update product pricing.');
@@ -303,15 +313,22 @@ export default function AdminDrightOfficialProductManager() {
     }
   };
 
-  const openFullEditor = (product: DrightOfficialProduct) => {
+  const openFullEditor = async (product: DrightOfficialProduct) => {
     if (editingId === product.id) {
       setEditingId(null);
       setEditDraft(null);
+      setEditMarketingMaterials([]);
       return;
     }
     setEditingId(product.id);
     setEditDraft(editDraftFromProduct(product));
+    setEditMarketingMaterials([]);
     setMessage(null);
+    try {
+      setEditMarketingMaterials(await loadListingMarketingMaterials('product', product.marketplace_product_id));
+    } catch {
+      setEditMarketingMaterials([]);
+    }
   };
 
   const uploadEditImages = async (files: FileList | null) => {
@@ -395,7 +412,15 @@ export default function AdminDrightOfficialProductManager() {
         image_url: editDraft.image_urls[0] || null,
         image_urls: editDraft.image_urls,
       });
-      setMessage(`${editDraft.name.trim()} settings saved.`);
+      if (user?.id) {
+        await persistListingMarketingMaterials({
+          kind: 'product',
+          listingId: product.marketplace_product_id,
+          ownerId: user.id,
+          materials: editMarketingMaterials,
+        });
+      }
+      setMessage(`${editDraft.name.trim()} settings and affiliate marketing materials saved.`);
       await load();
       setEditingId(null);
       setEditDraft(null);
@@ -521,8 +546,16 @@ export default function AdminDrightOfficialProductManager() {
             <Field label="Price">
               <input type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className={inputClass} />
             </Field>
-            <Field label="Currency">
-              <input maxLength={3} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })} className={inputClass} />
+            <Field label="Product currency">
+              <select
+                value={form.currency}
+                onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                className={inputClass}
+              >
+                {supportedCurrencies.map((currency) => (
+                  <option key={currency.code} value={currency.code}>{currency.label}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Affiliate commission %">
               <input type="number" min="0" max="100" step="0.1" value={form.affiliate_commission_percent} onChange={(e) => setForm({ ...form, affiliate_commission_percent: e.target.value })} className={inputClass} />
@@ -608,7 +641,7 @@ export default function AdminDrightOfficialProductManager() {
                 <span>{product.affiliate_commission_percent}% affiliate</span>
                 {product.official_rating_enabled && <span>{product.official_rating.toFixed(1)} official rating</span>}
               </div>
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-[minmax(120px,180px)_minmax(120px,180px)_auto] gap-2 items-end">
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(120px,180px)_minmax(160px,220px)_minmax(120px,180px)_auto] gap-2 items-end">
                 <Field label={`Price (${product.currency})`}>
                   <input
                     type="number"
@@ -619,11 +652,30 @@ export default function AdminDrightOfficialProductManager() {
                       ...current,
                       [product.id]: {
                         price: e.target.value,
+                        currency: current[product.id]?.currency ?? product.currency,
                         commission: current[product.id]?.commission ?? String(product.affiliate_commission_percent),
                       },
                     }))}
                     className={inputClass}
                   />
+                </Field>
+                <Field label="Currency">
+                  <select
+                    value={priceDrafts[product.id]?.currency ?? product.currency}
+                    onChange={(e) => setPriceDrafts((current) => ({
+                      ...current,
+                      [product.id]: {
+                        price: current[product.id]?.price ?? String(product.price),
+                        currency: e.target.value,
+                        commission: current[product.id]?.commission ?? String(product.affiliate_commission_percent),
+                      },
+                    }))}
+                    className={inputClass}
+                  >
+                    {supportedCurrencies.map((currency) => (
+                      <option key={currency.code} value={currency.code}>{currency.label}</option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Affiliate commission %">
                   <input
@@ -636,6 +688,7 @@ export default function AdminDrightOfficialProductManager() {
                       ...current,
                       [product.id]: {
                         price: current[product.id]?.price ?? String(product.price),
+                        currency: current[product.id]?.currency ?? product.currency,
                         commission: e.target.value,
                       },
                     }))}
@@ -663,7 +716,7 @@ export default function AdminDrightOfficialProductManager() {
               </button>
               <button
                 type="button"
-                onClick={() => openFullEditor(product)}
+                onClick={() => void openFullEditor(product)}
                 className="rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-black text-primary-700 inline-flex items-center justify-center gap-1.5"
               >
                 <Settings2 className="w-4 h-4" />
@@ -706,13 +759,16 @@ export default function AdminDrightOfficialProductManager() {
                   <Field label="Price">
                     <input type="number" min="0" step="0.01" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} className={inputClass} />
                   </Field>
-                  <Field label="Source currency">
-                    <input
-                      maxLength={3}
+                  <Field label="Product currency">
+                    <select
                       value={editDraft.currency}
-                      onChange={(e) => setEditDraft({ ...editDraft, currency: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })}
+                      onChange={(e) => setEditDraft({ ...editDraft, currency: e.target.value })}
                       className={inputClass}
-                    />
+                    >
+                      {supportedCurrencies.map((currency) => (
+                        <option key={currency.code} value={currency.code}>{currency.label}</option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="Affiliate commission %">
                     <input
@@ -809,6 +865,12 @@ export default function AdminDrightOfficialProductManager() {
                   </div>
                 </div>
 
+                <MarketingMaterialsEditor
+                  value={editMarketingMaterials}
+                  onChange={setEditMarketingMaterials}
+                  disabled={editSaving || editUploading}
+                />
+
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
@@ -821,7 +883,7 @@ export default function AdminDrightOfficialProductManager() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setEditingId(null); setEditDraft(null); }}
+                    onClick={() => { setEditingId(null); setEditDraft(null); setEditMarketingMaterials([]); }}
                     className="min-h-[50px] rounded-2xl border border-gray-200 bg-white px-5 font-bold text-gray-700"
                   >
                     Cancel
