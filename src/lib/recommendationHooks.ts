@@ -27,7 +27,7 @@ const PRODUCT_SELECT = `
   id, name, description, price, commission_rate, image_url, category,
   uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
   initial_stock, product_type, demo_video_url, total_reviews,
-  average_rating, total_sales, view_count, is_featured, is_sponsored
+  average_rating, total_sales, view_count, is_featured, is_sponsored, specifications
 `;
 
 async function fetchProductsByIds(ids: string[]): Promise<MarketplaceProduct[]> {
