@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -24,6 +24,9 @@ function generateTemporaryPassword() {
 }
 
 export default function AdminDrightClientOnboarding() {
+  const [params] = useSearchParams();
+  const starterPaid = params.get('starter_paid') === '1';
+  const paidReference = params.get('starter_reference');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [temporaryPassword, setTemporaryPassword] = useState('');
@@ -105,11 +108,11 @@ export default function AdminDrightClientOnboarding() {
               During checkout, use the same full name and email you will enter in Step 2. The server will refuse account creation until that email has a successful, processed, unclaimed Starter payment.
             </p>
             <Link
-              to="/dright/starter"
+              to="/dright/starter?client_onboarding=1"
               target="_blank"
               className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3.5 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
             >
-              <CreditCard className="h-4 w-4" /> Open Starter product <ExternalLink className="h-3.5 w-3.5" />
+              <CreditCard className="h-4 w-4" /> Pay Starter for client <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </div>
 
@@ -131,6 +134,15 @@ export default function AdminDrightClientOnboarding() {
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs text-white">2</span>
             Enter client details
           </div>
+
+          {starterPaid && (
+            <div className="mb-4 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Starter payment verified{paidReference ? ` · ${paidReference}` : ''}. Enter the client's exact paid email below and create the account.
+              </span>
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
