@@ -6,7 +6,7 @@ import {
   AlertCircle, FileText,
   ChevronLeft, ShoppingBag, Award,
   ChevronDown, Edit2,
-  BadgeCheck, Store, TrendingUp,
+  BadgeCheck, PlayCircle, Store, TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -44,6 +44,7 @@ import { useRecentlyViewed } from '../lib/marketplaceHooks';
 import { formatDisplayCurrency } from '../lib/currency';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
+import VideoPlayer from '../components/VideoPlayer';
 
 interface ServiceTier {
   id: string;
@@ -325,6 +326,8 @@ export default function ProductDetailPage() {
     productSpecs.price_currency || productSpecs.source_currency || productSpecs.display_currency || 'USD'
   ).toUpperCase();
   const isOfficialDrightProduct = productSpecs.official_store === true || productSpecs.first_party === true;
+  const isMetaAdsCourse = product.product_type === 'COURSE'
+    && String(productSpecs.course_slug || '').toLowerCase() === 'facebook-instagram-ads-mastery-2026';
 
   const pricing = product ? calculateCheckoutPricing({
     productBasePrice: Number(product.price),
@@ -733,6 +736,47 @@ export default function ProductDetailPage() {
           <SellerProfilePanel sellerId={product.uploaded_by} onChat={() => {}} />
         )}
       </div>
+
+      {isMetaAdsCourse && (
+        <section className="mt-6 rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-fuchsia-50 p-4 md:p-6">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-slate-950 text-white flex items-center justify-center shrink-0">
+              <PlayCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg md:text-xl font-black text-slate-950">English video learning previews</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Watch these supporting tutorials directly inside DRIGHT. The course now includes clear English instruction with both Nigerian and US-based teaching perspectives.
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid lg:grid-cols-2 gap-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <VideoPlayer
+                url="https://www.youtube.com/watch?v=PCf0_PNpm0s"
+                title="Nigerian English Meta Ads Full Course 2026"
+              />
+              <div className="pt-3">
+                <p className="font-black text-slate-900">Nigerian English • 2026 Meta Ads full course</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">Paul Chinedu Nnamani covers Meta Ads in clear English with practical strategy and Nigerian-market context.</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <VideoPlayer
+                url="https://www.youtube.com/watch?v=jGyo2BJYg3A"
+                title="US English Facebook and Instagram Ads Tutorial"
+              />
+              <div className="pt-3">
+                <p className="font-black text-slate-900">US English • Facebook & Instagram Ads walkthrough</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">Santrel Media walks through Ads Manager, campaign setup, ad sets and ad creation step by step.</p>
+              </div>
+            </div>
+          </div>
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            These are supporting third-party references. The DRIGHT course itself contains the structured modules, exercises, knowledge checks, notes and capstone.
+          </p>
+        </section>
+      )}
 
       {/* Product Description */}
       {description && (
