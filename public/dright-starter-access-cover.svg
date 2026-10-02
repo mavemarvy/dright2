@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="t d">
+  <title id="t">DRIGHT Starter Access</title>
+  <desc id="d">Official DRIGHT Starter Access cover</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020617"/>
+      <stop offset=".55" stop-color="#0b1533"/>
+      <stop offset="1" stop-color="#152750"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".78" cy=".35" r=".8">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity=".28"/>
+      <stop offset=".5" stop-color="#3b82f6" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#000" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="900" rx="48" fill="url(#bg)"/>
+  <rect width="1200" height="900" rx="48" fill="url(#glow)"/>
+  <path d="M0 740 C240 620 430 790 680 690 C890 606 1015 636 1200 560 L1200 900 L0 900Z" fill="#050a19" opacity=".48"/>
+  <g transform="translate(406 160)" filter="url(#shadow)">
+    <rect width="388" height="388" rx="92" fill="#070b14" stroke="#8ea1c4" stroke-width="8"/>
+    <rect x="24" y="24" width="340" height="340" rx="76" fill="url(#bg)" stroke="#c8d2e5" stroke-opacity=".16"/>
+    <text x="194" y="277" text-anchor="middle" fill="#f8fafc" font-family="Arial,Helvetica,sans-serif" font-size="248" font-weight="900">D</text>
+  </g>
+  <text x="600" y="665" text-anchor="middle" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="58" font-weight="900" letter-spacing="10">STARTER ACCESS</text>
+  <text x="600" y="733" text-anchor="middle" fill="#a8b8d8" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700">Official DRIGHT Product</text>
+  <g transform="translate(330 785)">
+    <rect width="540" height="62" rx="31" fill="#ffffff" fill-opacity=".08" stroke="#ffffff" stroke-opacity=".12"/>
+    <text x="270" y="40" text-anchor="middle" fill="#dbeafe" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700">Start • Learn • Sell • Grow with DRIGHT</text>
+  </g>
+</svg>
