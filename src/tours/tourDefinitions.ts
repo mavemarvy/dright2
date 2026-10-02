@@ -27,6 +27,7 @@ export type TourKey =
   | 'announcements'
   | 'help_support'
   | 'tutorials'
+  | 'meta_ads_course'
   | 'terms_policies'
   | 'settings';
 
@@ -502,6 +503,52 @@ export const TOUR_DEFINITIONS: Record<TourKey, TourDefinition> = {
     'Tutorials contains longer learning content for DRIGHT features and workflows.',
     'tutorials',
   ),
+  meta_ads_course: {
+    key: 'meta_ads_course',
+    version: 1,
+    title: 'Meta Ads Course',
+    description: 'Learn the course outline, lesson workspace, videos, knowledge checks and navigation.',
+    duration: '1 min',
+    startPath: '/learn/facebook-instagram-ads-mastery-2026',
+    steps: [
+      {
+        title: 'Welcome to your learning workspace',
+        body: 'This course is organized as a guided learning experience rather than one long page. Work through one lesson at a time and use the course outline whenever you want to move around.',
+        target: '[data-tour="course-hero"]',
+        route: '/learn/facebook-instagram-ads-mastery-2026',
+      },
+      {
+        title: 'Track your progress',
+        body: 'Your progress bar updates as you complete lessons so you can leave and return without losing your place.',
+        target: '[data-tour="course-progress"]',
+      },
+      {
+        title: 'Course outline',
+        body: 'The outline contains all 15 modules and their lessons. On mobile, use the Course outline button to open the same navigation.',
+        target: '[data-tour="course-outline"]',
+      },
+      {
+        title: 'Focus on one lesson',
+        body: 'Each lesson gives you the core concept, why it matters, a practical action and a place to save your own notes.',
+        target: '[data-tour="course-lesson"]',
+      },
+      {
+        title: 'Videos stay inside DRIGHT',
+        body: 'Supported course videos are embedded directly in the learning workspace so you can watch without leaving the course.',
+        target: '[data-tour="course-video"]',
+      },
+      {
+        title: 'Check your understanding',
+        body: 'Use the quick knowledge check to test whether the main idea is clear before moving forward.',
+        target: '[data-tour="course-check"]',
+      },
+      {
+        title: 'Move step by step',
+        body: 'Complete the lesson, continue to the next one, or return to the previous lesson. Your completed state is saved automatically.',
+        target: '[data-tour="course-nav"]',
+      },
+    ],
+  },
   terms_policies: pageTour(
     'terms_policies',
     'Terms & Policies',
