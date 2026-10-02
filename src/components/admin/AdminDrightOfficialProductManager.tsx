@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BadgeCheck, Eye, EyeOff, ImagePlus, Loader2, PackagePlus, Save, Star, Store, X,
+  BadgeCheck, ChevronDown, ChevronUp, Eye, EyeOff, ImagePlus, Loader2, PackagePlus, Save, Settings2, Star, Store, X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -29,6 +29,51 @@ import {
 import { formatCurrencyValue } from '../../lib/currency';
 
 type ProductType = 'PHYSICAL' | 'DIGITAL' | 'SERVICE' | 'COURSE';
+
+type ProductEditDraft = {
+  name: string;
+  slug: string;
+  subtitle: string;
+  description: string;
+  category: string;
+  price: string;
+  currency: string;
+  affiliate_commission_percent: string;
+  benefits: string;
+  image_url: string | null;
+  image_urls: string[];
+  public_visible: boolean;
+  is_enabled: boolean;
+  is_featured: boolean;
+  official_badge_enabled: boolean;
+  official_rating_enabled: boolean;
+  official_rating: string;
+};
+
+function editDraftFromProduct(product: DrightOfficialProduct): ProductEditDraft {
+  const images = product.image_urls.length > 0
+    ? product.image_urls
+    : (product.image_url ? [product.image_url] : []);
+  return {
+    name: product.name,
+    slug: product.slug,
+    subtitle: product.subtitle || '',
+    description: product.description || '',
+    category: product.category,
+    price: String(product.price),
+    currency: product.currency,
+    affiliate_commission_percent: String(product.affiliate_commission_percent),
+    benefits: product.benefits.join('\n'),
+    image_url: images[0] || null,
+    image_urls: images,
+    public_visible: product.public_visible,
+    is_enabled: product.is_enabled,
+    is_featured: product.is_featured,
+    official_badge_enabled: product.official_badge_enabled,
+    official_rating_enabled: product.official_rating_enabled,
+    official_rating: String(product.official_rating),
+  };
+}
 
 const DEFAULT_FORM = {
   name: '',
@@ -71,6 +116,10 @@ export default function AdminDrightOfficialProductManager() {
   const [saving, setSaving] = useState(false);
   const [pricingSavingId, setPricingSavingId] = useState<string | null>(null);
   const [priceDrafts, setPriceDrafts] = useState<Record<string, { price: string; commission: string }>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<ProductEditDraft | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editUploading, setEditUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const load = async () => {
@@ -251,6 +300,109 @@ export default function AdminDrightOfficialProductManager() {
       setMessage(error instanceof Error ? error.message : 'Unable to update product pricing.');
     } finally {
       setPricingSavingId(null);
+    }
+  };
+
+  const openFullEditor = (product: DrightOfficialProduct) => {
+    if (editingId === product.id) {
+      setEditingId(null);
+      setEditDraft(null);
+      return;
+    }
+    setEditingId(product.id);
+    setEditDraft(editDraftFromProduct(product));
+    setMessage(null);
+  };
+
+  const uploadEditImages = async (files: FileList | null) => {
+    if (!files?.length || !user?.id || !editDraft || editUploading) return;
+    const accepted = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    if (accepted.length === 0) return;
+    setEditUploading(true);
+    setMessage(null);
+    try {
+      const urls = await uploadOfficialProductImages(user.id, accepted);
+      const nextImages = [...editDraft.image_urls, ...urls];
+      setEditDraft({
+        ...editDraft,
+        image_url: nextImages[0] || null,
+        image_urls: nextImages,
+      });
+      setMessage('Images uploaded. Save full settings to publish the gallery.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to upload product images.');
+    } finally {
+      setEditUploading(false);
+    }
+  };
+
+  const removeEditImage = (index: number) => {
+    if (!editDraft) return;
+    const nextImages = editDraft.image_urls.filter((_, i) => i !== index);
+    setEditDraft({
+      ...editDraft,
+      image_url: nextImages[0] || null,
+      image_urls: nextImages,
+    });
+  };
+
+  const saveFullSettings = async (product: DrightOfficialProduct) => {
+    if (!editDraft || editingId !== product.id || editSaving) return;
+    const price = Number(editDraft.price);
+    const commission = Number(editDraft.affiliate_commission_percent);
+    const rating = Number(editDraft.official_rating);
+    const currency = editDraft.currency.trim().toUpperCase();
+    if (!editDraft.name.trim()) {
+      setMessage('Product title is required.');
+      return;
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      setMessage('Price must be 0 or greater.');
+      return;
+    }
+    if (!Number.isFinite(commission) || commission < 0 || commission > 100) {
+      setMessage('Affiliate commission must be between 0% and 100%.');
+      return;
+    }
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      setMessage('Currency must be a 3-letter ISO code such as NGN, USD or GBP.');
+      return;
+    }
+    if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
+      setMessage('Official rating must be between 0 and 5.');
+      return;
+    }
+
+    setEditSaving(true);
+    setMessage(null);
+    try {
+      await updateAdminDrightOfficialProduct(product.id, {
+        name: editDraft.name.trim(),
+        slug: editDraft.slug.trim(),
+        subtitle: editDraft.subtitle.trim(),
+        description: editDraft.description.trim(),
+        category: editDraft.category.trim() || 'General',
+        price,
+        currency,
+        affiliate_commission_percent: commission,
+        public_visible: editDraft.public_visible,
+        is_enabled: editDraft.is_enabled,
+        is_featured: editDraft.is_featured,
+        official_badge_enabled: editDraft.official_badge_enabled,
+        official_rating_enabled: editDraft.official_rating_enabled,
+        official_rating: rating,
+        benefits: editDraft.benefits.split('\n').map((value) => value.trim()).filter(Boolean),
+        image_url: editDraft.image_urls[0] || null,
+        image_urls: editDraft.image_urls,
+      });
+      setMessage(`${editDraft.name.trim()} settings saved.`);
+      await load();
+      setEditingId(null);
+      setEditDraft(null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to save official product settings.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -439,8 +591,9 @@ export default function AdminDrightOfficialProductManager() {
             No additional official products yet. Starter Access remains managed above.
           </div>
         ) : products.map((product) => (
-          <div key={product.id} className="rounded-2xl border border-gray-200 p-4 flex flex-col sm:flex-row gap-4">
-            <div className="w-full sm:w-24 aspect-square rounded-xl overflow-hidden bg-gray-100 shrink-0">
+          <div key={product.id} className="rounded-2xl border border-gray-200 p-4 space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="w-full sm:w-24 aspect-square rounded-xl overflow-hidden bg-gray-100 shrink-0">
               {product.image_url ? <img src={product.image_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Store className="w-6 h-6 text-gray-300" /></div>}
             </div>
             <div className="flex-1 min-w-0">
@@ -508,7 +661,174 @@ export default function AdminDrightOfficialProductManager() {
               <button type="button" onClick={() => toggleProduct(product, 'is_enabled')} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold">
                 {product.is_enabled ? 'Enabled' : 'Disabled'}
               </button>
+              <button
+                type="button"
+                onClick={() => openFullEditor(product)}
+                className="rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-black text-primary-700 inline-flex items-center justify-center gap-1.5"
+              >
+                <Settings2 className="w-4 h-4" />
+                Manage
+                {editingId === product.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
             </div>
+            </div>
+
+            {editingId === product.id && editDraft && (
+              <div className="rounded-2xl border border-primary-100 bg-primary-50/30 p-4 md:p-5 space-y-5">
+                <div>
+                  <h4 className="font-black text-gray-900">Full product settings</h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Same commercial controls as Starter: source currency, price, commission, presentation, gallery and public state. Price 0 automatically becomes a free product.
+                  </p>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <Field label="Product title">
+                    <input value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} className={inputClass} />
+                  </Field>
+                  <Field label="Slug">
+                    <input value={editDraft.slug} onChange={(e) => setEditDraft({ ...editDraft, slug: e.target.value })} className={inputClass} />
+                  </Field>
+                  <Field label="Subtitle">
+                    <input value={editDraft.subtitle} onChange={(e) => setEditDraft({ ...editDraft, subtitle: e.target.value })} className={inputClass} />
+                  </Field>
+                  <Field label="Category">
+                    <input value={editDraft.category} onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })} className={inputClass} />
+                  </Field>
+                  <div className="sm:col-span-2">
+                    <Field label="Description">
+                      <textarea rows={5} value={editDraft.description} onChange={(e) => setEditDraft({ ...editDraft, description: e.target.value })} className={inputClass} />
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <Field label="Price">
+                    <input type="number" min="0" step="0.01" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} className={inputClass} />
+                  </Field>
+                  <Field label="Source currency">
+                    <input
+                      maxLength={3}
+                      value={editDraft.currency}
+                      onChange={(e) => setEditDraft({ ...editDraft, currency: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Affiliate commission %">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={editDraft.affiliate_commission_percent}
+                      onChange={(e) => setEditDraft({ ...editDraft, affiliate_commission_percent: e.target.value })}
+                      className={inputClass}
+                    />
+                  </Field>
+                </div>
+
+                <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-900">
+                  <strong>Currency authority:</strong> this source currency is the real product price. Marketplace may convert it for a viewer, but checkout preserves this amount and only normalizes internally for DRIGHT ledger accounting.
+                </div>
+
+                <Field label="Benefits / what buyers get">
+                  <textarea
+                    rows={5}
+                    value={editDraft.benefits}
+                    onChange={(e) => setEditDraft({ ...editDraft, benefits: e.target.value })}
+                    className={inputClass}
+                    placeholder="One benefit per line"
+                  />
+                </Field>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">Product cover & gallery</p>
+                      <p className="text-xs text-gray-500 mt-0.5">The first image is the marketplace/product-page cover.</p>
+                    </div>
+                    <label className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 cursor-pointer">
+                      {editUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+                      {editUploading ? 'Uploading…' : 'Upload images'}
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        className="hidden"
+                        disabled={editUploading}
+                        onChange={(e) => void uploadEditImages(e.target.files)}
+                      />
+                    </label>
+                  </div>
+                  {editDraft.image_urls.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                      {editDraft.image_urls.map((url, index) => (
+                        <div key={url + index} className="relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                          <img src={url} alt="" className="w-full h-full object-contain" />
+                          <button type="button" onClick={() => removeEditImage(index)} className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                          {index === 0 && <span className="absolute left-2 bottom-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black">COVER</span>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-dashed border-gray-200 p-5 text-center text-xs text-gray-500">
+                      No product image. Upload at least one cover before publishing.
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <ToggleCard label="Public" value={editDraft.public_visible} onChange={() => setEditDraft({ ...editDraft, public_visible: !editDraft.public_visible })} />
+                  <ToggleCard label="Enabled" value={editDraft.is_enabled} onChange={() => setEditDraft({ ...editDraft, is_enabled: !editDraft.is_enabled })} />
+                  <ToggleCard label="Featured" value={editDraft.is_featured} onChange={() => setEditDraft({ ...editDraft, is_featured: !editDraft.is_featured })} />
+                  <ToggleCard label="Official badge" value={editDraft.official_badge_enabled} onChange={() => setEditDraft({ ...editDraft, official_badge_enabled: !editDraft.official_badge_enabled })} />
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-4 flex flex-wrap items-center gap-4">
+                  <ToggleCard
+                    label="Official rating"
+                    value={editDraft.official_rating_enabled}
+                    onChange={() => setEditDraft({ ...editDraft, official_rating_enabled: !editDraft.official_rating_enabled })}
+                    compact
+                  />
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    <input
+                      type="number"
+                      min="0"
+                      max="5"
+                      step="0.1"
+                      disabled={!editDraft.official_rating_enabled}
+                      value={editDraft.official_rating}
+                      onChange={(e) => setEditDraft({ ...editDraft, official_rating: e.target.value })}
+                      className="w-24 rounded-lg border border-gray-200 px-2.5 py-2 text-sm disabled:bg-gray-50"
+                    />
+                    <span className="text-xs text-gray-500">Separate from customer reviews</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void saveFullSettings(product)}
+                    disabled={editSaving || editUploading}
+                    className="flex-1 min-h-[50px] rounded-2xl bg-slate-950 text-white font-black inline-flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {editSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                    {editSaving ? 'Saving…' : 'Save full product settings'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingId(null); setEditDraft(null); }}
+                    className="min-h-[50px] rounded-2xl border border-gray-200 bg-white px-5 font-bold text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
