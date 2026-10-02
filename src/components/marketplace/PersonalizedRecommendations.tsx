@@ -8,7 +8,7 @@ import { useRecentlyViewed } from '../../lib/marketplaceHooks';
 import { getRecentlyViewedIds } from '../../lib/marketplace';
 import { useRelatedListings } from '../../lib/recommendationHooks';
 import type { MarketplaceProduct } from './ProductCard';
-import { formatCurrency } from '../../lib/currency';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 type RecommendationStrategy =
   | 'browsing_history'
@@ -47,7 +47,7 @@ async function fetchProducts(ids: string[]): Promise<MarketplaceProduct[]> {
       id, name, description, price, commission_rate, image_url, category,
       uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
       initial_stock, product_type, demo_video_url, total_reviews,
-      average_rating, total_sales, view_count
+      average_rating, total_sales, view_count, specifications
     `)
     .in('id', ids)
     .eq('is_active', true)
@@ -80,6 +80,7 @@ export default function PersonalizedRecommendations({
   currentProductId, currentCategory, currentSellerId, currentPrice,
 }: PersonalizedRecommendationsProps) {
   const { user } = useAuth();
+  const { format: formatMoney } = useCurrency();
   const { recentlyViewed } = useRecentlyViewed(user?.id);
   
   // Collaborative filtering + content-based similarity (Phase 2)
@@ -110,7 +111,7 @@ export default function PersonalizedRecommendations({
           id, name, description, price, commission_rate, image_url, category,
           uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
           initial_stock, product_type, demo_video_url, total_reviews,
-          average_rating, total_sales, view_count
+          average_rating, total_sales, view_count, specifications
         `)
         .eq('category', currentCategory)
         .eq('is_active', true)
@@ -132,7 +133,7 @@ export default function PersonalizedRecommendations({
           id, name, description, price, commission_rate, image_url, category,
           uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
           initial_stock, product_type, demo_video_url, total_reviews,
-          average_rating, total_sales, view_count
+          average_rating, total_sales, view_count, specifications
         `)
         .eq('uploaded_by', currentSellerId)
         .eq('is_active', true)
@@ -156,7 +157,7 @@ export default function PersonalizedRecommendations({
           id, name, description, price, commission_rate, image_url, category,
           uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
           initial_stock, product_type, demo_video_url, total_reviews,
-          average_rating, total_sales, view_count
+          average_rating, total_sales, view_count, specifications
         `)
         .gte('price', minP)
         .lte('price', maxP)
@@ -179,7 +180,7 @@ export default function PersonalizedRecommendations({
           id, name, description, price, commission_rate, image_url, category,
           uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
           initial_stock, product_type, demo_video_url, total_reviews,
-          average_rating, total_sales, view_count
+          average_rating, total_sales, view_count, specifications
         `)
         .eq('is_active', true)
         .eq('is_hidden', false)
@@ -201,7 +202,7 @@ export default function PersonalizedRecommendations({
           id, name, description, price, commission_rate, image_url, category,
           uploaded_by, created_at, sales_team_tier, is_free, stock_quantity,
           initial_stock, product_type, demo_video_url, total_reviews,
-          average_rating, total_sales, view_count
+          average_rating, total_sales, view_count, specifications
         `)
         .eq('is_active', true)
         .eq('is_hidden', false)
@@ -225,6 +226,15 @@ export default function PersonalizedRecommendations({
   }, [buildRecommendations]);
 
   if (loading || (recommendations.length === 0 && relatedSections.length === 0)) return null;
+
+  const priceLabel = (product: MarketplaceProduct) => {
+    if (product.is_free) return 'FREE';
+    const specs = product.specifications && typeof product.specifications === 'object'
+      ? product.specifications as Record<string, unknown>
+      : {};
+    const sourceCurrency = String(specs.price_currency || specs.source_currency || 'USD').toUpperCase();
+    return formatMoney(Number(product.price || 0), sourceCurrency);
+  };
 
   // Render collaborative-filtering sections first (people also viewed, similar)
   const relatedIcons: Record<string, typeof Sparkles> = {
@@ -260,7 +270,7 @@ export default function PersonalizedRecommendations({
                       <p className="text-sm font-medium text-gray-900 line-clamp-2">{product.name}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{product.category}</p>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-sm font-bold text-gray-900">{product.is_free ? 'FREE' : formatCurrency(product.price)}</span>
+                        <span className="text-sm font-bold text-gray-900">{priceLabel(product)}</span>
                         {(product.average_rating ?? 0) > 0 && (
                           <div className="flex items-center gap-0.5"><Star className="w-3 h-3 fill-warning text-warning" /><span className="text-xs text-gray-500">{Number(product.average_rating).toFixed(1)}</span></div>
                         )}
@@ -310,7 +320,7 @@ export default function PersonalizedRecommendations({
                       <p className="text-xs text-gray-400 mt-0.5">{product.category}</p>
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-sm font-bold text-gray-900">
-                          {product.is_free ? 'FREE' : formatCurrency(product.price)}
+                          {priceLabel(product)}
                         </span>
                         {(product.average_rating ?? 0) > 0 && (
                           <div className="flex items-center gap-0.5">
