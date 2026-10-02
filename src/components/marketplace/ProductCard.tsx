@@ -10,7 +10,7 @@ import {
 import { getProductBadges, type ProductBadge } from '../../lib/marketplace';
 import { ProfileLink } from '../Social';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency, formatDisplayCurrency } from '../../lib/currency';
+import { formatDisplayCurrency } from '../../lib/currency';
 import { getBuyerFacingPrice } from '../../lib/pricing';
 import {
   MARKETPLACE_IMAGE_HEIGHT_CLASSES,
@@ -134,22 +134,18 @@ export default function ProductCard({
     : '/challenges?section=affiliate&challenge=top_affiliate';
   const displayPrice = getBuyerFacingPrice(product);
   const displayOldPrice = product.old_price ? getBuyerFacingPrice(product, product.old_price) : null;
-  const sourceCurrency = isDrightStarter
-    ? String(specs.price_currency || specs.source_currency || specs.display_currency || 'NGN').toUpperCase()
-    : 'USD';
+  const sourceCurrency = String(
+    specs.price_currency || specs.source_currency || specs.display_currency || (isDrightStarter ? 'NGN' : 'USD')
+  ).toUpperCase();
   const affiliatePercent = isDrightStarter
     ? Number(product.affiliate_commission_percent ?? specs.affiliate_commission_percent ?? 0)
     : Number(product.commission_rate || 0);
   const commission = product.is_free ? 0 : (product.price * affiliatePercent) / 100;
-  const priceText = isDrightStarter
-    ? formatDisplayCurrency(displayPrice, sourceCurrency)
-    : formatCurrency(displayPrice);
+  const priceText = formatDisplayCurrency(displayPrice, sourceCurrency);
   const oldPriceText = displayOldPrice
-    ? (isDrightStarter ? formatDisplayCurrency(displayOldPrice, sourceCurrency) : formatCurrency(displayOldPrice))
+    ? formatDisplayCurrency(displayOldPrice, sourceCurrency)
     : null;
-  const commissionText = isDrightStarter
-    ? formatDisplayCurrency(commission, sourceCurrency)
-    : formatCurrency(commission);
+  const commissionText = formatDisplayCurrency(commission, sourceCurrency);
   const officialRating = isDrightStarter && specs.official_rating_enabled
     ? Number(specs.official_rating || 0)
     : 0;
