@@ -19,6 +19,7 @@ interface Result {
   amount?: number;
   currency?: string;
   included_trial_days?: number;
+  checkout_mode?: string;
 }
 
 export default function DrightStarterPaymentPage() {
@@ -30,6 +31,8 @@ export default function DrightStarterPaymentPage() {
   const [state, setState] = useState<PaymentState>('verifying');
   const [message, setMessage] = useState('Confirming your DRIGHT Starter payment…');
   const [result, setResult] = useState<Result | null>(null);
+  const resolvedAssistedSignupFlow = assistedSignupFlow || result?.checkout_mode === 'assisted_signup';
+  const resolvedAdminClientFlow = adminClientFlow || result?.checkout_mode === 'admin_client_onboarding';
   const attempts = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,21 +51,23 @@ export default function DrightStarterPaymentPage() {
     const payload = (data || {}) as Result;
 
     if (payload.success || payload.status === 'success') {
+      const verifiedAssistedFlow = assistedSignupFlow || payload.checkout_mode === 'assisted_signup';
+      const verifiedAdminClientFlow = adminClientFlow || payload.checkout_mode === 'admin_client_onboarding';
       setResult(payload);
-      if (!assistedSignupFlow) setPendingDrightStarterPurchase(reference);
+      if (!verifiedAssistedFlow) setPendingDrightStarterPurchase(reference);
       setState('success');
       setMessage(
-        assistedSignupFlow
+        verifiedAssistedFlow
           ? 'Payment confirmed. Returning you to finish the new user’s registration…'
-          : adminClientFlow
+          : verifiedAdminClientFlow
             ? 'Payment confirmed. Returning you to Create account for client…'
             : 'Payment confirmed. Taking you to create your DRIGHT account…',
       );
       redirectTimer.current = setTimeout(() => {
         navigate(
-          assistedSignupFlow
+          verifiedAssistedFlow
             ? '/dright/starter?assisted_signup=finish&reference=' + encodeURIComponent(reference)
-            : adminClientFlow
+            : verifiedAdminClientFlow
               ? '/admin/dright-store?starter_paid=1&starter_reference=' + encodeURIComponent(reference)
               : '/sign-up?starter_reference=' + encodeURIComponent(reference),
           { replace: true },
@@ -159,16 +164,16 @@ export default function DrightStarterPaymentPage() {
 
           {state === 'success' && (
             <Link
-              to={assistedSignupFlow
+              to={resolvedAssistedSignupFlow
                 ? '/dright/starter?assisted_signup=finish&reference=' + encodeURIComponent(reference)
-                : adminClientFlow
+                : resolvedAdminClientFlow
                   ? '/admin/dright-store?starter_paid=1&starter_reference=' + encodeURIComponent(reference)
                   : '/sign-up?starter_reference=' + encodeURIComponent(reference)}
               className="min-h-[48px] rounded-xl bg-primary-600 text-white font-black flex items-center justify-center gap-2"
             >
-              <UserPlus className="w-4 h-4" /> {assistedSignupFlow
+              <UserPlus className="w-4 h-4" /> {resolvedAssistedSignupFlow
                 ? 'Finish registering new user'
-                : adminClientFlow
+                : resolvedAdminClientFlow
                   ? 'Create account for client'
                   : 'Create your DRIGHT account'}
             </Link>
