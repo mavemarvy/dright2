@@ -17,7 +17,7 @@ import {
   type DrightStarterPublicSettings,
 } from '../lib/drightStarter';
 import { formatCurrencyValue } from '../lib/currency';
-import { resolveAndRecordTracking } from '../lib/affiliate';
+import { resolveAndRecordTracking, setAffiliateCookie } from '../lib/affiliate';
 import SeoHead from '../components/SeoHead';
 import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 import StarterAffiliateProgressBoard from '../components/StarterAffiliateProgressBoard';
@@ -49,7 +49,11 @@ export default function DrightStarterProductPage() {
 
   useEffect(() => {
     const ref = params.get('ref')?.trim();
-    if (ref) void resolveAndRecordTracking(ref).catch(() => undefined);
+    if (!ref) return;
+    // Preserve referral attribution even for legacy accounts whose canonical
+    // referral-link row predates the current tracking-link system.
+    setAffiliateCookie(ref);
+    void resolveAndRecordTracking(ref).catch(() => undefined);
   }, [params]);
 
   const product = settings?.product;
