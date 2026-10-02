@@ -101,7 +101,7 @@ export default function AccessDownload({ orderId, downloadToken, productName, pr
       {/* Verify & Download Button */}
       <button
         onClick={handleVerifyAndAccess}
-        disabled={loading || !downloadToken}
+        disabled={loading}
         className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white rounded-2xl font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 min-h-[56px] shadow-lg shadow-primary-600/20"
       >
         {loading ? (
