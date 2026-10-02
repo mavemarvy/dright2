@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Circle, Compass, ExternalLink,
-  FileDown, FileText, GraduationCap, Images, List, Lock, Menu, PlayCircle, RotateCcw,
+  FileDown, FileText, List, Lock, Menu, PlayCircle, RotateCcw,
   Sparkles, Target, Trophy, Video, X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
