@@ -11,6 +11,7 @@ const json = (body: unknown, status = 200) =>
 
 const URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const PAYSTACK_SECRET = Deno.env.get("PAYSTACK_SECRET_KEY") || "";
 const db = createClient(URL, SERVICE_ROLE);
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -74,12 +75,31 @@ Deno.serve(async (req: Request) => {
   try {
     if (!URL || !SERVICE_ROLE) return json({ error: "Starter checkout is not configured" }, 503);
 
+    const body = await req.json().catch(() => ({}));
+    const checkoutMode = safeText(body.checkout_mode, 64);
+    const adminClientMode = checkoutMode === "admin_client_onboarding";
     const signedInUser = await authenticatedUser(req);
+
     if (signedInUser) {
-      return json({ error: "DRIGHT Starter Access is only available to new guest users." }, 409);
+      if (!adminClientMode) {
+        return json({ error: "DRIGHT Starter Access is only available to new guest users." }, 409);
+      }
+      if (!ANON_KEY) return json({ error: "Admin-assisted Starter checkout is not configured." }, 503);
+
+      const caller = createClient(URL, ANON_KEY, {
+        global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
+      });
+      const { data: canManage, error: permissionError } = await caller.rpc("has_dright_permission", {
+        p_module: "subscriptions",
+        p_action: "manage",
+      });
+      if (permissionError || canManage !== true) {
+        return json({ error: "Starter subscription management permission required." }, 403);
+      }
+    } else if (adminClientMode) {
+      return json({ error: "Sign in as an authorized admin to use client Starter checkout." }, 401);
     }
 
-    const body = await req.json().catch(() => ({}));
     const security = await verifyTurnstile(safeText(body.turnstile_token, 4096));
     if (!security.ok) return json({ error: security.error }, security.status);
 
@@ -238,6 +258,8 @@ Deno.serve(async (req: Request) => {
         no_marketplace_platform_fee: true,
         store_slug: store.slug || "dright",
         user_agent: req.headers.get("user-agent") || null,
+        checkout_mode: adminClientMode ? "admin_client_onboarding" : "guest_signup",
+        created_by_admin_user_id: adminClientMode ? signedInUser?.id || null : null,
       },
     }).select("id").single();
 
@@ -270,7 +292,7 @@ Deno.serve(async (req: Request) => {
         amount: Math.round(amount * 100),
         currency,
         reference,
-        callback_url: `${appUrl}/dright/starter/payment?reference=${encodeURIComponent(reference)}`,
+        callback_url: `${appUrl}/dright/starter/payment?reference=${encodeURIComponent(reference)}${adminClientMode ? "&flow=admin_client_onboarding" : ""}`,
         metadata: {
           purpose: "dright_starter_access",
           starter_purchase_id: purchase.id,
@@ -278,6 +300,7 @@ Deno.serve(async (req: Request) => {
           no_marketplace_platform_fee: true,
           affiliate_commission_percent: commissionPercent,
           included_trial_days: trialDays,
+          checkout_mode: adminClientMode ? "admin_client_onboarding" : "guest_signup",
         },
       }),
     });
