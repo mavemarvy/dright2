@@ -147,7 +147,14 @@ export default function DrightOfficialStorePage() {
                       <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.subtitle || item.description}</p>
                       <div className="mt-4 flex items-center justify-between gap-2">
                         <span className="font-black text-gray-900 dark:text-white">{formatDisplayCurrency(item.price, item.currency)}</span>
-                        <span className="text-xs text-emerald-700 dark:text-emerald-300">{item.affiliate_commission_percent}% affiliate</span>
+                        <span className="text-xs text-emerald-700 dark:text-emerald-300 text-right">
+                          {item.affiliate_commission_percent}% affiliate
+                          {item.price > 0 && item.affiliate_commission_percent > 0 && (
+                            <span className="block font-bold">
+                              Earn {formatDisplayCurrency(item.price * item.affiliate_commission_percent / 100, item.currency)}
+                            </span>
+                          )}
+                        </span>
                       </div>
                     </div>
                   </Link>
