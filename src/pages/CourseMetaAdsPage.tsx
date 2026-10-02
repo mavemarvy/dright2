@@ -155,6 +155,84 @@ const moduleIntros = [
   'The final module turns the course into an operating system: policy review, a capstone campaign and a repeatable 90-day rhythm for research, production and analysis.',
 ];
 
+const modulePlaybooks = [
+  {
+    principles: ['Ad delivery is an auction influenced by bid, estimated action rate and ad quality.', 'A campaign should have one measurable business outcome and a funnel that supports it.', 'Read CPM, CTR, CPC, CVR, CPA, AOV and ROAS as a connected chain, not isolated screenshots.'],
+    mistakes: ['Optimizing for cheap clicks when the business needs purchases.', 'Judging a campaign without knowing break-even economics.'],
+    deliverable: 'Write your campaign goal, funnel stages and break-even CPA on one page before opening Ads Manager.',
+  },
+  {
+    principles: ['Separate personal access from business assets and assign permissions by role.', 'Protect every administrator with two-factor authentication and recovery options.', 'Document billing ownership, backup payment methods and who is allowed to change them.'],
+    mistakes: ['Sharing one login between multiple people.', 'Giving full admin permissions to people who only need one task.'],
+    deliverable: 'Create an asset-and-access checklist that another trusted person could use to understand your setup safely.',
+  },
+  {
+    principles: ['Start with the customer problem, desired outcome, objections and buying language.', 'Turn product features into an offer with a clear promise, proof and next action.', 'Use competitor research to identify patterns, not to copy creative.'],
+    mistakes: ['Choosing audiences before understanding the offer.', 'Copying a competitor ad without knowing why it works.'],
+    deliverable: 'Produce a one-page research sheet containing customer phrases, objections, offer promise and five competitor patterns.',
+  },
+  {
+    principles: ['Choose the campaign objective that matches the action you actually want.', 'Keep campaign, ad set and ad responsibilities clear so tests remain readable.', 'Consolidate when fragmentation prevents useful learning.'],
+    mistakes: ['Using Traffic when the real goal is Purchase without a reason.', 'Creating many tiny ad sets that each receive too little spend.'],
+    deliverable: 'Draw your campaign structure before building it: objective, ad sets, audiences, creatives and the question each layer is testing.',
+  },
+  {
+    principles: ['Broad audiences can work when the offer, creative and conversion signal are strong.', 'Interest targeting should add useful information, not simply make an audience smaller.', 'Custom and lookalike audiences depend on the quality of the source data.'],
+    mistakes: ['Stacking dozens of unrelated interests.', 'Retargeting purchasers as if they were cold prospects.'],
+    deliverable: 'Prepare one broad, one focused-interest and one warm-audience hypothesis with a reason for each.',
+  },
+  {
+    principles: ['Feed rewards quick comprehension and strong visual hierarchy.', 'Stories and Reels need vertical framing, safe zones and an immediate opening.', 'Placement decisions should come from evidence rather than personal preference.'],
+    mistakes: ['Uploading a horizontal creative everywhere without adaptation.', 'Excluding placements before data shows they are a problem.'],
+    deliverable: 'Adapt one campaign idea into Feed, Story and Reel versions while keeping the core offer consistent.',
+  },
+  {
+    principles: ['A hook earns the next second of attention; the angle explains why the offer matters.', 'Test meaningfully different concepts before obsessing over tiny visual variations.', 'Phone-first production can be effective when framing, lighting, audio and pacing are intentional.'],
+    mistakes: ['Changing headline, audience, offer and format at the same time.', 'Treating likes as proof that an ad will convert.'],
+    deliverable: 'Create six distinct creative concepts and label the customer angle, hook, proof and CTA for each.',
+  },
+  {
+    principles: ['Lead quality depends on both ad targeting and what happens after the click.', 'Qualifying questions can trade some volume for better sales conversations.', 'Fast, structured follow-up is part of advertising economics.'],
+    mistakes: ['Celebrating low CPL while ignoring whether leads become customers.', 'Sending every lead the same generic follow-up.'],
+    deliverable: 'Build a lead form or message flow plus a 24-hour follow-up sequence and owner for each step.',
+  },
+  {
+    principles: ['Pixel events describe browser behavior; server events can strengthen signal quality.', 'Deduplication matters when the same event is sent from browser and server.', 'Platform attribution should be reconciled with your own business records.'],
+    mistakes: ['Installing tracking without testing the event map.', 'Assuming every attributed conversion is perfect ground truth.'],
+    deliverable: 'Map the events from landing-page view to purchase and identify your business source of truth for revenue.',
+  },
+  {
+    principles: ['A test budget should create enough opportunities to evaluate the target action.', 'Campaign-budget and ad-set-budget control answer different allocation needs.', 'Bid controls can stabilize cost goals but can also restrict delivery.'],
+    mistakes: ['Choosing budget only because the number feels comfortable.', 'Using aggressive bid controls before understanding normal campaign delivery.'],
+    deliverable: 'Calculate a seven-day test budget from target CPA and document the conditions that would justify increasing or reducing spend.',
+  },
+  {
+    principles: ['Diagnose the chain: delivery, attention, click, landing experience, conversion and economics.', 'Give a test enough time and data for the decision you are trying to make.', 'Change the variable that corresponds to the diagnosed problem.'],
+    mistakes: ['Making several edits after a few hours because spend feels uncomfortable.', 'Blaming targeting when the landing page is the real bottleneck.'],
+    deliverable: 'Create a troubleshooting sheet that maps weak CPM, CTR, CVR and CPA patterns to the next investigation.',
+  },
+  {
+    principles: ['Every test should have a written hypothesis and a primary success metric.', 'Creative concepts, hooks, offers and audiences should be tested in a sequence you can learn from.', 'Keep a log of what changed, why, the result and the next decision.'],
+    mistakes: ['Running many changes that cannot be attributed to one idea.', 'Repeating failed concepts because results were never documented.'],
+    deliverable: 'Start a testing log with hypothesis, variable, budget, result, interpretation and next action columns.',
+  },
+  {
+    principles: ['Warm audiences should be segmented by what people already did.', 'Message intensity can increase with demonstrated intent.', 'Exclusions and post-purchase journeys keep retargeting relevant.'],
+    mistakes: ['Showing abandoned-cart messaging to someone who only watched a video.', 'Continuing acquisition ads to recent purchasers without a reason.'],
+    deliverable: 'Draw your warm-audience ladder from engaged viewer to purchaser with message, window and exclusion rules for each stage.',
+  },
+  {
+    principles: ['Vertical scaling increases spend while watching marginal performance.', 'Horizontal scaling expands concepts, audiences, offers, geographies or placements.', 'Protect contribution profit instead of chasing bigger dashboard numbers.'],
+    mistakes: ['Doubling budget repeatedly without checking marginal CPA.', 'Calling higher revenue a success when margin collapses.'],
+    deliverable: 'Write four independent scale levers and the economic guardrail that would make you stop each one.',
+  },
+  {
+    principles: ['Policy review belongs in campaign operations, not after an account problem.', 'A capstone proves you can connect research, creative, tracking and economics.', 'A weekly operating rhythm turns isolated lessons into repeatable execution.'],
+    mistakes: ['Making claims or using landing pages that create avoidable policy risk.', 'Finishing the course without building a complete campaign plan.'],
+    deliverable: 'Complete the capstone, then schedule four weeks of research, creative production, launches, analysis and replacement work.',
+  },
+];
+
 const moduleChecks = [
   { question: 'Which metric tells you the maximum acquisition cost your offer can tolerate before the sale becomes unprofitable?', choices: ['Break-even CPA', 'CPM', 'Reach'], answer: 0, explanation: 'Break-even CPA connects advertising cost to your unit economics. CPM and reach describe delivery, not whether the sale is profitable.' },
   { question: 'What is the safest default for people who only need limited Business Portfolio access?', choices: ['Give everyone admin access', 'Use least-privilege permissions', 'Share one login'], answer: 1, explanation: 'Least-privilege permissions reduce account and billing risk while still giving each person the access needed for their role.' },
@@ -514,6 +592,35 @@ export default function CourseMetaAdsPage() {
                         <p className="mt-2 text-sm leading-6 text-amber-950">
                           Every lesson should change a decision you make in a real campaign. Do not rush to the next lesson until you can explain this idea in your own words.
                         </p>
+                      </div>
+                    </div>
+
+                    <div className="grid lg:grid-cols-3 gap-3">
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                        <p className="text-xs font-black uppercase tracking-wider text-blue-700">Framework</p>
+                        <ul className="mt-3 space-y-2">
+                          {modulePlaybooks[activeModule].principles.map((point) => (
+                            <li key={point} className="flex gap-2 text-sm leading-6 text-blue-950">
+                              <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-1" />
+                              <span>{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                        <p className="text-xs font-black uppercase tracking-wider text-rose-700">Common mistakes</p>
+                        <ul className="mt-3 space-y-2">
+                          {modulePlaybooks[activeModule].mistakes.map((point) => (
+                            <li key={point} className="flex gap-2 text-sm leading-6 text-rose-950">
+                              <Circle className="w-4 h-4 text-rose-500 shrink-0 mt-1" />
+                              <span>{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs font-black uppercase tracking-wider text-slate-600">Module deliverable</p>
+                        <p className="mt-3 text-sm leading-6 text-slate-800">{modulePlaybooks[activeModule].deliverable}</p>
                       </div>
                     </div>
 
