@@ -83,7 +83,7 @@ export default function DrightOfficialStorePage() {
             <div className="grid md:grid-cols-[220px_1fr]">
               <div className="min-h-[210px] bg-gradient-to-br from-slate-950 via-slate-900 to-primary-950 flex items-center justify-center overflow-hidden">
                 {product.image_url && product.image_url !== '/dright-logo.webp' ? (
-                  <img src={product.image_url} alt={product.title} className="w-full h-full min-h-[210px] object-cover" />
+                  <img src={product.image_url} alt={product.title} className="w-full h-full min-h-[210px] object-contain" />
                 ) : (
                   <div className="text-center p-8">
                     <DrightMark size={100} className="mx-auto" />
