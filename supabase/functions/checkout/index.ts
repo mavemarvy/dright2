@@ -342,8 +342,8 @@ Deno.serve(async (req: Request) => {
     const sourceBasePrice = Number(product.price);
     const isFree = product.is_free || sourceBasePrice === 0;
     const affiliateCommPercent = Number(product.affiliate_commission_percent || 0);
-    const adminTaskPct = Number(product.admin_task_percent || 15);
-    const salesTeamPct = Number(product.sales_team_task_percent || 0);
+    const adminTaskPct = Number(product.admin_task_percent ?? 15);
+    const salesTeamPct = Number(product.sales_team_task_percent ?? 0);
 
     let sourceAffiliateCommissionAmount = 0;
     let sourceAdminTaskAmount = 0;
