@@ -1,6 +1,6 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';\nimport { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, Ban } from 'lucide-react';
+import { Lock, Ban } from 'lucide-react';\nimport { getMyDrightClientOnboarding, type DrightClientOnboardingState } from '../lib/clientOnboarding';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
