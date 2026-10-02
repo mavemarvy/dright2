@@ -326,8 +326,12 @@ export default function ProductDetailPage() {
     productSpecs.price_currency || productSpecs.source_currency || productSpecs.display_currency || 'USD'
   ).toUpperCase();
   const isOfficialDrightProduct = productSpecs.official_store === true || productSpecs.first_party === true;
-  const isMetaAdsCourse = product?.product_type === 'COURSE'
-    && String(productSpecs.course_slug || '').toLowerCase() === 'facebook-instagram-ads-mastery-2026';
+  const courseSlug = product?.product_type === 'COURSE'
+    ? String(productSpecs.course_slug || '').toLowerCase()
+    : '';
+  const isMetaAdsCourse = courseSlug === 'facebook-instagram-ads-mastery-2026';
+  const isInstagramAdsCourse = courseSlug === 'instagram-ads-mastery-2026';
+  const isWhatsAppSalesCourse = courseSlug === 'whatsapp-marketing-sales-mastery-2026';
 
   const pricing = product ? calculateCheckoutPricing({
     productBasePrice: Number(product.price),
@@ -839,6 +843,109 @@ export default function ProductDetailPage() {
           <p className="mt-5 text-xs leading-5 text-slate-500">
             These videos are supporting third-party visual references. The paid DRIGHT course provides the structured modules, screenshot-style walkthroughs, practice challenges, knowledge checks, notes and capstone.
           </p>
+        </section>
+      )}
+
+      {isInstagramAdsCourse && (
+        <section className="mt-6 rounded-3xl border border-fuchsia-100 bg-gradient-to-br from-fuchsia-50 via-white to-orange-50 p-4 md:p-6">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-fuchsia-600 to-orange-500 text-white flex items-center justify-center shrink-0">
+              <PlayCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-fuchsia-700">Course 002 preview</p>
+              <h2 className="mt-1 text-lg md:text-xl font-black text-slate-950">Instagram Ads visual learning</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Preview the same visual-first learning style used inside the paid course: English tutorials, real stock references, practical exercises and step-by-step Feed, Stories and Reels lessons.
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid lg:grid-cols-2 gap-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <VideoPlayer url="https://www.youtube.com/watch?v=haUZvNZWae0" title="Nigeria Instagram Ads Step-by-Step" />
+              <div className="pt-3">
+                <p className="font-black text-slate-900">Nigeria • Instagram Ads Step-by-Step</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">Nigeria-focused visual support for campaign creation and sponsored Instagram advertising.</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <VideoPlayer url="https://www.youtube.com/watch?v=iTstnwkiizk" title="USA Instagram Ads Step-by-Step" />
+              <div className="pt-3">
+                <p className="font-black text-slate-900">USA • Instagram Ads Step-by-Step</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">English agency walkthrough covering campaign setup, placements and ad creative.</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-5 grid sm:grid-cols-2 gap-4">
+            <figure className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+              <img src="https://images.pexels.com/photos/27552013/pexels-photo-27552013/free-photo-of-instagram-on-a-smartphone-with-the-instagram-app-open.jpeg?auto=compress&dpr=1&h=750&w=1260" alt="Instagram app shown on a smartphone" className="w-full aspect-[4/3] object-cover" loading="lazy" />
+              <figcaption className="p-3 text-xs leading-5 text-slate-500"><strong className="text-slate-900">Mobile-first reference.</strong> Buyers learn to evaluate how ads and creative actually appear on a phone screen.</figcaption>
+            </figure>
+            <figure className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+              <img src="https://images.unsplash.com/photo-1759215524600-7971d6a4dac0?auto=format&fit=crop&w=1200&q=80" alt="Social media analytics displayed on a smartphone" className="w-full aspect-[4/3] object-cover" loading="lazy" />
+              <figcaption className="p-3 text-xs leading-5 text-slate-500"><strong className="text-slate-900">Measurement reference.</strong> The course connects creative decisions to campaign reporting instead of treating them separately.</figcaption>
+            </figure>
+          </div>
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-2">
+            {['Campaign setup','Audience research','Feed / Stories / Reels','Creative testing','Tracking & budgets','Optimization & scaling'].map((label,index) => (
+              <div key={label} className="rounded-xl border border-fuchsia-100 bg-white p-3">
+                <div className="text-[10px] font-black text-fuchsia-600">STEP {index + 1}</div>
+                <p className="mt-1 text-xs font-bold leading-5 text-slate-700">{label}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {isWhatsAppSalesCourse && (
+        <section className="mt-6 rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 md:p-6">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+              <PlayCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">Course 003 • Nigeria-ready</p>
+              <h2 className="mt-1 text-lg md:text-xl font-black text-slate-950">WhatsApp Marketing & Sales visual learning</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Preview practical WhatsApp Business training built around catalogs, labels, Status, broadcasts, sales scripts, follow-up and customer retention.
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid lg:grid-cols-2 gap-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <VideoPlayer url="https://www.youtube.com/watch?v=pD5aXXTfTF4" title="Nigeria WhatsApp Marketing Training" />
+              <div className="pt-3">
+                <p className="font-black text-slate-900">Nigeria • WhatsApp Marketing Training</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">Nigeria-focused supporting tutorial for using WhatsApp as a structured business marketing channel.</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <VideoPlayer url="https://www.youtube.com/watch?v=XboSEL5o05A" title="WhatsApp Business Complete Guide" />
+              <div className="pt-3">
+                <p className="font-black text-slate-900">English • WhatsApp Business Setup</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">Step-by-step support for business profile setup, catalogs, automated messages, quick replies and labels.</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-5 grid sm:grid-cols-2 gap-4">
+            <figure className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+              <img src="https://images.pexels.com/photos/21792116/pexels-photo-21792116/free-photo-of-whatsapp-on-a-smartphone.jpeg?auto=compress&dpr=1&h=750&w=1260" alt="WhatsApp displayed on a smartphone" className="w-full aspect-[4/3] object-cover" loading="lazy" />
+              <figcaption className="p-3 text-xs leading-5 text-slate-500"><strong className="text-slate-900">Phone-first workflow.</strong> The course is designed around the device many Nigerian vendors actually use to manage customers.</figcaption>
+            </figure>
+            <figure className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+              <img src="https://images.pexels.com/photos/10375889/pexels-photo-10375889.jpeg?auto=compress&dpr=1&h=750&w=1260" alt="Small business owner working with phone and laptop" className="w-full aspect-[4/3] object-cover" loading="lazy" />
+              <figcaption className="p-3 text-xs leading-5 text-slate-500"><strong className="text-slate-900">Small-business context.</strong> Lessons connect conversations, product information, follow-up and simple customer records.</figcaption>
+            </figure>
+          </div>
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-2">
+            {['Business setup','Catalog & labels','Status content','Broadcasts & consent','Sales scripts','Follow-up & retention'].map((label,index) => (
+              <div key={label} className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="text-[10px] font-black text-emerald-600">STEP {index + 1}</div>
+                <p className="mt-1 text-xs font-bold leading-5 text-slate-700">{label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-xs leading-5 text-slate-500">The course teaches responsible marketing. It does not encourage scraped phone lists, unsolicited bulk messaging or guaranteed-income claims.</p>
         </section>
       )}
 
