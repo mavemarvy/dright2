@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, Circle, ExternalLink, Lock, Printer, RotateCcw, Target } from 'lucide-react';
+import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Circle, Compass, FileText, GraduationCap, List, Lock, Menu, PlayCircle, RotateCcw, Sparkles, Target, Trophy, Video, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { AnimatePresence, motion } from 'framer-motion';
+import VideoPlayer from '../components/VideoPlayer';
+import { startDrightTour } from '../tours/tourDefinitions';
 
 const COURSE_SLUG = 'facebook-instagram-ads-mastery-2026';
 
@@ -89,42 +92,149 @@ const modules: Module[] = [
   ]},
 ];
 
-const refs = [
-  ['Meta Blueprint — Ads Manager learning path', 'https://metaspark.facebookblueprint.com/student/collection/507005-meta-ads-manager-learning'],
-  ['Meta Blueprint — Get started with Meta Ads Manager', 'https://www.facebookblueprint.com/student/path/515321-get-started-with-meta-ads-manager'],
-  ['Meta Blueprint — Campaign activation tools and Advantage+', 'https://www.facebookblueprint.com/student/path/253164-ads-business-manager-course'],
-  ['Meta for Business — Facebook & Instagram Reels Ads', 'https://www.facebook.com/business/ads/facebook-instagram-reels-ads'],
-  ['Meta Ad Library', 'https://www.facebook.com/ads/library/'],
-  ['2026 Meta Ads walkthrough — D2C by Nikhil', 'https://www.youtube.com/watch?v=gV0J-pWJDVk'],
-  ['Phone-first Meta Ads tutorial — Bizliftng', 'https://www.youtube.com/watch?v=pIawYyNGZ-E'],
-  ['2026 creative testing walkthrough — Etienne Garcia', 'https://www.youtube.com/watch?v=QCZoeGUr9vc'],
+
+const embeddedVideos = [
+  {
+    module: 0,
+    title: '2026 Meta Ads walkthrough',
+    url: 'https://www.youtube.com/watch?v=gV0J-pWJDVk',
+    description: 'A practical walkthrough to connect the concepts in the foundations module with the current Meta Ads workflow.',
+  },
+  {
+    module: 6,
+    title: 'Phone-first Meta Ads tutorial',
+    url: 'https://www.youtube.com/watch?v=pIawYyNGZ-E',
+    description: 'Use this while working through creative strategy and phone-first production.',
+  },
+  {
+    module: 6,
+    title: 'Creative testing walkthrough',
+    url: 'https://www.youtube.com/watch?v=QCZoeGUr9vc',
+    description: 'A companion walkthrough for creative testing, iteration and deciding what to test next.',
+  },
+];
+
+const officialReferences = [
+  {
+    label: 'Meta Blueprint — Ads Manager learning path',
+    url: 'https://metaspark.facebookblueprint.com/student/collection/507005-meta-ads-manager-learning',
+  },
+  {
+    label: 'Meta Blueprint — Get started with Meta Ads Manager',
+    url: 'https://www.facebookblueprint.com/student/path/515321-get-started-with-meta-ads-manager',
+  },
+  {
+    label: 'Meta Blueprint — Campaign activation tools and Advantage+',
+    url: 'https://www.facebookblueprint.com/student/path/253164-ads-business-manager-course',
+  },
+  {
+    label: 'Meta for Business — Facebook & Instagram Reels Ads',
+    url: 'https://www.facebook.com/business/ads/facebook-instagram-reels-ads',
+  },
+  {
+    label: 'Meta Ad Library',
+    url: 'https://www.facebook.com/ads/library/',
+  },
+];
+
+const moduleIntros = [
+  'Stop thinking of ads as a boost button. This module gives you the business logic behind the auction, funnels and the numbers that tell you whether a campaign is healthy.',
+  'Before spending money, protect the account. You will organize assets, permissions, billing and recovery so one mistake does not lock you out of your advertising operation.',
+  'Good targeting cannot rescue a weak offer. Here you learn to research the customer, sharpen the offer and study the market without copying competitors.',
+  'Campaign structure should make decisions easier, not create more noise. This module shows how objectives, campaigns, ad sets and ads fit together.',
+  'Audience strategy is about giving Meta enough useful signal while keeping your hypothesis clear. You will compare broad, interest, custom and lookalike approaches.',
+  'The same idea behaves differently in Feed, Stories and Reels. You will learn how placement changes framing, pacing and creative requirements.',
+  'Creative is where strategy becomes visible. You will build hooks, angles, copy and phone-first production habits that can be tested instead of guessed.',
+  'Leads are only valuable when the handoff works. You will design forms, WhatsApp conversations and follow-up systems that protect lead quality.',
+  'Tracking is your measurement system. You will learn the role of Pixel, Conversions API, attribution and a practical source of truth for business results.',
+  'Budget is not just how much you can spend. You will learn how to set test budgets, choose budget control and understand when bid controls help or restrict delivery.',
+  'Launch is the start of analysis, not the finish line. This module teaches a calm workflow for reading delivery, diagnosing weak points and avoiding panic edits.',
+  'Testing works when each experiment answers a question. You will learn to isolate variables, read creative performance and turn results into the next test.',
+  'Retargeting should respond to intent, not follow everybody forever. You will structure warm audiences, exclusions, post-purchase messaging and timing.',
+  'Scaling is not simply increasing budget. You will learn several scale levers while protecting contribution margin and campaign stability.',
+  'The final module turns the course into an operating system: policy review, a capstone campaign and a repeatable 90-day rhythm for research, production and analysis.',
+];
+
+const moduleChecks = [
+  { question: 'Which metric tells you the maximum acquisition cost your offer can tolerate before the sale becomes unprofitable?', choices: ['Break-even CPA', 'CPM', 'Reach'], answer: 0, explanation: 'Break-even CPA connects advertising cost to your unit economics. CPM and reach describe delivery, not whether the sale is profitable.' },
+  { question: 'What is the safest default for people who only need limited Business Portfolio access?', choices: ['Give everyone admin access', 'Use least-privilege permissions', 'Share one login'], answer: 1, explanation: 'Least-privilege permissions reduce account and billing risk while still giving each person the access needed for their role.' },
+  { question: 'What should come before choosing interests in Ads Manager?', choices: ['Customer and offer research', 'Increasing budget', 'Duplicating ad sets'], answer: 0, explanation: 'Audience settings are downstream of the offer and customer insight. Research gives the creative and targeting something useful to work with.' },
+  { question: 'Why should campaign structure stay as simple as the test allows?', choices: ['To hide weak ads', 'To reduce unnecessary fragmentation', 'To avoid tracking results'], answer: 1, explanation: 'Excessive fragmentation spreads budget and learning signals across too many ad sets, making results harder to interpret.' },
+  { question: 'When can broad targeting be a strong option?', choices: ['When creative, offer and conversion signals are strong', 'Only when there is no Pixel', 'Only for tiny budgets'], answer: 0, explanation: 'Broad targeting can work well when Meta has useful conversion signals and the creative and offer clearly attract the intended customer.' },
+  { question: 'What should change first when adapting a Feed concept to Reels?', choices: ['The business goal', 'The vertical framing and opening seconds', 'The product price'], answer: 1, explanation: 'Reels needs native vertical framing and immediate attention. The business goal can stay the same while execution changes for the placement.' },
+  { question: 'What is a useful creative test?', choices: ['Ten almost identical ads', 'A clear hypothesis with meaningfully different concepts', 'Changing everything at once'], answer: 1, explanation: 'A good test lets you learn why one idea performed differently. Meaningful concepts and controlled variables make the result actionable.' },
+  { question: 'What can turn cheap leads into an expensive campaign?', choices: ['Slow or poor follow-up', 'Using qualifying questions', 'Tracking lead source'], answer: 0, explanation: 'Lead cost alone is not the outcome. Slow follow-up and weak handling can destroy value after the ad already paid to acquire the lead.' },
+  { question: 'What should be your revenue source of truth?', choices: ['Only Ads Manager', 'A defined business record reconciled with platform reporting', 'Only impressions'], answer: 1, explanation: 'Platform attribution is useful but modeled. Your business records should be the source of truth and reconciled with advertising reports.' },
+  { question: 'What should influence a seven-day test budget?', choices: ['Target CPA and enough conversion opportunities', 'A random round number', 'Competitor follower count'], answer: 0, explanation: 'A test needs enough budget to create a reasonable number of opportunities to observe the behavior you are measuring.' },
+  { question: 'What is usually better than making several panic edits after a few hours?', choices: ['Read the delivery and conversion chain first', 'Duplicate everything immediately', 'Turn off tracking'], answer: 0, explanation: 'Diagnose where the funnel is failing before changing variables. Fast, unstructured edits make the next result harder to interpret.' },
+  { question: 'Why keep a testing log?', choices: ['To remember hypotheses and outcomes', 'To increase CPM', 'To hide losing ads'], answer: 0, explanation: 'A testing log turns experiments into accumulated knowledge so the next creative decision is based on evidence rather than memory.' },
+  { question: 'What is a good retargeting habit?', choices: ['Never exclude purchasers', 'Match message to intent and use exclusions', 'Show the same ad forever'], answer: 1, explanation: 'Retargeting should reflect what the person already did and exclude people who should move to another stage of the customer journey.' },
+  { question: 'What should you watch while scaling?', choices: ['Only total spend', 'Marginal CPA and contribution profit', 'Only likes'], answer: 1, explanation: 'Scaling is healthy when additional spend still produces acceptable economics. Total spend by itself does not tell you that.' },
+  { question: 'What makes the capstone valuable?', choices: ['It combines research, creative, tracking and economics into one operating plan', 'It removes the need to test', 'It guarantees revenue'], answer: 0, explanation: 'The capstone forces the pieces to work together. It does not guarantee an outcome; it gives you a repeatable process for making better decisions.' },
 ];
 
 export default function CourseMetaAdsPage() {
   const { user } = useAuth();
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [productId, setProductId] = useState('');
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [activeModule, setActiveModule] = useState(0);
+  const [activeLesson, setActiveLesson] = useState(0);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [referenceOpen, setReferenceOpen] = useState<{ label: string; url: string } | null>(null);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [checkedAnswer, setCheckedAnswer] = useState(false);
 
-  const lessons = useMemo(() => modules.flatMap((m, mi) => m.lessons.map((l, li) => ({ ...l, key: `${mi}-${li}`, module: m.title }))), []);
-  const doneCount = lessons.filter((l) => completed[l.key]).length;
+  const lessons = useMemo(
+    () => modules.flatMap((module, moduleIndex) =>
+      module.lessons.map((lesson, lessonIndex) => ({
+        ...lesson,
+        key: String(moduleIndex) + '-' + String(lessonIndex),
+        module: module.title,
+        moduleIndex,
+        lessonIndex,
+      })),
+    ),
+    [],
+  );
+
+  const currentModule = modules[activeModule] || modules[0];
+  const currentLesson = currentModule.lessons[activeLesson] || currentModule.lessons[0];
+  const currentKey = String(activeModule) + '-' + String(activeLesson);
+  const doneCount = lessons.filter((lesson) => completed[lesson.key]).length;
   const percent = lessons.length ? Math.round((doneCount / lessons.length) * 100) : 0;
+  const currentNumber = lessons.findIndex((lesson) => lesson.key === currentKey) + 1;
+  const moduleVideos = embeddedVideos.filter((video) => video.module === activeModule);
+  const moduleDone = currentModule.lessons.filter((_, index) => completed[String(activeModule) + '-' + String(index)]).length;
+  const modulePercent = Math.round((moduleDone / Math.max(1, currentModule.lessons.length)) * 100);
+  const isLastLesson = activeModule === modules.length - 1 && activeLesson === currentModule.lessons.length - 1;
 
   useEffect(() => {
     if (!user?.id) return;
-    const key = `dright-course-progress:${COURSE_SLUG}:${user.id}`;
-    try { setCompleted(JSON.parse(localStorage.getItem(key) || '{}')); } catch { setCompleted({}); }
+    const progressKey = 'dright-course-progress:' + COURSE_SLUG + ':' + user.id;
+    const notesKey = 'dright-course-notes:' + COURSE_SLUG + ':' + user.id;
+    try { setCompleted(JSON.parse(localStorage.getItem(progressKey) || '{}')); } catch { setCompleted({}); }
+    try { setNotes(JSON.parse(localStorage.getItem(notesKey) || '{}')); } catch { setNotes({}); }
   }, [user?.id]);
 
   useEffect(() => {
     const check = async () => {
-      if (!user?.id) return;
+      if (!user?.id) {
+        setChecking(false);
+        return;
+      }
       setChecking(true);
       const { data } = await supabase.rpc('get_public_dright_official_products');
       const items = Array.isArray(data) ? data : [];
       const course = items.find((item: any) => item.slug === COURSE_SLUG);
-      if (!course?.marketplace_product_id) { setChecking(false); return; }
+      if (!course?.marketplace_product_id) {
+        setChecking(false);
+        return;
+      }
       setProductId(String(course.marketplace_product_id));
       const { data: order } = await supabase
         .from('orders')
@@ -140,103 +250,539 @@ export default function CourseMetaAdsPage() {
     void check();
   }, [user?.id]);
 
-  const toggle = (key: string) => {
+  useEffect(() => {
+    setSelectedAnswer(null);
+    setCheckedAnswer(false);
+  }, [activeModule, activeLesson]);
+
+  const persistCompleted = (next: Record<string, boolean>) => {
+    setCompleted(next);
     if (!user?.id) return;
-    setCompleted((current) => {
-      const next = { ...current, [key]: !current[key] };
-      localStorage.setItem(`dright-course-progress:${COURSE_SLUG}:${user.id}`, JSON.stringify(next));
-      return next;
-    });
+    localStorage.setItem('dright-course-progress:' + COURSE_SLUG + ':' + user.id, JSON.stringify(next));
   };
 
-  if (checking) return <div className="min-h-[70vh] flex items-center justify-center text-gray-500">Checking course access...</div>;
+  const persistNotes = (next: Record<string, string>) => {
+    setNotes(next);
+    if (!user?.id) return;
+    localStorage.setItem('dright-course-notes:' + COURSE_SLUG + ':' + user.id, JSON.stringify(next));
+  };
 
-  if (!allowed) return (
-    <div className="max-w-xl mx-auto px-4 py-16 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-gray-100 mx-auto flex items-center justify-center"><Lock className="w-7 h-7 text-gray-500" /></div>
-      <h1 className="text-2xl font-black text-gray-900 mt-5">Course access locked</h1>
-      <p className="text-gray-600 mt-2">Purchase Facebook & Instagram Ads Mastery 2026 from the official Dright Shop to unlock this learning portal.</p>
-      <div className="mt-6 flex gap-3 justify-center">
-        {productId && <Link to={`/product/${productId}`} className="px-5 py-3 rounded-xl bg-primary-600 text-white font-bold">View product</Link>}
-        <Link to="/dright/store" className="px-5 py-3 rounded-xl border border-gray-200 font-bold text-gray-700">Official shop</Link>
+  const goToLesson = (moduleIndex: number, lessonIndex: number) => {
+    setActiveModule(moduleIndex);
+    setActiveLesson(lessonIndex);
+    setOutlineOpen(false);
+    window.setTimeout(() => workspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
+  };
+
+  const goNext = () => {
+    if (activeLesson < currentModule.lessons.length - 1) {
+      goToLesson(activeModule, activeLesson + 1);
+      return;
+    }
+    if (activeModule < modules.length - 1) {
+      goToLesson(activeModule + 1, 0);
+    }
+  };
+
+  const goPrevious = () => {
+    if (activeLesson > 0) {
+      goToLesson(activeModule, activeLesson - 1);
+      return;
+    }
+    if (activeModule > 0) {
+      goToLesson(activeModule - 1, modules[activeModule - 1].lessons.length - 1);
+    }
+  };
+
+  const completeAndContinue = () => {
+    if (!completed[currentKey]) {
+      persistCompleted({ ...completed, [currentKey]: true });
+    }
+    if (!isLastLesson) goNext();
+  };
+
+  const resetProgress = () => {
+    if (!user?.id) return;
+    localStorage.removeItem('dright-course-progress:' + COURSE_SLUG + ':' + user.id);
+    setCompleted({});
+    goToLesson(0, 0);
+  };
+
+  if (checking) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-2xl bg-primary-50 flex items-center justify-center mx-auto animate-pulse">
+            <GraduationCap className="w-6 h-6 text-primary-600" />
+          </div>
+          <p className="text-gray-500 mt-3">Preparing your course workspace…</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (!allowed) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-gray-100 mx-auto flex items-center justify-center"><Lock className="w-7 h-7 text-gray-500" /></div>
+        <h1 className="text-2xl font-black text-gray-900 mt-5">Course access locked</h1>
+        <p className="text-gray-600 mt-2">Purchase Facebook & Instagram Ads Mastery 2026 from the Official DRIGHT Store to unlock the learning workspace.</p>
+        <div className="mt-6 flex gap-3 justify-center">
+          {productId && <Link to={'/product/' + productId} className="px-5 py-3 rounded-xl bg-primary-600 text-white font-bold">View product</Link>}
+          <Link to="/dright/store" className="px-5 py-3 rounded-xl border border-gray-200 font-bold text-gray-700">Official Store</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const check = moduleChecks[activeModule];
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-      <section className="rounded-3xl bg-gray-950 text-white p-6 md:p-10 overflow-hidden relative">
-        <div className="absolute -right-20 -top-20 w-72 h-72 rounded-full bg-fuchsia-500/20 blur-3xl" />
-        <div className="relative">
-          <p className="text-fuchsia-300 font-bold tracking-widest text-xs">DRIGHT COURSE 001 • 2026 EDITION</p>
-          <h1 className="text-3xl md:text-5xl font-black mt-3">Facebook & Instagram Ads Mastery</h1>
-          <p className="text-gray-300 mt-4 max-w-3xl">A practical, phone-friendly Meta advertising course covering strategy, creative, audiences, leads, WhatsApp funnels, measurement, testing and responsible scaling.</p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm">15 modules</span>
-            <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm">{lessons.length} lessons</span>
-            <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm">Buyer-only access</span>
+    <div className="min-h-screen bg-slate-50 pb-24">
+      <section data-tour="course-hero" className="relative overflow-hidden bg-slate-950 text-white">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 via-slate-950 to-fuchsia-950/30" />
+        <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="relative max-w-7xl mx-auto px-4 py-7 md:py-10">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-black tracking-[0.18em] uppercase text-blue-200">
+                <span>DRIGHT Course 001</span>
+                <span className="w-1 h-1 rounded-full bg-blue-300" />
+                <span>2026 Edition</span>
+              </div>
+              <h1 className="mt-3 text-3xl md:text-5xl font-black leading-tight">Facebook & Instagram Ads Mastery</h1>
+              <p className="mt-4 text-sm md:text-base leading-7 text-slate-300 max-w-2xl">
+                Have you ever launched an ad, watched money spend, and still struggled to understand where the sales went?
+                This course is built to replace guesswork with a step-by-step system: offer, audience, creative, tracking, testing and responsible scaling.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{modules.length} modules</span>
+                <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{lessons.length} lessons</span>
+                <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{embeddedVideos.length} embedded videos</span>
+                <span className="rounded-full bg-emerald-400/15 text-emerald-200 px-3 py-1.5 text-xs font-bold">Buyer-only access</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:flex gap-2">
+              <button
+                type="button"
+                onClick={() => startDrightTour('meta_ads_course')}
+                className="min-h-[44px] rounded-xl bg-white text-slate-950 px-4 text-sm font-black inline-flex items-center justify-center gap-2"
+              >
+                <Compass className="w-4 h-4" /> Course tour
+              </button>
+              <button
+                type="button"
+                onClick={() => setMediaOpen(true)}
+                className="min-h-[44px] rounded-xl bg-white/10 border border-white/15 px-4 text-sm font-bold inline-flex items-center justify-center gap-2"
+              >
+                <PlayCircle className="w-4 h-4" /> Media library
+              </button>
+            </div>
+          </div>
+
+          <div data-tour="course-progress" className="mt-7 grid md:grid-cols-[1fr_auto] gap-4 items-center rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black">Your course progress</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{doneCount} of {lessons.length} lessons completed</p>
+                </div>
+                <span className="text-2xl font-black">{percent}%</span>
+              </div>
+              <div className="mt-3 h-2.5 rounded-full bg-white/10 overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-400 to-fuchsia-400"
+                  animate={{ width: String(percent) + '%' }}
+                  transition={{ duration: 0.45 }}
+                />
+              </div>
+            </div>
+            <button type="button" onClick={resetProgress} className="text-xs font-bold text-slate-300 inline-flex items-center gap-1.5 hover:text-white">
+              <RotateCcw className="w-3.5 h-3.5" /> Reset progress
+            </button>
           </div>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div><p className="text-sm font-bold text-gray-900">Course progress</p><p className="text-xs text-gray-500">{doneCount}/{lessons.length} lessons complete</p></div>
-          <div className="text-2xl font-black text-primary-600">{percent}%</div>
+      <div ref={workspaceRef} className="max-w-7xl mx-auto px-4 py-6">
+        <div className="lg:hidden mb-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setOutlineOpen(true)}
+            className="min-h-[46px] rounded-xl border border-slate-200 bg-white px-3 text-sm font-black inline-flex items-center justify-center gap-2"
+          >
+            <Menu className="w-4 h-4" /> Course outline
+          </button>
+          <div className="min-h-[46px] rounded-xl border border-slate-200 bg-white px-3 flex items-center justify-center text-xs font-bold text-slate-600">
+            Lesson {currentNumber} of {lessons.length}
+          </div>
         </div>
-        <div className="h-3 rounded-full bg-gray-100 mt-4 overflow-hidden"><div className="h-full bg-primary-600 rounded-full" style={{ width: `${percent}%` }} /></div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 text-sm font-bold"><Printer className="w-4 h-4" /> Print / Save PDF</button>
-          <button type="button" onClick={() => { if (user?.id) { localStorage.removeItem(`dright-course-progress:${COURSE_SLUG}:${user.id}`); setCompleted({}); } }} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 text-sm font-bold"><RotateCcw className="w-4 h-4" /> Reset progress</button>
-        </div>
-      </section>
 
-      <div className="space-y-5">
-        {modules.map((module, mi) => (
-          <section key={module.title} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-            <div className="px-5 py-4 bg-gray-50 border-b border-gray-100"><h2 className="font-black text-gray-900">{module.title}</h2></div>
-            <div className="divide-y divide-gray-100">
-              {module.lessons.map((lesson, li) => {
-                const key = `${mi}-${li}`;
-                const done = Boolean(completed[key]);
+        <div className="grid lg:grid-cols-[330px_minmax(0,1fr)] gap-6 items-start">
+          <aside data-tour="course-outline" className="hidden lg:block sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="p-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-2">
+                <List className="w-4 h-4 text-primary-600" />
+                <h2 className="font-black text-slate-950">Course outline</h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Work through one lesson at a time. Your progress is saved on this device.</p>
+            </div>
+            <div className="p-2">
+              {modules.map((module, moduleIndex) => {
+                const completedInModule = module.lessons.filter((_, lessonIndex) => completed[String(moduleIndex) + '-' + String(lessonIndex)]).length;
+                const active = moduleIndex === activeModule;
                 return (
-                  <article key={key} className="p-5">
-                    <div className="flex items-start gap-3">
-                      <button type="button" onClick={() => toggle(key)} className="mt-0.5 shrink-0" aria-label={done ? 'Mark incomplete' : 'Mark complete'}>
-                        {done ? <CheckCircle2 className="w-6 h-6 text-emerald-600" /> : <Circle className="w-6 h-6 text-gray-300" />}
-                      </button>
-                      <div>
-                        <h3 className="font-extrabold text-gray-900">{lesson.title}</h3>
-                        <p className="text-sm text-gray-600 mt-1 leading-6">{lesson.brief}</p>
-                        <div className="mt-3 rounded-xl bg-primary-50 border border-primary-100 px-3 py-2 text-sm text-primary-900"><strong>Practice:</strong> {lesson.action}</div>
+                  <div key={module.title} className="mb-2">
+                    <button
+                      type="button"
+                      onClick={() => goToLesson(moduleIndex, 0)}
+                      className={'w-full text-left rounded-xl px-3 py-3 transition ' + (active ? 'bg-primary-50 ring-1 ring-primary-100' : 'hover:bg-slate-50')}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={'w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ' + (active ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600')}>
+                          {moduleIndex + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={'text-xs font-black leading-5 ' + (active ? 'text-primary-900' : 'text-slate-800')}>{module.title.replace(/^[0-9]+\.\s*/, '')}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{completedInModule}/{module.lessons.length} complete</p>
+                        </div>
                       </div>
-                    </div>
-                  </article>
+                    </button>
+                    {active && (
+                      <div className="mt-1 ml-5 border-l border-primary-100 pl-3 space-y-1">
+                        {module.lessons.map((lesson, lessonIndex) => {
+                          const key = String(moduleIndex) + '-' + String(lessonIndex);
+                          const lessonActive = lessonIndex === activeLesson;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => goToLesson(moduleIndex, lessonIndex)}
+                              className={'w-full flex items-start gap-2 rounded-lg px-2 py-2 text-left text-xs ' + (lessonActive ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-50')}
+                            >
+                              {completed[key]
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                : <Circle className="w-4 h-4 shrink-0 mt-0.5 opacity-40" />}
+                              <span className="leading-5">{lesson.title}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
-          </section>
-        ))}
+          </aside>
+
+          <main data-tour="course-lesson" className="min-w-0">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentKey}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.24 }}
+                className="space-y-5"
+              >
+                <section className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="p-5 md:p-7 border-b border-slate-100 bg-gradient-to-br from-white to-blue-50/40">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-primary-600">
+                        <span>Module {activeModule + 1}</span>
+                        <span>•</span>
+                        <span>Lesson {activeLesson + 1} of {currentModule.lessons.length}</span>
+                      </div>
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{modulePercent}% module complete</span>
+                    </div>
+                    <h2 className="mt-3 text-2xl md:text-3xl font-black text-slate-950">{currentLesson.title}</h2>
+                    <p className="mt-3 text-sm md:text-base leading-7 text-slate-600">{moduleIntros[activeModule]}</p>
+                  </div>
+
+                  <div className="p-5 md:p-7 space-y-6">
+                    <div className="grid md:grid-cols-3 gap-3">
+                      <div className="rounded-2xl bg-slate-950 text-white p-4 md:col-span-2">
+                        <div className="flex items-center gap-2 text-blue-300">
+                          <BookOpen className="w-4 h-4" />
+                          <p className="text-xs font-black uppercase tracking-wider">Core lesson</p>
+                        </div>
+                        <p className="mt-3 text-base md:text-lg leading-8 text-slate-100">{currentLesson.brief}</p>
+                      </div>
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                        <p className="text-xs font-black uppercase tracking-wider text-amber-700">Why this matters</p>
+                        <p className="mt-2 text-sm leading-6 text-amber-950">
+                          Every lesson should change a decision you make in a real campaign. Do not rush to the next lesson until you can explain this idea in your own words.
+                        </p>
+                      </div>
+                    </div>
+
+                    {moduleVideos.length > 0 && (
+                      <div data-tour="course-video" className="space-y-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Video className="w-5 h-5 text-primary-600" />
+                            <h3 className="font-black text-slate-950">Watch inside DRIGHT</h3>
+                          </div>
+                          <p className="text-sm text-slate-500 mt-1">These videos play here in the course. You do not need to leave DRIGHT or open YouTube.</p>
+                        </div>
+                        {moduleVideos.map((video) => (
+                          <div key={video.url} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 md:p-4">
+                            <VideoPlayer url={video.url} title={video.title} />
+                            <div className="pt-3">
+                              <p className="font-black text-slate-900">{video.title}</p>
+                              <p className="text-sm text-slate-500 mt-1">{video.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+                      <div className="flex items-center gap-2">
+                        <Target className="w-5 h-5 text-emerald-700" />
+                        <h3 className="font-black text-emerald-950">Practice challenge</h3>
+                      </div>
+                      <p className="mt-2 text-sm md:text-base leading-7 text-emerald-950">{currentLesson.action}</p>
+                      <p className="mt-3 text-xs font-bold text-emerald-700">Do the action with a real or sample business before marking this lesson complete.</p>
+                    </div>
+
+                    <div data-tour="course-check" className="rounded-2xl border border-violet-200 bg-violet-50/70 p-5">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-violet-700" />
+                        <h3 className="font-black text-violet-950">Quick knowledge check</h3>
+                      </div>
+                      <p className="mt-3 font-bold text-slate-900">{check.question}</p>
+                      <div className="mt-3 grid gap-2">
+                        {check.choices.map((choice, index) => {
+                          const selected = selectedAnswer === index;
+                          const correct = checkedAnswer && index === check.answer;
+                          const wrong = checkedAnswer && selected && index !== check.answer;
+                          return (
+                            <button
+                              key={choice}
+                              type="button"
+                              onClick={() => {
+                                if (!checkedAnswer) setSelectedAnswer(index);
+                              }}
+                              className={'text-left rounded-xl border px-4 py-3 text-sm font-semibold transition ' +
+                                (correct ? 'border-emerald-400 bg-emerald-100 text-emerald-950' :
+                                  wrong ? 'border-rose-300 bg-rose-100 text-rose-950' :
+                                    selected ? 'border-violet-400 bg-white text-violet-950' :
+                                      'border-violet-100 bg-white text-slate-700 hover:border-violet-300')}
+                            >
+                              {choice}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {!checkedAnswer ? (
+                        <button
+                          type="button"
+                          disabled={selectedAnswer === null}
+                          onClick={() => setCheckedAnswer(true)}
+                          className="mt-3 min-h-[42px] rounded-xl bg-violet-700 text-white px-4 text-sm font-black disabled:opacity-40"
+                        >
+                          Check my answer
+                        </button>
+                      ) : (
+                        <div className="mt-3 rounded-xl bg-white border border-violet-100 p-3 text-sm leading-6 text-slate-700">
+                          <strong>{selectedAnswer === check.answer ? 'Correct. ' : 'Not quite. '}</strong>{check.explanation}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-slate-500" />
+                        <h3 className="font-black text-slate-900">Your lesson notes</h3>
+                      </div>
+                      <textarea
+                        rows={5}
+                        value={notes[currentKey] || ''}
+                        onChange={(event) => persistNotes({ ...notes, [currentKey]: event.target.value })}
+                        placeholder="Write what you learned, the campaign idea you want to test, questions to revisit, or results from the practice challenge…"
+                        className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm leading-6 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 resize-y"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                {activeModule === modules.length - 1 && (
+                  <section className="rounded-3xl bg-gradient-to-br from-slate-950 to-blue-950 text-white p-5 md:p-7">
+                    <div className="flex items-center gap-2 text-amber-300">
+                      <Trophy className="w-5 h-5" />
+                      <h3 className="font-black">Capstone campaign</h3>
+                    </div>
+                    <p className="mt-3 text-sm md:text-base leading-7 text-slate-200">
+                      Build one complete campaign package: customer research, offer, objective, audience plan, six creative concepts, landing or messaging flow,
+                      tracking map, seven-day test budget, target CPA or ROAS, stop rules and scale rules. Keep screenshots and results as portfolio evidence.
+                    </p>
+                  </section>
+                )}
+
+                <section data-tour="course-nav" className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={goPrevious}
+                      disabled={activeModule === 0 && activeLesson === 0}
+                      className="min-h-[46px] rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 inline-flex items-center justify-center gap-2 disabled:opacity-30"
+                    >
+                      <ChevronLeft className="w-4 h-4" /> Previous lesson
+                    </button>
+
+                    <div className="text-center">
+                      <p className="text-xs text-slate-400">Lesson {currentNumber} of {lessons.length}</p>
+                      <p className="text-sm font-black text-slate-800 mt-0.5">{completed[currentKey] ? 'Completed' : 'Ready when you are'}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={completeAndContinue}
+                      className="min-h-[46px] rounded-xl bg-primary-600 hover:bg-primary-700 px-4 text-sm font-black text-white inline-flex items-center justify-center gap-2"
+                    >
+                      {completed[currentKey] ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                      {isLastLesson ? 'Complete course' : completed[currentKey] ? 'Continue' : 'Complete & continue'}
+                      {!isLastLesson && <ChevronRight className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </section>
+
+                {isLastLesson && percent >= 90 && (
+                  <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+                    <GraduationCap className="w-10 h-10 text-emerald-700 mx-auto" />
+                    <h3 className="mt-3 text-xl font-black text-emerald-950">You reached the end of the course</h3>
+                    <p className="mt-2 text-sm leading-6 text-emerald-900">
+                      Review any incomplete lessons, finish the capstone and keep using the notes and practice tasks as your operating playbook.
+                    </p>
+                  </section>
+                )}
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-black text-slate-900">Official reference library</h3>
+                      <p className="text-sm text-slate-500 mt-1">Open supporting Meta references inside the course workspace.</p>
+                    </div>
+                    <BookOpen className="w-5 h-5 text-slate-400" />
+                  </div>
+                  <div className="mt-3 grid sm:grid-cols-2 gap-2">
+                    {officialReferences.map((reference) => (
+                      <button
+                        key={reference.url}
+                        type="button"
+                        onClick={() => setReferenceOpen(reference)}
+                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs font-bold text-slate-700 hover:border-primary-300 hover:bg-primary-50"
+                      >
+                        {reference.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <p className="text-xs leading-5 text-slate-500 pb-4">
+                  Educational product. Not affiliated with or endorsed by Meta. Platform interfaces and policies change, and advertising results vary.
+                  The course teaches decision-making and campaign process; it does not guarantee revenue or sales.
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </main>
+        </div>
       </div>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
-        <div className="flex items-center gap-2"><Target className="w-5 h-5 text-primary-600" /><h2 className="font-black text-gray-900">Capstone</h2></div>
-        <p className="text-sm text-gray-600 mt-2 leading-6">Build one complete campaign package: customer research, offer, objective, audience plan, six creatives, landing/message flow, tracking map, seven-day test budget, target CPA/ROAS, stop rules and scale rules. Keep screenshots and results as your portfolio evidence.</p>
-      </section>
+      <AnimatePresence>
+        {outlineOpen && (
+          <motion.div className="fixed inset-0 z-[90] lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <button type="button" aria-label="Close course outline" onClick={() => setOutlineOpen(false)} className="absolute inset-0 bg-slate-950/60" />
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="absolute inset-y-0 left-0 w-[88%] max-w-sm bg-white shadow-2xl overflow-y-auto"
+            >
+              <div className="sticky top-0 bg-white border-b border-slate-100 p-4 flex items-center justify-between">
+                <div><p className="font-black">Course outline</p><p className="text-xs text-slate-500">{percent}% complete</p></div>
+                <button type="button" onClick={() => setOutlineOpen(false)} className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="p-3 space-y-3">
+                {modules.map((module, moduleIndex) => (
+                  <div key={module.title} className="rounded-2xl border border-slate-200 p-2">
+                    <p className="px-2 py-2 text-xs font-black text-slate-800">{module.title}</p>
+                    <div className="space-y-1">
+                      {module.lessons.map((lesson, lessonIndex) => {
+                        const key = String(moduleIndex) + '-' + String(lessonIndex);
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => goToLesson(moduleIndex, lessonIndex)}
+                            className={'w-full rounded-xl px-3 py-2.5 text-left text-xs flex items-start gap-2 ' + (key === currentKey ? 'bg-primary-600 text-white' : 'bg-slate-50 text-slate-700')}
+                          >
+                            {completed[key] ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> : <Circle className="w-4 h-4 shrink-0 opacity-40" />}
+                            <span>{lesson.title}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
-        <h2 className="font-black text-gray-900">Current reference library</h2>
-        <p className="text-sm text-gray-500 mt-1">The course is original. These official and selected third-party resources are supporting references and may change over time.</p>
-        <div className="mt-4 grid gap-3">
-          {refs.map(([label, href]) => (
-            <a key={href} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-800 hover:border-primary-300">
-              <span>{label}</span><ExternalLink className="w-4 h-4 shrink-0 text-gray-400" />
-            </a>
-          ))}
-        </div>
-      </section>
+      <AnimatePresence>
+        {mediaOpen && (
+          <motion.div className="fixed inset-0 z-[95] bg-slate-950/75 p-3 md:p-8 overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="max-w-4xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl">
+              <div className="sticky top-0 z-10 bg-white border-b border-slate-100 p-4 md:p-5 flex items-center justify-between">
+                <div>
+                  <p className="font-black text-slate-950">Course media library</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Videos play inside DRIGHT.</p>
+                </div>
+                <button type="button" onClick={() => setMediaOpen(false)} className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="p-4 md:p-6 space-y-6">
+                {embeddedVideos.map((video) => (
+                  <div key={video.url}>
+                    <VideoPlayer url={video.url} title={video.title} />
+                    <p className="mt-3 font-black text-slate-900">{video.title}</p>
+                    <p className="text-sm text-slate-500 mt-1">{video.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <p className="text-xs text-gray-500 pb-8">Educational product. Not affiliated with or endorsed by Meta. Platform interfaces and policies change. Advertising results vary; no revenue or sales outcome is guaranteed.</p>
+      <AnimatePresence>
+        {referenceOpen && (
+          <motion.div className="fixed inset-0 z-[96] bg-slate-950/75 p-3 md:p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="h-full max-w-5xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-black text-slate-950 truncate">{referenceOpen.label}</p>
+                  <p className="text-xs text-slate-500">Reference viewer</p>
+                </div>
+                <button type="button" onClick={() => setReferenceOpen(null)} className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><X className="w-4 h-4" /></button>
+              </div>
+              <iframe
+                src={referenceOpen.url}
+                title={referenceOpen.label}
+                className="w-full flex-1 min-h-0 bg-white"
+                sandbox="allow-forms allow-scripts allow-same-origin allow-popups"
+              />
+              <div className="px-4 py-2 border-t border-slate-100 text-[11px] text-slate-500">
+                Some publishers may block iframe display in browsers. The DRIGHT course itself remains available even if a third-party reference refuses embedding.
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
