@@ -24,7 +24,7 @@ import StarterAffiliateProgressBoard from '../components/StarterAffiliateProgres
 import RegisteredStarterAssistedSignup from '../components/RegisteredStarterAssistedSignup';
 
 export default function DrightStarterProductPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const [params] = useSearchParams();
   const [settings, setSettings] = useState<DrightStarterPublicSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,12 +37,15 @@ export default function DrightStarterProductPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    markDrightStarterSignupFunnel();
     void fetchDrightStarterProduct().then((value) => {
       setSettings(value);
       setLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    if (!authLoading && !user) markDrightStarterSignupFunnel();
+  }, [authLoading, user]);
 
   useEffect(() => {
     const ref = params.get('ref')?.trim();
