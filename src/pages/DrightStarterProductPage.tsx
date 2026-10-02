@@ -7,7 +7,6 @@ import {
 import { DrightMark } from '../components/DrightBrand';
 import TurnstileWidget from '../components/TurnstileWidget';
 import { useAuth } from '../contexts/AuthContext';
-import { canUsePlatformFeature } from '../lib/platformAccess';
 import {
   buildDrightStarterAffiliateLink,
   fetchDrightStarterProduct,
@@ -22,9 +21,10 @@ import { resolveAndRecordTracking } from '../lib/affiliate';
 import SeoHead from '../components/SeoHead';
 import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 import StarterAffiliateProgressBoard from '../components/StarterAffiliateProgressBoard';
+import RegisteredStarterAssistedSignup from '../components/RegisteredStarterAssistedSignup';
 
 export default function DrightStarterProductPage() {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile } = useAuth();
   const [params] = useSearchParams();
   const [settings, setSettings] = useState<DrightStarterPublicSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,9 +34,7 @@ export default function DrightStarterProductPage() {
   const [turnstileKey, setTurnstileKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [canAffiliate, setCanAffiliate] = useState(false);
   const [copied, setCopied] = useState(false);
-  const adminClientMode = params.get('client_onboarding') === '1' && Boolean(user) && isAdmin;
 
   useEffect(() => {
     markDrightStarterSignupFunnel();
@@ -50,11 +48,6 @@ export default function DrightStarterProductPage() {
     const ref = params.get('ref')?.trim();
     if (ref) void resolveAndRecordTracking(ref).catch(() => undefined);
   }, [params]);
-
-  useEffect(() => {
-    if (!user) return;
-    void canUsePlatformFeature('affiliate_marketing').then(setCanAffiliate);
-  }, [user]);
 
   const product = settings?.product;
   const store = settings?.store;
@@ -78,7 +71,7 @@ export default function DrightStarterProductPage() {
 
   const startCheckout = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!product || submitting || (user && !adminClientMode)) return;
+    if (!product || user || submitting) return;
     if (!turnstileToken) {
       setError('Complete the security check before continuing.');
       return;
@@ -91,7 +84,6 @@ export default function DrightStarterProductPage() {
         buyerName,
         buyerEmail,
         turnstileToken,
-        checkoutMode: adminClientMode ? 'admin_client_onboarding' : undefined,
       });
       if (!result.reference || !result.authorization_url) {
         throw new Error('Payment gateway did not return a checkout URL.');
@@ -204,44 +196,44 @@ export default function DrightStarterProductPage() {
                   </div>
                 </div>
 
-                {product.marketplace_product_id && (
-                  <div className="mt-5 text-slate-900">
-                    <ListingMarketingMaterialsPanel
-                      kind="product"
-                      listingId={product.marketplace_product_id}
-                      title="Starter affiliate marketing kit"
-                    />
-                  </div>
+                {user && (
+                  <>
+                    {product.marketplace_product_id && (
+                      <div className="mt-5 text-slate-900">
+                        <ListingMarketingMaterialsPanel
+                          kind="product"
+                          listingId={product.marketplace_product_id}
+                          title="Starter affiliate marketing kit"
+                        />
+                      </div>
+                    )}
+
+                    <StarterAffiliateProgressBoard className="mt-5" />
+
+                    <div className="mt-5 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-5">
+                      <h3 className="font-bold text-blue-100">Affiliate test product</h3>
+                      <p className="text-sm text-blue-200/80 mt-1">
+                        Share this official product with a new user. A verified purchase pays {product.affiliate_commission_percent}% commission — currently {formatCurrencyValue(affiliateValue, product.currency)} at this price.
+                      </p>
+                      {profile?.referral_code && (
+                        <button
+                          type="button"
+                          onClick={copyAffiliateLink}
+                          className="mt-4 min-h-[46px] px-4 rounded-xl bg-white text-slate-950 font-black inline-flex items-center gap-2"
+                        >
+                          {copied ? <BadgeCheck className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                          {copied ? 'Starter referral link copied' : 'Copy Starter referral link'}
+                        </button>
+                      )}
+                      <Link
+                        to="/challenges?section=affiliate&challenge=starter_affiliate"
+                        className="mt-3 min-h-[44px] px-4 rounded-xl border border-blue-300/30 bg-blue-400/10 text-blue-100 font-black inline-flex items-center gap-2"
+                      >
+                        <Trophy className="w-4 h-4" /> View Starter Affiliate Leaderboard
+                      </Link>
+                    </div>
+                  </>
                 )}
-
-                <StarterAffiliateProgressBoard className="mt-5" />
-
-                <div className="mt-5 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-5">
-                  <h3 className="font-bold text-blue-100">Affiliate test product</h3>
-                  <p className="text-sm text-blue-200/80 mt-1">
-                    Share this official product with a new user. A verified purchase pays {product.affiliate_commission_percent}% commission — currently {formatCurrencyValue(affiliateValue, product.currency)} at this price.
-                  </p>
-                  {user && canAffiliate && profile?.referral_code ? (
-                    <button
-                      type="button"
-                      onClick={copyAffiliateLink}
-                      className="mt-4 min-h-[46px] px-4 rounded-xl bg-white text-slate-950 font-black inline-flex items-center gap-2"
-                    >
-                      {copied ? <BadgeCheck className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                      {copied ? 'Affiliate link copied' : 'Copy affiliate link'}
-                    </button>
-                  ) : user ? (
-                    <Link to="/subscriptions" className="mt-4 inline-flex min-h-[46px] items-center px-4 rounded-xl bg-white text-slate-950 font-black">
-                      Open affiliate access
-                    </Link>
-                  ) : null}
-                  <Link
-                    to="/challenges?section=affiliate&challenge=starter_affiliate"
-                    className="mt-3 min-h-[44px] px-4 rounded-xl border border-blue-300/30 bg-blue-400/10 text-blue-100 font-black inline-flex items-center gap-2"
-                  >
-                    <Trophy className="w-4 h-4" /> View Starter Affiliate Leaderboard
-                  </Link>
-                </div>
               </div>
 
               <aside className="w-full max-w-full min-w-0 lg:sticky lg:top-6 rounded-3xl bg-white text-slate-900 shadow-2xl overflow-hidden">
@@ -271,17 +263,17 @@ export default function DrightStarterProductPage() {
                     )}
                   </div>
 
-                  {user && !adminClientMode ? (
-                    <div className="mt-6 rounded-2xl bg-slate-100 p-5 text-center">
-                      <LockKeyhole className="w-8 h-8 mx-auto text-slate-500" />
-                      <p className="font-black mt-3">New guests only</p>
-                      <p className="text-sm text-slate-500 mt-1">
-                        You are already signed in, so this Starter product cannot be purchased by this account.
-                      </p>
-                      <Link to="/" className="mt-4 inline-flex min-h-[44px] items-center px-4 rounded-xl bg-slate-950 text-white font-bold">
-                        Go to Dashboard
-                      </Link>
-                    </div>
+                  {user ? (
+                    <>
+                      <div className="mt-6 rounded-2xl bg-slate-100 p-5 text-center">
+                        <LockKeyhole className="w-8 h-8 mx-auto text-slate-500" />
+                        <p className="font-black mt-3">Starter purchase for your own account is locked</p>
+                        <p className="text-sm text-slate-500 mt-1">
+                          You are already registered. You can still use Starter to register another new user below.
+                        </p>
+                      </div>
+                      <RegisteredStarterAssistedSignup product={product} />
+                    </>
                   ) : (
                     <form onSubmit={startCheckout} className="mt-6 space-y-4">
                       <div>
@@ -336,28 +328,30 @@ export default function DrightStarterProductPage() {
                     </form>
                   )}
 
-                  <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-                    <p className="text-xs text-slate-500">
-                      Starter signup unlocks only after DRIGHT verifies the payment.
-                    </p>
-                    <div className="mt-2 flex flex-wrap justify-center gap-3 text-sm font-bold">
-                      {pendingStarterPurchase?.reference ? (
-                        <Link
-                          to={`/dright/starter/payment?reference=${encodeURIComponent(pendingStarterPurchase.reference)}${adminClientMode ? '&flow=admin_client_onboarding' : ''}`}
-                          className="text-primary-600 inline-flex items-center gap-1"
-                        >
-                          <UserPlus className="w-4 h-4" /> Verify payment & unlock signup
+                  {!user && (
+                    <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+                      <p className="text-xs text-slate-500">
+                        Starter signup unlocks only after DRIGHT verifies the payment.
+                      </p>
+                      <div className="mt-2 flex flex-wrap justify-center gap-3 text-sm font-bold">
+                        {pendingStarterPurchase?.reference ? (
+                          <Link
+                            to={`/dright/starter/payment?reference=${encodeURIComponent(pendingStarterPurchase.reference)}`}
+                            className="text-primary-600 inline-flex items-center gap-1"
+                          >
+                            <UserPlus className="w-4 h-4" /> Verify payment & unlock signup
+                          </Link>
+                        ) : (
+                          <span className="text-slate-500 inline-flex items-center gap-1">
+                            <LockKeyhole className="w-4 h-4" /> Pay first to unlock signup
+                          </span>
+                        )}
+                        <Link to="/sign-in" className="text-slate-700 inline-flex items-center gap-1">
+                          Existing user sign in <ArrowRight className="w-4 h-4" />
                         </Link>
-                      ) : (
-                        <span className="text-slate-500 inline-flex items-center gap-1">
-                          <LockKeyhole className="w-4 h-4" /> Pay first to unlock signup
-                        </span>
-                      )}
-                      <Link to="/sign-in" className="text-slate-700 inline-flex items-center gap-1">
-                        Existing user sign in <ArrowRight className="w-4 h-4" />
-                      </Link>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </aside>
             </div>
