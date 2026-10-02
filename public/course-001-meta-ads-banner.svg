@@ -1,12 +1,129 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b1020"/><stop offset=".55" stop-color="#171d3a"/><stop offset="1" stop-color="#3d145f"/></linearGradient><radialGradient id="r"><stop stop-color="#ff4f9a" stop-opacity=".55"/><stop offset="1" stop-color="#ff4f9a" stop-opacity="0"/></radialGradient></defs>
-<rect width="1600" height="900" fill="url(#g)"/><circle cx="1280" cy="170" r="420" fill="url(#r)"/><circle cx="1390" cy="710" r="340" fill="#5e42ff" opacity=".12"/>
-<g fill="none" stroke="#fff" stroke-opacity=".15"><rect x="1030" y="230" rx="36" width="360" height="460"/><rect x="1090" y="310" rx="22" width="240" height="150"/><path d="M1130 520h160M1130 565h120M1130 610h145"/></g>
-<rect x="1055" y="262" width="310" height="12" rx="6" fill="#ff4f9a" opacity=".9"/><circle cx="1083" cy="262" r="6" fill="#fff"/>
-<text x="115" y="190" fill="#ff77b8" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="4">DRIGHT COURSE 001</text>
-<text x="115" y="310" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800">Facebook &amp;</text>
-<text x="115" y="405" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800">Instagram Ads</text>
-<text x="115" y="500" fill="#ff77b8" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800">Mastery 2026</text>
-<text x="120" y="585" fill="#d9dbea" font-family="Arial, Helvetica, sans-serif" font-size="34">Strategy • Creative • Tracking • Optimization • Scaling</text>
-<rect x="120" y="660" width="550" height="90" rx="45" fill="#fff"/><text x="170" y="720" fill="#11142b" font-family="Arial" font-size="34" font-weight="700">Practical + Phone-Friendly</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Facebook and Instagram Ads Mastery 2026 — DRIGHT Course 001</title>
+  <desc id="desc">Dark blue and magenta course cover with Facebook and Instagram visual marks, advertising dashboard graphics, and phone-friendly course branding.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07122c"/>
+      <stop offset=".48" stop-color="#111a48"/>
+      <stop offset="1" stop-color="#47105d"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff3f8f"/>
+      <stop offset="1" stop-color="#b53cff"/>
+    </linearGradient>
+    <linearGradient id="ig" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffd15c"/>
+      <stop offset=".25" stop-color="#ff6a3d"/>
+      <stop offset=".58" stop-color="#e1306c"/>
+      <stop offset="1" stop-color="#833ab4"/>
+    </linearGradient>
+    <linearGradient id="phone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#172c66"/>
+      <stop offset="1" stop-color="#091027"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".72" cy=".25" r=".7">
+      <stop offset="0" stop-color="#ff3f9c" stop-opacity=".42"/>
+      <stop offset=".5" stop-color="#5e4cff" stop-opacity=".17"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#020617" flood-opacity=".55"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" rx="46" fill="url(#bg)"/>
+  <rect width="1600" height="900" rx="46" fill="url(#glow)"/>
+  <path d="M0 735 C260 585 470 830 760 690 C1055 548 1230 660 1600 508 L1600 900 L0 900 Z" fill="#080d25" opacity=".6"/>
+  <circle cx="1430" cy="105" r="240" fill="#ff3f9c" opacity=".12"/>
+  <circle cx="1280" cy="780" r="330" fill="#5b44ff" opacity=".12"/>
+
+  <!-- DRIGHT + course badge -->
+  <g transform="translate(90 72)">
+    <rect width="220" height="54" rx="27" fill="#ffffff" fill-opacity=".08" stroke="#ffffff" stroke-opacity=".14"/>
+    <text x="28" y="35" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="800" letter-spacing="4">DRIGHT</text>
+    <rect x="238" width="248" height="54" rx="27" fill="url(#pink)"/>
+    <text x="274" y="35" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="800" letter-spacing="2">COURSE 001</text>
+  </g>
+
+  <!-- Headline safe area -->
+  <text x="90" y="250" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="78" font-weight="900">Facebook &amp; Instagram</text>
+  <text x="90" y="345" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="78" font-weight="900">Ads <tspan fill="#ff61aa">Mastery 2026</tspan></text>
+  <text x="94" y="410" fill="#c7d2fe" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="600">Strategy • Creative • Tracking • Optimization • Scaling</text>
+
+  <!-- Facebook mark -->
+  <g transform="translate(103 474)" filter="url(#shadow)">
+    <rect width="126" height="126" rx="31" fill="#1877F2"/>
+    <text x="45" y="102" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="110" font-weight="900">f</text>
+  </g>
+
+  <!-- Instagram mark -->
+  <g transform="translate(258 474)" filter="url(#shadow)">
+    <rect width="126" height="126" rx="34" fill="url(#ig)"/>
+    <rect x="27" y="27" width="72" height="72" rx="23" fill="none" stroke="#fff" stroke-width="9"/>
+    <circle cx="63" cy="63" r="18" fill="none" stroke="#fff" stroke-width="9"/>
+    <circle cx="88" cy="37" r="6" fill="#fff"/>
+  </g>
+
+  <g transform="translate(420 480)">
+    <rect width="430" height="112" rx="28" fill="#ffffff" fill-opacity=".075" stroke="#ffffff" stroke-opacity=".12"/>
+    <text x="30" y="43" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="800">PRACTICAL • PHONE-FRIENDLY</text>
+    <text x="30" y="79" fill="#aeb9dd" font-family="Arial,Helvetica,sans-serif" font-size="22">15 modules • Real campaign workflows</text>
+  </g>
+
+  <g transform="translate(90 660)">
+    <g>
+      <circle cx="19" cy="19" r="19" fill="#22c55e" opacity=".16"/>
+      <path d="M10 19l6 6 13-14" fill="none" stroke="#6ee7a6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="27" fill="#dbe4ff" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700">Campaign setup</text>
+    </g>
+    <g transform="translate(278 0)">
+      <circle cx="19" cy="19" r="19" fill="#22c55e" opacity=".16"/>
+      <path d="M10 19l6 6 13-14" fill="none" stroke="#6ee7a6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="27" fill="#dbe4ff" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700">Audience research</text>
+    </g>
+    <g transform="translate(610 0)">
+      <circle cx="19" cy="19" r="19" fill="#22c55e" opacity=".16"/>
+      <path d="M10 19l6 6 13-14" fill="none" stroke="#6ee7a6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="27" fill="#dbe4ff" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700">Creative testing</text>
+    </g>
+    <g transform="translate(0 72)">
+      <circle cx="19" cy="19" r="19" fill="#22c55e" opacity=".16"/>
+      <path d="M10 19l6 6 13-14" fill="none" stroke="#6ee7a6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="27" fill="#dbe4ff" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700">Meta Pixel &amp; CAPI concepts</text>
+    </g>
+    <g transform="translate(430 72)">
+      <circle cx="19" cy="19" r="19" fill="#22c55e" opacity=".16"/>
+      <path d="M10 19l6 6 13-14" fill="none" stroke="#6ee7a6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="27" fill="#dbe4ff" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700">Optimization &amp; scaling</text>
+    </g>
+  </g>
+
+  <!-- Phone/dashboard visual -->
+  <g transform="translate(1040 112) rotate(4 230 320)" filter="url(#shadow)">
+    <rect x="0" y="0" width="430" height="640" rx="58" fill="#050914" stroke="#7581b0" stroke-width="5"/>
+    <rect x="22" y="28" width="386" height="584" rx="39" fill="url(#phone)"/>
+    <rect x="150" y="12" width="130" height="20" rx="10" fill="#01030a"/>
+    <text x="54" y="94" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="800">Ads performance</text>
+    <text x="54" y="132" fill="#8fa4dc" font-family="Arial,Helvetica,sans-serif" font-size="18">Campaign overview</text>
+    <rect x="50" y="166" width="310" height="154" rx="25" fill="#ffffff" fill-opacity=".08"/>
+    <polyline points="70,282 115,260 156,266 200,215 240,232 286,180 340,195" fill="none" stroke="#ff4f9f" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="286" cy="180" r="9" fill="#fff"/>
+    <g transform="translate(50 350)">
+      <rect width="145" height="104" rx="20" fill="#1877F2"/>
+      <text x="20" y="38" fill="#dcecff" font-family="Arial" font-size="17" font-weight="700">FACEBOOK</text>
+      <text x="20" y="77" fill="#fff" font-family="Arial" font-size="31" font-weight="900">12.4K</text>
+    </g>
+    <g transform="translate(215 350)">
+      <rect width="145" height="104" rx="20" fill="url(#ig)"/>
+      <text x="18" y="38" fill="#fff" font-family="Arial" font-size="17" font-weight="700">INSTAGRAM</text>
+      <text x="18" y="77" fill="#fff" font-family="Arial" font-size="31" font-weight="900">8.7K</text>
+    </g>
+    <rect x="50" y="484" width="310" height="82" rx="22" fill="#ffffff" fill-opacity=".07"/>
+    <text x="76" y="519" fill="#9cacd6" font-family="Arial" font-size="17">Optimization score</text>
+    <text x="76" y="551" fill="#fff" font-family="Arial" font-size="29" font-weight="900">92 / 100</text>
+  </g>
+
+  <!-- Growth arrow -->
+  <path d="M1310 690 C1365 628 1402 572 1450 490" fill="none" stroke="#ff4f9f" stroke-width="18" stroke-linecap="round"/>
+  <path d="M1421 502 L1458 470 L1461 520" fill="none" stroke="#ff4f9f" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
