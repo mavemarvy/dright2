@@ -237,7 +237,6 @@ export default function CheckoutPaymentPage() {
   }, [loadProviders, loadCheckoutData]);
 
   // Calculate totals with coupon discount
-  const productPrice = checkoutData?.basePrice || 0;
   const tierPrice = checkoutData?.tierPrice || 0;
   const customizationPrice = checkoutData?.customizationPrice || 0;
   const referralDiscount = checkoutData?.affiliateCommissionAmount || 0;
