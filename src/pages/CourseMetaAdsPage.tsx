@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Circle, Compass, FileText, GraduationCap, List, Lock, Menu, PlayCircle, RotateCcw, Sparkles, Target, Trophy, Video, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Circle, Compass, ExternalLink, FileText, GraduationCap, Images, List, Lock, Menu, PlayCircle, RotateCcw, Sparkles, Target, Trophy, Video, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -107,6 +107,20 @@ const embeddedVideos = [
     description: 'Santrel Media gives a clear English step-by-step walkthrough of Meta Ads Manager, campaign setup, ad sets and ad creation.',
   },
   {
+    module: 5,
+    title: 'Nigeria: Instagram Ads Step-by-Step',
+    url: 'https://www.youtube.com/watch?v=haUZvNZWae0',
+    description: 'AYO IS MARKETING demonstrates how to create sponsored Instagram ads for a Nigerian audience and business context.',
+    section: 'instagram',
+  },
+  {
+    module: 5,
+    title: 'USA: Instagram Ads Step-by-Step',
+    url: 'https://www.youtube.com/watch?v=iTstnwkiizk',
+    description: 'Atlanta-based LYFE Marketing walks through Instagram ad campaign setup, ad sets, placements and creative step by step.',
+    section: 'instagram',
+  },
+  {
     module: 6,
     title: 'Nigerian English: Run Meta Ads from Your Phone',
     url: 'https://www.youtube.com/watch?v=pIawYyNGZ-E',
@@ -118,23 +132,42 @@ const officialReferences = [
   {
     label: 'Meta Blueprint — Ads Manager learning path',
     url: 'https://metaspark.facebookblueprint.com/student/collection/507005-meta-ads-manager-learning',
+    summary: 'Official Meta training covering the Ads Manager workflow from campaign objectives through audiences, placements, creative and results.',
+    points: ['Choose an objective that matches the business outcome.', 'Build audiences and placements deliberately.', 'Read results before deciding what to change.'],
   },
   {
     label: 'Meta Blueprint — Get started with Meta Ads Manager',
     url: 'https://www.facebookblueprint.com/student/path/515321-get-started-with-meta-ads-manager',
+    summary: 'An official Meta starting point for learning the Ads Manager structure and campaign creation workflow.',
+    points: ['Understand campaigns, ad sets and ads.', 'Prepare the account before launch.', 'Use reporting to evaluate delivery.'],
   },
   {
     label: 'Meta Blueprint — Campaign activation tools and Advantage+',
     url: 'https://www.facebookblueprint.com/student/path/253164-ads-business-manager-course',
+    summary: 'Official learning material for Meta campaign activation tools and Advantage+ automation.',
+    points: ['Know what Meta can automate.', 'Keep your business goal and conversion signal clear.', 'Use automation as a tool, not as a substitute for strategy.'],
   },
   {
     label: 'Meta for Business — Facebook & Instagram Reels Ads',
     url: 'https://www.facebook.com/business/ads/facebook-instagram-reels-ads',
+    summary: 'Meta guidance for Reels placements, vertical creative and testing across Facebook and Instagram.',
+    points: ['Design 9:16 creative for Reels.', 'Keep important text and visuals inside safe zones.', 'Test Reels placements and creative rather than assuming performance.'],
   },
   {
     label: 'Meta Ad Library',
     url: 'https://www.facebook.com/ads/library/',
+    summary: 'Meta’s public ad-transparency library. Use it to study active advertising patterns without copying another advertiser.',
+    points: ['Search competitors or categories.', 'Record hooks, formats, offers and landing-page patterns.', 'Turn observations into your own test hypotheses.'],
   },
+];
+
+const instagramVisualSteps = [
+  { step: '01', title: 'Prepare the Instagram business account', detail: 'Use a professional Instagram account, complete the profile and connect the correct business assets before spending.' },
+  { step: '02', title: 'Create the campaign', detail: 'In Meta Ads Manager, choose the business objective that matches the action you actually want people to take.' },
+  { step: '03', title: 'Set budget and conversion location', detail: 'Choose the destination or conversion location, then set a test budget that can generate useful data.' },
+  { step: '04', title: 'Define the audience', detail: 'Choose broad, interest, custom or lookalike targeting based on a written audience hypothesis.' },
+  { step: '05', title: 'Choose Instagram placements', detail: 'Use Advantage+ placements or intentionally select Instagram Feed, Stories and Reels when the test requires it.' },
+  { step: '06', title: 'Build, preview and publish', detail: 'Upload the creative, check the mobile preview, confirm tracking and CTA, then publish and monitor results.' },
 ];
 
 const moduleIntros = [
@@ -263,7 +296,7 @@ export default function CourseMetaAdsPage() {
   const [activeLesson, setActiveLesson] = useState(0);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
-  const [referenceOpen, setReferenceOpen] = useState<{ label: string; url: string } | null>(null);
+  const [referenceOpen, setReferenceOpen] = useState<{ label: string; url: string; summary: string; points: string[] } | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [checkedAnswer, setCheckedAnswer] = useState(false);
 
@@ -624,12 +657,54 @@ export default function CourseMetaAdsPage() {
                       </div>
                     </div>
 
+                    {activeModule === 5 && (
+                      <div className="rounded-3xl border border-pink-200 bg-gradient-to-br from-pink-50 via-white to-violet-50 p-4 md:p-5">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-fuchsia-600 to-orange-500 text-white flex items-center justify-center shrink-0">
+                            <Images className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.14em] text-fuchsia-700">Instagram visual walkthrough</p>
+                            <h3 className="mt-1 text-lg font-black text-slate-950">See the flow before you open Ads Manager</h3>
+                            <p className="mt-1 text-sm leading-6 text-slate-600">These screenshot-style DRIGHT learning cards show the sequence. They are intentionally simplified so the lesson stays useful even when Meta changes button positions.</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                          {instagramVisualSteps.map((item) => (
+                            <div key={item.step} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                              <div className="bg-slate-950 p-3">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                                  <span className="w-2 h-2 rounded-full bg-amber-300" />
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                  <span className="ml-auto text-[9px] font-black tracking-wider text-slate-400">DRIGHT VISUAL GUIDE</span>
+                                </div>
+                                <div className="mt-3 rounded-xl bg-slate-800 p-3">
+                                  <div className="h-2.5 w-24 rounded-full bg-fuchsia-400/80" />
+                                  <div className="mt-3 space-y-2">
+                                    <div className="h-2 rounded-full bg-white/15" />
+                                    <div className="h-2 rounded-full bg-white/10 w-4/5" />
+                                    <div className="h-8 rounded-lg bg-blue-500/25 border border-blue-400/20" />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="p-4">
+                                <div className="text-xs font-black text-fuchsia-600">STEP {item.step}</div>
+                                <p className="mt-1 font-black text-slate-900">{item.title}</p>
+                                <p className="mt-2 text-xs leading-5 text-slate-500">{item.detail}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {moduleVideos.length > 0 && (
                       <div data-tour="course-video" className="space-y-4">
                         <div>
                           <div className="flex items-center gap-2">
                             <Video className="w-5 h-5 text-primary-600" />
-                            <h3 className="font-black text-slate-950">Watch inside DRIGHT</h3>
+                            <h3 className="font-black text-slate-950">{activeModule === 5 ? 'Instagram Tutorial Up Here' : 'Watch inside DRIGHT'}</h3>
                           </div>
                           <p className="text-sm text-slate-500 mt-1">These videos play here in the course. You do not need to leave DRIGHT or open YouTube.</p>
                         </div>
@@ -868,23 +943,41 @@ export default function CourseMetaAdsPage() {
 
       <AnimatePresence>
         {referenceOpen && (
-          <motion.div className="fixed inset-0 z-[96] bg-slate-950/75 p-3 md:p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="h-full max-w-5xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+          <motion.div className="fixed inset-0 z-[96] bg-slate-950/75 p-3 md:p-8 overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="max-w-2xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-black text-slate-950 truncate">{referenceOpen.label}</p>
-                  <p className="text-xs text-slate-500">Reference viewer</p>
+                  <p className="font-black text-slate-950">{referenceOpen.label}</p>
+                  <p className="text-xs text-slate-500">DRIGHT reference summary</p>
                 </div>
                 <button type="button" onClick={() => setReferenceOpen(null)} className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><X className="w-4 h-4" /></button>
               </div>
-              <iframe
-                src={referenceOpen.url}
-                title={referenceOpen.label}
-                className="w-full flex-1 min-h-0 bg-white"
-                sandbox="allow-forms allow-scripts allow-same-origin allow-popups"
-              />
-              <div className="px-4 py-2 border-t border-slate-100 text-[11px] text-slate-500">
-                Some publishers may block iframe display in browsers. The DRIGHT course itself remains available even if a third-party reference refuses embedding.
+              <div className="p-5 md:p-6">
+                <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+                  <p className="text-sm leading-7 text-blue-950">{referenceOpen.summary}</p>
+                </div>
+                <div className="mt-5">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Key points to remember</p>
+                  <div className="mt-3 space-y-3">
+                    {referenceOpen.points.map((point) => (
+                      <div key={point} className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <p className="text-sm leading-6 text-slate-700">{point}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+                  DRIGHT no longer tries to force this external website into an iframe. Some publishers block embedding with browser security headers, so the useful summary stays inside the course and the official source is optional.
+                </div>
+                <a
+                  href={referenceOpen.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 min-h-[46px] rounded-xl bg-slate-950 text-white px-4 inline-flex items-center justify-center gap-2 text-sm font-black"
+                >
+                  <ExternalLink className="w-4 h-4" /> Open official source
+                </a>
               </div>
             </div>
           </motion.div>
