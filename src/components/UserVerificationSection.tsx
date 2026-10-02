@@ -28,7 +28,7 @@ const STATUS_COLORS: Record<string, string> = {
   expired: 'bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700',
 };
 
-export default function UserVerificationSection() {
+export default function UserVerificationSection({ onChanged }: { onChanged?: () => void } = {}) {
   const { profile } = useAuth();
   const userId = profile?.id ?? null;
   const { profile: kycProfile, loading: profileLoading, refetch: refetchProfile } = useKycProfile(userId);
@@ -56,7 +56,7 @@ export default function UserVerificationSection() {
       if (prof) {
         const sub = await createKycSubmission(prof.id, userId);
         if (sub) setActiveSubmission(sub.id);
-        setSuccess('Verification started. Upload the required identity documents below.');
+        setSuccess('Verification started. Upload the required identity documents below.');\n        onChanged?.();
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start verification');
@@ -70,7 +70,7 @@ export default function UserVerificationSection() {
     try {
       await uploadKycDocument(activeSubmission, userId, docType, file);
       await refetchDocs();
-      setSuccess('Document uploaded successfully.');
+      setSuccess('Document uploaded successfully.');\n      onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -85,7 +85,7 @@ export default function UserVerificationSection() {
     try {
       await replaceKycDocument(oldDocId, activeSubmission, userId, docType, file);
       await refetchDocs();
-      setSuccess('Document replaced successfully.');
+      setSuccess('Document replaced successfully.');\n      onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Replace failed');
     } finally {
@@ -113,7 +113,7 @@ export default function UserVerificationSection() {
 
   return (
     <div className="space-y-5">
-      <OnboardingCenter compact onChanged={() => void refetchProfile()} />
+      <OnboardingCenter compact onChanged={() => { void refetchProfile(); onChanged?.(); }} />
 
       <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
