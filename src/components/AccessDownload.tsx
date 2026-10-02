@@ -4,7 +4,6 @@ import {
   Download, Link2, Loader2, AlertCircle, CheckCircle,
   FileText, Clock, Award, Play, ExternalLink, Lock,
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 import VideoPlayer from './VideoPlayer';
 
 interface AccessDownloadProps {
@@ -32,7 +31,6 @@ interface VerifyResult {
 }
 
 export default function AccessDownload({ orderId, downloadToken, productName, productType, hasPurchased }: AccessDownloadProps) {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,16 +41,20 @@ export default function AccessDownload({ orderId, downloadToken, productName, pr
     setError(null);
     setResult(null);
     try {
+      const { data: { session }, error: sessionError } = await (await import('../lib/supabase')).supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        setError('Your session has expired. Please sign in again.');
+        return;
+      }
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-download`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           download_token: downloadToken,
           order_id: orderId,
-          user_id: user?.id,
         }),
       });
 
@@ -103,6 +105,8 @@ export default function AccessDownload({ orderId, downloadToken, productName, pr
       >
         {loading ? (
           <><Loader2 className="w-5 h-5 animate-spin" />Verifying access...</>
+        ) : productType === 'COURSE' ? (
+          <><Link2 className="w-5 h-5" />Verify & Open Course</>
         ) : (
           <><Download className="w-5 h-5" />Verify & Download</>
         )}
