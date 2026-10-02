@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b1020"/><stop offset=".55" stop-color="#171d3a"/><stop offset="1" stop-color="#3d145f"/></linearGradient><radialGradient id="r"><stop stop-color="#ff4f9a" stop-opacity=".55"/><stop offset="1" stop-color="#ff4f9a" stop-opacity="0"/></radialGradient></defs>
+<rect width="1600" height="900" fill="url(#g)"/><circle cx="1280" cy="170" r="420" fill="url(#r)"/><circle cx="1390" cy="710" r="340" fill="#5e42ff" opacity=".12"/>
+<g fill="none" stroke="#fff" stroke-opacity=".15"><rect x="1030" y="230" rx="36" width="360" height="460"/><rect x="1090" y="310" rx="22" width="240" height="150"/><path d="M1130 520h160M1130 565h120M1130 610h145"/></g>
+<rect x="1055" y="262" width="310" height="12" rx="6" fill="#ff4f9a" opacity=".9"/><circle cx="1083" cy="262" r="6" fill="#fff"/>
+<text x="115" y="190" fill="#ff77b8" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="4">DRIGHT COURSE 001</text>
+<text x="115" y="310" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800">Facebook &amp;</text>
+<text x="115" y="405" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800">Instagram Ads</text>
+<text x="115" y="500" fill="#ff77b8" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="800">Mastery 2026</text>
+<text x="120" y="585" fill="#d9dbea" font-family="Arial, Helvetica, sans-serif" font-size="34">Strategy • Creative • Tracking • Optimization • Scaling</text>
+<rect x="120" y="660" width="550" height="90" rx="45" fill="#fff"/><text x="170" y="720" fill="#11142b" font-family="Arial" font-size="34" font-weight="700">Practical + Phone-Friendly</text>
+</svg>
