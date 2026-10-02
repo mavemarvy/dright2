@@ -94,8 +94,10 @@ Deno.serve(async (req: Request) => {
     if (purpose === "product_purchase" || purpose === "escrow") {
       if (!referenceId) return json({ error: "Order reference is required" }, 400);
       const { data: order, error: orderError } = await supabase
-        .from("orders").select("id,buyer_id,product_id,seller_id,status,final_price,is_free_order")
-        .eq("id", referenceId).maybeSingle();
+        .from("orders")
+        .select("id,buyer_id,product_id,seller_id,status,final_price,is_free_order,source_currency,source_final_price,source_to_usd_rate")
+        .eq("id", referenceId)
+        .maybeSingle();
       if (orderError) return json({ error: "Unable to validate order" }, 500);
       if (!order) return json({ error: "Order not found" }, 404);
       if (order.buyer_id !== user.id) return json({ error: "Order does not belong to authenticated user" }, 403);
@@ -105,19 +107,39 @@ Deno.serve(async (req: Request) => {
       const orderTotal = Number(order.final_price);
       if (order.is_free_order || !Number.isFinite(orderTotal) || orderTotal <= 0) return json({ error: "This order does not require a Paystack payment" }, 400);
 
-      // DRIGHT marketplace prices and wallets are canonical USD. Nigerian Paystack
-      // checkout is settled in NGN, so keep the ledger amount in USD and derive a
-      // separate trusted gateway amount server-side.
+      // Marketplace wallets/ledgers remain canonical USD, but an order may have
+      // been configured in another source currency (for example NGN). Never
+      // relabel a source amount as USD. Paystack receives the trusted source NGN
+      // amount when available; otherwise USD is converted server-side.
       amountMinor = Math.round(orderTotal * 100);
       paymentCurrency = "USD";
       if (Number.isFinite(requestedAmountMinor) && Math.round(requestedAmountMinor) !== amountMinor) {
         return json({ error: "Payment amount does not match the current order total", amount: orderTotal, currency: "USD" }, 409);
       }
 
-      const fx = await getUsdToNgnRate();
-      const gatewayAmount = Math.round(orderTotal * fx.rate * 100) / 100;
-      gatewayAmountMinor = Math.round(gatewayAmount * 100);
-      gatewayCurrency = "NGN";
+      const sourceCurrency = String(order.source_currency || "USD").toUpperCase();
+      const sourceFinalPrice = Number(order.source_final_price);
+      let gatewayAmount: number;
+      let paymentFxRate: number | null = null;
+      let paymentFxSource: string | null = null;
+
+      if (sourceCurrency === "NGN" && Number.isFinite(sourceFinalPrice) && sourceFinalPrice > 0) {
+        gatewayAmount = Math.round(sourceFinalPrice * 100) / 100;
+        gatewayAmountMinor = Math.round(gatewayAmount * 100);
+        gatewayCurrency = "NGN";
+        paymentFxRate = Number(order.source_to_usd_rate || 0) > 0
+          ? 1 / Number(order.source_to_usd_rate)
+          : null;
+        paymentFxSource = "order_source_price";
+      } else {
+        const fx = await getUsdToNgnRate();
+        gatewayAmount = Math.round(orderTotal * fx.rate * 100) / 100;
+        gatewayAmountMinor = Math.round(gatewayAmount * 100);
+        gatewayCurrency = "NGN";
+        paymentFxRate = fx.rate;
+        paymentFxSource = fx.source;
+      }
+
       if (!Number.isSafeInteger(gatewayAmountMinor) || gatewayAmountMinor <= 0) {
         return json({ error: "Unable to calculate the Paystack payment amount" }, 503);
       }
@@ -130,10 +152,12 @@ Deno.serve(async (req: Request) => {
         buyer_id: user.id,
         authoritative_amount: orderTotal,
         authoritative_currency: "USD",
+        source_amount: Number.isFinite(sourceFinalPrice) ? sourceFinalPrice : orderTotal,
+        source_currency: sourceCurrency,
         gateway_amount: gatewayAmount,
         gateway_currency: gatewayCurrency,
-        fx_rate: fx.rate,
-        fx_source: fx.source,
+        fx_rate: paymentFxRate,
+        fx_source: paymentFxSource,
       };
     } else if (["subscription", "affiliate_subscription", "vendor_subscription"].includes(purpose)) {
       const planId = typeof requestedMetadata.plan_id === "string" ? requestedMetadata.plan_id.trim() : "";
