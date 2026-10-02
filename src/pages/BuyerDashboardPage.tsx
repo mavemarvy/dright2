@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import VideoPlayer from '../components/VideoPlayer';
 import { BuyerAnalyticsDashboard } from '../components/analytics/BuyerAnalyticsDashboard';
-import { formatCurrency } from '../lib/currency';
+import { formatCurrency, formatDisplayCurrency } from '../lib/currency';
 
 interface Order {
   id: string;
@@ -22,6 +22,10 @@ interface Order {
   tier_price: number;
   customization_price: number;
   final_price: number;
+  source_currency?: string | null;
+  source_base_price?: number | null;
+  source_final_price?: number | null;
+  source_to_usd_rate?: number | null;
   buyer_requirements: string | null;
   delivery_url: string | null;
   download_token: string | null;
@@ -34,6 +38,7 @@ interface Order {
   product_image?: string | null;
   product_type?: string;
   seller_email?: string;
+  is_official_dright?: boolean;
 }
 
 type Tab = 'active' | 'completed' | 'downloads';
@@ -78,20 +83,29 @@ export default function BuyerDashboardPage() {
       const sellerIds = [...new Set(data.map(o => o.seller_id))];
 
       const [productsRes, sellersRes] = await Promise.all([
-        supabase.from('products').select('id, name, image_url, product_type').in('id', productIds),
+        supabase.from('products').select('id, name, image_url, product_type, specifications').in('id', productIds),
         supabase.from('users').select('id, email').in('id', sellerIds),
       ]);
 
       const productMap = new Map(productsRes.data?.map(p => [p.id, p]) || []);
       const sellerMap = new Map(sellersRes.data?.map(s => [s.id, s.email]) || []);
 
-      setOrders(data.map(o => ({
-        ...o,
-        product_name: productMap.get(o.product_id)?.name || 'Unknown Product',
-        product_image: productMap.get(o.product_id)?.image_url || null,
-        product_type: productMap.get(o.product_id)?.product_type || 'PHYSICAL',
-        seller_email: sellerMap.get(o.seller_id) || 'Unknown',
-      })) as Order[]);
+      setOrders(data.map(o => {
+        const product = productMap.get(o.product_id);
+        const specs = product?.specifications && typeof product.specifications === 'object'
+          ? product.specifications as Record<string, unknown>
+          : {};
+        const isOfficial = specs.official_store === true || specs.first_party === true;
+        return {
+          ...o,
+          product_name: product?.name || 'Unknown Product',
+          product_image: product?.image_url || null,
+          product_type: product?.product_type || 'PHYSICAL',
+          seller_email: isOfficial ? 'Official DRIGHT Store' : (sellerMap.get(o.seller_id) || 'Unknown'),
+          is_official_dright: isOfficial,
+          source_currency: String(o.source_currency || specs.price_currency || specs.source_currency || 'USD').toUpperCase(),
+        };
+      }) as Order[]);
     } catch (err) {
       console.error('Error fetching orders:', err);
     } finally {
@@ -132,21 +146,24 @@ export default function BuyerDashboardPage() {
   };
 
   const handleDownload = async (order: Order) => {
-    if (!order.download_token) return;
     setDownloadLoading(order.id);
     setDownloadError(null);
     setDownloadSuccess(null);
     try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        setDownloadError('Your session has expired. Please sign in again.');
+        return;
+      }
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-download`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          download_token: order.download_token,
+          download_token: order.download_token || undefined,
           order_id: order.id,
-          user_id: user?.id,
         }),
       });
       const data = await response.json();
@@ -164,7 +181,11 @@ export default function BuyerDashboardPage() {
       if (data.video_url) {
         setOrderVideoUrls(prev => ({ ...prev, [order.id]: data.video_url }));
       }
-      setDownloadSuccess(`Access verified! ${data.download_url ? 'Download started.' : 'Access link opened.'} ${data.days_remaining ? `${data.days_remaining} days remaining.` : ''}`);
+      setDownloadSuccess(
+        order.order_type === 'COURSE'
+          ? `Course access verified. ${data.access_link ? 'Course opened.' : 'Use View Product to continue learning.'}`
+          : `Access verified! ${data.download_url ? 'Download started.' : data.access_link ? 'Access link opened.' : ''} ${data.days_remaining ? `${data.days_remaining} days remaining.` : ''}`
+      );
     } catch (err: any) {
       setDownloadError(err.message || 'Failed to verify download');
     } finally {
@@ -180,7 +201,7 @@ export default function BuyerDashboardPage() {
   const completedOrders = orders.filter(o => o.status === 'COMPLETED');
   const downloadOrders = orders.filter(o =>
     (o.order_type === 'DIGITAL' || o.order_type === 'COURSE') &&
-    o.status === 'COMPLETED' && o.download_token
+    o.status === 'COMPLETED'
   );
 
   const displayOrders = tab === 'active' ? activeOrders : tab === 'completed' ? completedOrders : downloadOrders;
@@ -289,7 +310,11 @@ export default function BuyerDashboardPage() {
                       {order.is_free_order ? (
                         <p className="text-lg font-bold text-success">FREE</p>
                       ) : (
-                        <p className="text-lg font-bold text-gray-900">{formatCurrency(Number(order.final_price))}</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {order.source_final_price != null
+                            ? formatDisplayCurrency(Number(order.source_final_price), order.source_currency || 'USD')
+                            : formatCurrency(Number(order.final_price))}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -343,10 +368,13 @@ export default function BuyerDashboardPage() {
                   {/* Actions */}
                   <div className="flex gap-2 mt-3 flex-wrap">
                     {/* Download button for digital */}
-                    {isDigital && order.status === 'COMPLETED' && order.download_token && (
+                    {isDigital && order.status === 'COMPLETED' && (
                       <button onClick={() => handleDownload(order)} disabled={downloadLoading === order.id}
                         className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors min-h-[44px] disabled:opacity-50">
-                        {downloadLoading === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}Verify & Download
+                        {downloadLoading === order.id
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : order.order_type === 'COURSE' ? <Play className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+                        {order.order_type === 'COURSE' ? 'Verify & Open Course' : 'Verify & Download'}
                       </button>
                     )}
 
