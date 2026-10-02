@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   ShoppingCart, Heart, Share2, Check, Loader2, ShoppingBag, Send,
 } from 'lucide-react';
-import { formatCurrency } from '../../lib/currency';
+import { formatDisplayCurrency } from '../../lib/currency';
 import { getListingConfig } from './listingTypes';
 
 interface MobileActionBarProps {
@@ -17,11 +17,12 @@ interface MobileActionBarProps {
   isOwner?: boolean;
   applied?: boolean;
   onApply?: () => void;
+  sourceCurrency?: string;
 }
 
 export default function MobileActionBar({
   listingType, price, isFree, finalPrice, onBuyNow, onShare,
-  checkoutLoading, isOutOfStock, isOwner, applied, onApply,
+  checkoutLoading, isOutOfStock, isOwner, applied, onApply, sourceCurrency = 'USD',
 }: MobileActionBarProps) {
   const config = getListingConfig(listingType);
   const [saved, setSaved] = useState(false);
@@ -62,7 +63,7 @@ export default function MobileActionBar({
           {isFree ? (
             <p className="text-lg font-bold text-success">FREE</p>
           ) : (
-            <p className="text-lg font-bold text-gray-900 truncate">{formatCurrency(displayPrice)}</p>
+            <p className="text-lg font-bold text-gray-900 truncate">{formatDisplayCurrency(displayPrice, sourceCurrency)}</p>
           )}
         </div>
 
