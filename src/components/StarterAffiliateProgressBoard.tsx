@@ -62,7 +62,7 @@ export default function StarterAffiliateProgressBoard({
       : 'Up to ' + progress.product_limit.toLocaleString() + ' affiliate products';
 
   return (
-    <section className={'overflow-hidden rounded-3xl border border-violet-300/50 bg-gradient-to-br from-violet-950 via-indigo-950 to-slate-950 text-white shadow-xl ' + className}>
+    <section className={'w-full max-w-full min-w-0 overflow-hidden rounded-3xl border border-violet-300/50 bg-gradient-to-br from-violet-950 via-indigo-950 to-slate-950 text-white shadow-xl ' + className}>
       <div className={compact ? 'p-4' : 'p-5 sm:p-6'}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
@@ -162,7 +162,7 @@ export default function StarterAffiliateProgressBoard({
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-200">Level path</p>
               <p className="text-[10px] text-white/45">0 → 10</p>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="min-w-0 max-w-full flex gap-2 overflow-x-auto pb-2">
               {progress.levels.map(level => {
                 const unlocked = level.is_unlocked;
                 const current = level.is_current;
