@@ -28,19 +28,42 @@ export function useWishlist(userId: string | undefined) {
 
   const toggleWishlist = useCallback(async (productId: string): Promise<boolean> => {
     if (!userId) return false;
-    if (wishlistIds.has(productId)) {
-      const { error } = await supabase.from('wishlist').delete().eq('user_id', userId).eq('product_id', productId);
-      if (error) return true;
-      setWishlistIds(prev => { const next = new Set(prev); next.delete(productId); return next; });
-      void trackEvent({ event_type: 'wishlist_remove', entity_type: 'product', entity_id: productId, source: 'marketplace' });
-      return false;
+
+    const wasSaved = wishlistIds.has(productId);
+    // Immediate visual feedback, then reconcile with the authenticated server RPC.
+    setWishlistIds(prev => {
+      const next = new Set(prev);
+      if (wasSaved) next.delete(productId); else next.add(productId);
+      return next;
+    });
+
+    const { data, error } = await supabase.rpc('toggle_wishlist_product', {
+      p_product_id: productId,
+    });
+
+    if (error) {
+      setWishlistIds(prev => {
+        const next = new Set(prev);
+        if (wasSaved) next.add(productId); else next.delete(productId);
+        return next;
+      });
+      return wasSaved;
     }
 
-    const { error } = await supabase.from('wishlist').insert({ user_id: userId, product_id: productId });
-    if (error) return false;
-    setWishlistIds(prev => new Set(prev).add(productId));
-    void trackEvent({ event_type: 'wishlist_add', entity_type: 'product', entity_id: productId, source: 'marketplace' });
-    return true;
+    const saved = Boolean((data as Record<string, unknown> | null)?.saved);
+    setWishlistIds(prev => {
+      const next = new Set(prev);
+      if (saved) next.add(productId); else next.delete(productId);
+      return next;
+    });
+
+    void trackEvent({
+      event_type: saved ? 'wishlist_add' : 'wishlist_remove',
+      entity_type: 'product',
+      entity_id: productId,
+      source: 'marketplace',
+    });
+    return saved;
   }, [userId, wishlistIds]);
 
   return { wishlistIds, toggleWishlist, loading, refetch: fetchWishlist };
