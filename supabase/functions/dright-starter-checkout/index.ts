@@ -13,7 +13,7 @@ const URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const PAYSTACK_SECRET = Deno.env.get("PAYSTACK_SECRET_KEY") || "";
-const db = createClient(URL, SERVICE_ROLE);
+const db = createClient(URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
 const PAYSTACK_BASE = "https://api.paystack.co";
 
 function safeText(value: unknown, max = 500): string {
@@ -68,6 +68,56 @@ async function authenticatedUser(req: Request) {
   return data.user;
 }
 
+type Link = {
+  id: string | null;
+  user_id: string;
+  unique_code: string;
+  product_id: string | null;
+  source_type: string | null;
+  source_level: string | null;
+};
+
+async function helperAffiliateLink(userId: string): Promise<Link | null> {
+  const { data: helper } = await db
+    .from("users")
+    .select("id,referral_code,account_status")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!helper || String(helper.account_status || "").toUpperCase() !== "ACTIVE") return null;
+  const code = String(helper.referral_code || "").trim();
+  if (!code) return null;
+
+  let { data: generic } = await db
+    .from("referral_links")
+    .select("id,user_id,unique_code,product_id,source_type,source_level")
+    .eq("user_id", userId)
+    .eq("source_type", "affiliate")
+    .is("product_id", null)
+    .is("campaign_id", null)
+    .is("sales_team_id", null)
+    .limit(1)
+    .maybeSingle();
+
+  if (!generic) {
+    const inserted = await db
+      .from("referral_links")
+      .insert({ user_id: userId, unique_code: code, source_type: "affiliate" })
+      .select("id,user_id,unique_code,product_id,source_type,source_level")
+      .maybeSingle();
+    generic = inserted.data || null;
+  }
+
+  return (generic || {
+    id: null,
+    user_id: userId,
+    unique_code: code,
+    product_id: null,
+    source_type: "affiliate",
+    source_level: null,
+  }) as Link;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -78,26 +128,40 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const checkoutMode = safeText(body.checkout_mode, 64);
     const adminClientMode = checkoutMode === "admin_client_onboarding";
+    const assistedSignupMode = checkoutMode === "assisted_signup";
     const signedInUser = await authenticatedUser(req);
 
     if (signedInUser) {
-      if (!adminClientMode) {
+      if (!adminClientMode && !assistedSignupMode) {
         return json({ error: "DRIGHT Starter Access is only available to new guest users." }, 409);
       }
-      if (!ANON_KEY) return json({ error: "Admin-assisted Starter checkout is not configured." }, 503);
 
-      const caller = createClient(URL, ANON_KEY, {
-        global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
-      });
-      const { data: canManage, error: permissionError } = await caller.rpc("has_dright_permission", {
-        p_module: "subscriptions",
-        p_action: "manage",
-      });
-      if (permissionError || canManage !== true) {
-        return json({ error: "Starter subscription management permission required." }, 403);
+      if (adminClientMode) {
+        if (!ANON_KEY) return json({ error: "Admin-assisted Starter checkout is not configured." }, 503);
+        const caller = createClient(URL, ANON_KEY, {
+          global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
+        });
+        const { data: canManage, error: permissionError } = await caller.rpc("has_dright_permission", {
+          p_module: "subscriptions",
+          p_action: "manage",
+        });
+        if (permissionError || canManage !== true) {
+          return json({ error: "Starter subscription management permission required." }, 403);
+        }
       }
-    } else if (adminClientMode) {
-      return json({ error: "Sign in as an authorized admin to use client Starter checkout." }, 401);
+
+      if (assistedSignupMode) {
+        const { data: helper } = await db
+          .from("users")
+          .select("id,account_status")
+          .eq("id", signedInUser.id)
+          .maybeSingle();
+        if (!helper || String(helper.account_status || "").toUpperCase() !== "ACTIVE") {
+          return json({ error: "Your DRIGHT account must be active to register another user." }, 403);
+        }
+      }
+    } else if (adminClientMode || assistedSignupMode) {
+      return json({ error: "Sign in to DRIGHT to register another user." }, 401);
     }
 
     const security = await verifyTurnstile(safeText(body.turnstile_token, 4096));
@@ -106,7 +170,7 @@ Deno.serve(async (req: Request) => {
     const buyerEmail = safeText(body.buyer_email, 320).toLowerCase();
     const buyerName = safeText(body.buyer_name, 120);
     if (!buyerName || !validEmail(buyerEmail)) {
-      return json({ error: "Your name and a valid email address are required." }, 400);
+      return json({ error: "The new user's full name and valid email address are required." }, 400);
     }
 
     const [{ data: store }, { data: product }] = await Promise.all([
@@ -117,13 +181,16 @@ Deno.serve(async (req: Request) => {
     if (!store?.is_active || !store?.public_visible || !product?.is_enabled || !product?.public_visible) {
       return json({ error: "DRIGHT Starter Access is currently unavailable." }, 409);
     }
+    if (assistedSignupMode && product?.assisted_signup_enabled !== true) {
+      return json({ error: "Register another user is currently disabled by DRIGHT." }, 403);
+    }
 
     const { data: emailExists, error: emailError } = await db.rpc("dright_starter_email_exists", {
       p_email: buyerEmail,
     });
     if (emailError) return json({ error: "Unable to validate new-user eligibility." }, 500);
     if (emailExists === true) {
-      return json({ error: "This product is only for new users. This email is already linked to a DRIGHT account." }, 409);
+      return json({ error: "This email is already linked to a DRIGHT account." }, 409);
     }
 
     const { data: prior } = await db
@@ -135,24 +202,19 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (prior) {
       return json({
-        error: "A completed DRIGHT Starter purchase already exists for this email. Continue to sign up or sign in to claim it.",
+        error: "A completed DRIGHT Starter purchase already exists for this email.",
         reference: prior.payment_reference,
       }, 409);
     }
 
-    type Link = {
-      id: string | null;
-      user_id: string;
-      unique_code: string;
-      product_id: string | null;
-      source_type: string | null;
-      source_level: string | null;
-    };
     let link: Link | null = null;
     const referralLinkId = safeText(body.referral_link_id, 64);
     const trackingCode = safeText(body.tracking_code, 100) || safeText(body.ref_code, 100);
 
-    if (referralLinkId) {
+    if (assistedSignupMode && signedInUser) {
+      link = await helperAffiliateLink(signedInUser.id);
+      if (!link) return json({ error: "Your DRIGHT referral link is not ready yet. Refresh and try again." }, 409);
+    } else if (referralLinkId) {
       const { data } = await db.from("referral_links")
         .select("id,user_id,unique_code,product_id,source_type,source_level")
         .eq("id", referralLinkId)
@@ -219,11 +281,13 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    if (assistedSignupMode && signedInUser && referrerId !== signedInUser.id) {
+      return json({ error: "Assisted signup referral attribution could not be verified." }, 409);
+    }
+
     const amount = Math.max(0, Number(product.price) || 0);
     const currency = String(product.currency || "USD").trim().toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency)) {
-      return json({ error: "DRIGHT Starter currency is not configured correctly." }, 409);
-    }
+    if (!/^[A-Z]{3}$/.test(currency)) return json({ error: "DRIGHT Starter currency is not configured correctly." }, 409);
     if (amount <= 0) return json({ error: "DRIGHT Starter price is not configured." }, 409);
 
     const commissionPercent = Math.max(0, Math.min(100, Number(product.affiliate_commission_percent) || 0));
@@ -231,6 +295,18 @@ Deno.serve(async (req: Request) => {
     const platformRevenue = Math.max(0, Math.round((amount - affiliateAmount) * 100) / 100);
     const trialDays = Math.max(0, Math.min(730, Math.floor(Number(product.included_trial_days) || 0)));
     const reference = `DRG_STARTER_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+
+    const metadata = {
+      first_party_product: true,
+      product_key: "dright_starter_access",
+      category: product.category || "Sign Up",
+      no_marketplace_platform_fee: true,
+      store_slug: store.slug || "dright",
+      user_agent: req.headers.get("user-agent") || null,
+      checkout_mode: assistedSignupMode ? "assisted_signup" : adminClientMode ? "admin_client_onboarding" : "guest_signup",
+      assisted_by_user_id: assistedSignupMode ? signedInUser?.id || null : null,
+      created_by_admin_user_id: adminClientMode ? signedInUser?.id || null : null,
+    };
 
     const { data: purchase, error: purchaseError } = await db.from("dright_starter_purchases").insert({
       buyer_email: buyerEmail,
@@ -251,16 +327,7 @@ Deno.serve(async (req: Request) => {
       payment_reference: reference,
       payment_status: "initialized",
       status: "pending_payment",
-      metadata: {
-        first_party_product: true,
-        product_key: "dright_starter_access",
-        category: product.category || "Sign Up",
-        no_marketplace_platform_fee: true,
-        store_slug: store.slug || "dright",
-        user_agent: req.headers.get("user-agent") || null,
-        checkout_mode: adminClientMode ? "admin_client_onboarding" : "guest_signup",
-        created_by_admin_user_id: adminClientMode ? signedInUser?.id || null : null,
-      },
+      metadata,
     }).select("id").single();
 
     if (purchaseError || !purchase) {
@@ -281,6 +348,9 @@ Deno.serve(async (req: Request) => {
     const appUrl = (Deno.env.get("APP_URL") || req.headers.get("origin") || "").replace(/\/$/, "");
     if (!appUrl) return json({ error: "Application URL is not configured." }, 503);
 
+    const flow = assistedSignupMode ? "assisted_signup" : adminClientMode ? "admin_client_onboarding" : "";
+    const callbackUrl = `${appUrl}/dright/starter/payment?reference=${encodeURIComponent(reference)}${flow ? `&flow=${flow}` : ""}`;
+
     const response = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
       method: "POST",
       headers: {
@@ -292,7 +362,7 @@ Deno.serve(async (req: Request) => {
         amount: Math.round(amount * 100),
         currency,
         reference,
-        callback_url: `${appUrl}/dright/starter/payment?reference=${encodeURIComponent(reference)}${adminClientMode ? "&flow=admin_client_onboarding" : ""}`,
+        callback_url: callbackUrl,
         metadata: {
           purpose: "dright_starter_access",
           starter_purchase_id: purchase.id,
@@ -300,7 +370,7 @@ Deno.serve(async (req: Request) => {
           no_marketplace_platform_fee: true,
           affiliate_commission_percent: commissionPercent,
           included_trial_days: trialDays,
-          checkout_mode: adminClientMode ? "admin_client_onboarding" : "guest_signup",
+          checkout_mode: metadata.checkout_mode,
         },
       }),
     });
@@ -332,6 +402,7 @@ Deno.serve(async (req: Request) => {
       currency,
       affiliate_commission_percent: commissionPercent,
       included_trial_days: trialDays,
+      assisted_signup: assistedSignupMode,
     });
   } catch (error) {
     console.error("[dright-starter-checkout]", error);

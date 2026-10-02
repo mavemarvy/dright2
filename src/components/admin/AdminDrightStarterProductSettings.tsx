@@ -6,6 +6,7 @@ import {
   getAdminDrightStarterAffiliateChallenge,
   getAdminDrightAffiliateLevels,
   updateAdminDrightStarterSettings,
+  setDrightStarterAssistedSignupEnabled,
   updateAdminDrightStarterAffiliateChallenge,
   updateAdminDrightAffiliateLevels,
   type DrightStarterAdminSettings,
@@ -41,13 +42,14 @@ function Toggle({
 }
 
 export default function AdminDrightStarterProductSettings() {
-  const { user } = useAuth();
+  const { user, adminRole } = useAuth();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<DrightStarterAdminSettings | null>(null);
   const [challenge, setChallenge] = useState<DrightStarterAffiliateChallengeSettings | null>(null);
   const [affiliateLevels, setAffiliateLevels] = useState<DrightAffiliateLevelSettings[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [assistedSaving, setAssistedSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [marketingMaterials, setMarketingMaterials] = useState<MarketingMaterialDraft[]>([]);
@@ -108,6 +110,27 @@ export default function AdminDrightStarterProductSettings() {
         image_urls: nextImages,
       },
     });
+  };
+
+  const toggleAssistedSignup = async () => {
+    if (!settings || adminRole !== 'super_admin' || assistedSaving) return;
+    const nextValue = !settings.product.assisted_signup_enabled;
+    setAssistedSaving(true);
+    setMessage(null);
+    try {
+      const saved = await setDrightStarterAssistedSignupEnabled(nextValue);
+      setSettings({
+        ...settings,
+        product: { ...settings.product, assisted_signup_enabled: saved },
+      });
+      setMessage(saved
+        ? 'Pay-to-signup for new users is enabled for registered DRIGHT users.'
+        : 'Pay-to-signup for new users is disabled.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to update assisted signup.');
+    } finally {
+      setAssistedSaving(false);
+    }
   };
 
   const save = async () => {
@@ -304,6 +327,22 @@ export default function AdminDrightStarterProductSettings() {
               onChange={() => setSettings({ ...settings, product: { ...product, public_visible: !product.public_visible } })}
             />
           </label>
+
+          {adminRole === 'super_admin' && (
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Registered users can pay & sign up new users</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Master switch for the “Register another user” option on DRIGHT Starter. Super Admin only.
+                </p>
+              </div>
+              <Toggle
+                value={product.assisted_signup_enabled}
+                disabled={assistedSaving}
+                onChange={() => void toggleAssistedSignup()}
+              />
+            </label>
+          )}
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">

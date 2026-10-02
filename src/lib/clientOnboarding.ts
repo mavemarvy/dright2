@@ -2,9 +2,14 @@ import { supabase } from './supabase';
 
 export interface DrightClientOnboardingState {
   required: boolean;
+  onboarding_type?: 'admin_client' | 'assisted_signup' | string;
   must_change_password?: boolean;
   password_changed_at?: string | null;
+  must_verify_email?: boolean;
+  email_verified_at?: string | null;
+  defer_profile_setup?: boolean;
   must_complete_kyc?: boolean;
+  kyc_required_during_first_login?: boolean;
   kyc_submitted?: boolean;
   kyc_status?: string;
   kyc_submission_status?: string | null;
@@ -65,10 +70,61 @@ export async function createDrightStarterClientAccount(input: {
 }
 
 export async function changeDrightClientTemporaryPassword(newPassword: string): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('admin-client-onboarding', {
+  const { data, error } = await supabase.functions.invoke('starter-assisted-signup', {
     body: { action: 'change_password', new_password: newPassword },
   });
   if (error) throw new Error(await edgeErrorMessage(error, 'Unable to change your password.'));
   const result = (data ?? {}) as { success?: boolean; error?: string };
   if (!result.success) throw new Error(result.error || 'Unable to change your password.');
+}
+
+
+export interface AssistedStarterPurchase {
+  reference: string;
+  full_name: string;
+  email: string;
+  claimed: boolean;
+  included_trial_days: number;
+}
+
+export async function getAssistedStarterPurchase(reference: string): Promise<AssistedStarterPurchase> {
+  const { data, error } = await supabase.functions.invoke('starter-assisted-signup', {
+    body: { action: 'get_purchase', reference: reference.trim() },
+  });
+  if (error) throw new Error(await edgeErrorMessage(error, 'Unable to load the assisted Starter payment.'));
+  const payload = (data ?? {}) as AssistedStarterPurchase & { success?: boolean; error?: string };
+  if (!payload.success) throw new Error(payload.error || 'Unable to load the assisted Starter payment.');
+  return payload;
+}
+
+export async function createAssistedStarterAccount(reference: string, temporaryPassword: string) {
+  const { data, error } = await supabase.functions.invoke('starter-assisted-signup', {
+    body: {
+      action: 'create_account',
+      reference: reference.trim(),
+      temporary_password: temporaryPassword,
+    },
+  });
+  if (error) throw new Error(await edgeErrorMessage(error, 'Unable to create the new DRIGHT account.'));
+  const payload = (data ?? {}) as {
+    success?: boolean;
+    error?: string;
+    account_created?: boolean;
+    credentials_reset?: boolean;
+    email_sent?: boolean;
+    email_error?: string | null;
+    email?: string;
+    full_name?: string;
+  };
+  if (!payload.success) throw new Error(payload.error || 'Unable to create the new DRIGHT account.');
+  return payload;
+}
+
+export async function verifyAssistedSignupEmail(token: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('starter-assisted-signup', {
+    body: { action: 'verify_email', token },
+  });
+  if (error) throw new Error(await edgeErrorMessage(error, 'Unable to verify your email.'));
+  const payload = (data ?? {}) as { success?: boolean; error?: string };
+  if (!payload.success) throw new Error(payload.error || 'Unable to verify your email.');
 }
