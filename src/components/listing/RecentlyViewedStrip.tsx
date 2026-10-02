@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { X, Package, Trash2, History } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatCurrency } from '../../lib/currency';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
-interface RecentlyViewedItem { id: string; name: string; price: number; image_url: string | null; is_free: boolean; category: string; }
+interface RecentlyViewedItem { id: string; name: string; price: number; image_url: string | null; is_free: boolean; category: string; specifications?: Record<string, unknown> | null; }
 
 // Shared with useRecentlyViewed. One browser history, not two competing stores.
 const STORAGE_KEY = 'dright_recently_viewed_ids';
@@ -23,6 +23,7 @@ function clearLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify([])); }
 
 export default function RecentlyViewedStrip() {
   const { user } = useAuth();
+  const { format: formatMoney } = useCurrency();
   const [items, setItems] = useState<RecentlyViewedItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +33,7 @@ export default function RecentlyViewedStrip() {
     (async () => {
       try {
         const { data } = await supabase.from('products')
-          .select('id, name, price, image_url, is_free, category')
+          .select('id, name, price, image_url, is_free, category, specifications')
           .in('id', ids.slice(0, MAX_ITEMS)).eq('is_active', true).eq('is_hidden', false).eq('approval_status', 'approved');
         const itemMap = new Map((data || []).map((p: RecentlyViewedItem) => [p.id, p]));
         setItems(ids.map(id => itemMap.get(id)).filter(Boolean) as RecentlyViewedItem[]);
@@ -43,6 +44,14 @@ export default function RecentlyViewedStrip() {
 
   const handleRemove = (id: string) => { removeFromLocal(id); setItems(prev => prev.filter(item => item.id !== id)); };
   const handleClear = () => { clearLocal(); setItems([]); };
+  const priceLabel = (item: RecentlyViewedItem) => {
+    if (item.is_free) return 'FREE';
+    const specs = item.specifications && typeof item.specifications === 'object'
+      ? item.specifications
+      : {};
+    const sourceCurrency = String(specs.price_currency || specs.source_currency || 'USD').toUpperCase();
+    return formatMoney(Number(item.price || 0), sourceCurrency);
+  };
   if (loading || items.length === 0) return null;
 
   return (
@@ -60,7 +69,7 @@ export default function RecentlyViewedStrip() {
                 {item.image_url ? <img src={item.image_url} alt={item.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <div className="w-full h-full flex items-center justify-center"><Package className="w-8 h-8 text-gray-300" /></div>}
               </div>
               <p className="text-sm font-medium text-gray-900 truncate group-hover:text-primary-600 transition-colors">{item.name}</p>
-              <p className="text-sm font-bold text-primary-600">{item.is_free ? 'FREE' : formatCurrency(Number(item.price))}</p>
+              <p className="text-sm font-bold text-primary-600">{priceLabel(item)}</p>
             </Link>
           </div>
         ))}
