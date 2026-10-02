@@ -10,7 +10,7 @@ import {
 import { getProductBadges, type ProductBadge } from '../../lib/marketplace';
 import { ProfileLink } from '../Social';
 import { supabase } from '../../lib/supabase';
-import { formatDisplayCurrency } from '../../lib/currency';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { getBuyerFacingPrice } from '../../lib/pricing';
 import {
   MARKETPLACE_IMAGE_HEIGHT_CLASSES,
@@ -106,6 +106,7 @@ export default function ProductCard({
   onCopyAffiliate, copiedId, affiliateCode, affiliateEligible = true, affiliateLockLabel = null,
   variant = 'default', cardSize = 'medium',
 }: ProductCardProps) {
+  const { format: formatMoney } = useCurrency();
   const [imgLoaded, setImgLoaded] = useState(false);
   const isJob = isJobCategory(product.category, product.product_type);
   const isService = isServiceCategory(product.category);
@@ -128,6 +129,7 @@ export default function ProductCard({
     : {};
   const isDrightStarter = product.sku === 'DRIGHT-STARTER-ACCESS'
     || specs.system_product_kind === 'dright_starter_access';
+  const isOfficialDright = isDrightStarter || specs.official_store === true || specs.first_party === true;
   const productHref = isDrightStarter ? '/dright/starter' : `/product/${product.id}`;
   const affiliateLeaderboardHref = isDrightStarter
     ? '/challenges?section=affiliate&challenge=starter_affiliate'
@@ -141,11 +143,11 @@ export default function ProductCard({
     product.affiliate_commission_percent ?? specs.affiliate_commission_percent ?? product.commission_rate ?? 0
   );
   const commission = product.is_free ? 0 : (product.price * affiliatePercent) / 100;
-  const priceText = formatDisplayCurrency(displayPrice, sourceCurrency);
+  const priceText = formatMoney(displayPrice, sourceCurrency);
   const oldPriceText = displayOldPrice
-    ? formatDisplayCurrency(displayOldPrice, sourceCurrency)
+    ? formatMoney(displayOldPrice, sourceCurrency)
     : null;
-  const commissionText = formatDisplayCurrency(commission, sourceCurrency);
+  const commissionText = formatMoney(commission, sourceCurrency);
   const officialRating = isDrightStarter && specs.official_rating_enabled
     ? Number(specs.official_rating || 0)
     : 0;
@@ -254,7 +256,7 @@ export default function ProductCard({
       <div className="p-4 flex flex-col flex-1">
         {/* Seller info */}
         <div className="flex items-center gap-2 mb-2.5">
-          {isDrightStarter ? (
+          {isOfficialDright ? (
             <Link to="/dright" className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-xs font-bold text-primary-700 dark:text-primary-300">
               <BadgeCheck className="w-4 h-4 text-emerald-500 shrink-0" />
               Official DRIGHT Store
@@ -350,8 +352,9 @@ export default function ProductCard({
 
         {/* Commission */}
         {!product.is_free && commission > 0 && (
-          <p className="text-xs text-emerald-600 font-medium mb-2.5">
+          <p className="text-xs text-emerald-600 font-semibold mb-2.5">
             Earn {commissionText} commission
+            {affiliatePercent > 0 ? <span className="text-gray-400 dark:text-gray-500 font-medium"> · {affiliatePercent}% affiliate</span> : null}
           </p>
         )}
 
@@ -369,7 +372,7 @@ export default function ProductCard({
               <><ShoppingBag className="w-4 h-4" /> Buy</>
             )}
           </Link>
-          {!isDrightStarter && (
+          {!isOfficialDright && (
             <Link
               to="/chat"
               className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
