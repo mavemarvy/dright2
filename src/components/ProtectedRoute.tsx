@@ -11,6 +11,40 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, isAccountLocked, isAccountBanned } = useAuth();
   const location = useLocation();
+  const isAdminCreatedClient = user?.app_metadata?.created_via === 'admin_client_onboarding';
+  const [clientOnboarding, setClientOnboarding] = useState<DrightClientOnboardingState | null>(null);
+  const [clientOnboardingLoading, setClientOnboardingLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user || !isAdminCreatedClient) {
+      setClientOnboarding({ required: false });
+      setClientOnboardingLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    setClientOnboardingLoading(true);
+    void getMyDrightClientOnboarding()
+      .then((state) => {
+        if (!cancelled) setClientOnboarding(state);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          // Fail closed for an account explicitly marked as admin-created.
+          setClientOnboarding({
+            required: true,
+            must_change_password: true,
+            must_complete_kyc: true,
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setClientOnboardingLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [user?.id, isAdminCreatedClient, location.pathname]);
 
   if (loading) {
     return (
@@ -69,6 +103,22 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         </div>
       </div>
     );
+  }
+
+  if (clientOnboardingLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-muted">
+        <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const clientSetupRequired = isAdminCreatedClient
+    && clientOnboarding?.required === true
+    && (clientOnboarding.must_change_password === true || clientOnboarding.must_complete_kyc === true);
+
+  if (clientSetupRequired && location.pathname !== '/client-account-setup') {
+    return <Navigate to="/client-account-setup" replace />;
   }
 
   return <>{children}</>;
