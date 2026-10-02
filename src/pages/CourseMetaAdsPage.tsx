@@ -96,21 +96,21 @@ const modules: Module[] = [
 const embeddedVideos = [
   {
     module: 0,
-    title: '2026 Meta Ads walkthrough',
-    url: 'https://www.youtube.com/watch?v=gV0J-pWJDVk',
-    description: 'A practical walkthrough to connect the concepts in the foundations module with the current Meta Ads workflow.',
+    title: 'Nigerian English: Meta Ads Full Course 2026',
+    url: 'https://www.youtube.com/watch?v=PCf0_PNpm0s',
+    description: 'Paul Chinedu Nnamani explains Meta Ads in clear English with practical campaign strategy and Nigerian-market context.',
+  },
+  {
+    module: 0,
+    title: 'US English: Facebook & Instagram Ads Tutorial',
+    url: 'https://www.youtube.com/watch?v=jGyo2BJYg3A',
+    description: 'Santrel Media gives a clear English step-by-step walkthrough of Meta Ads Manager, campaign setup, ad sets and ad creation.',
   },
   {
     module: 6,
-    title: 'Phone-first Meta Ads tutorial',
+    title: 'Nigerian English: Run Meta Ads from Your Phone',
     url: 'https://www.youtube.com/watch?v=pIawYyNGZ-E',
-    description: 'Use this while working through creative strategy and phone-first production.',
-  },
-  {
-    module: 6,
-    title: 'Creative testing walkthrough',
-    url: 'https://www.youtube.com/watch?v=QCZoeGUr9vc',
-    description: 'A companion walkthrough for creative testing, iteration and deciding what to test next.',
+    description: 'A phone-first English tutorial for Nigerian businesses, freelancers and beginners using Meta Ads Manager on mobile.',
   },
 ];
 
