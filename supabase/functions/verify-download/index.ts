@@ -14,7 +14,6 @@ const supabase = createClient(
 interface VerifyRequest {
   download_token?: string;
   order_id?: string;
-  user_id?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -23,8 +22,25 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing authentication", verified: false }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const token = authHeader.slice("Bearer ".length);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized", verified: false }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const body: VerifyRequest = await req.json();
-    const { download_token, order_id, user_id } = body;
+    const { download_token, order_id } = body;
 
     if (!download_token && !order_id) {
       return new Response(
@@ -50,10 +66,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 2. Verify the order belongs to the requesting user (if provided)
-    if (user_id && order.buyer_id !== user_id) {
+    // 2. Buyer ownership is derived from the authenticated session. Never trust
+    // a browser-supplied user id for protected digital/course access.
+    if (order.buyer_id !== user.id) {
       return new Response(
-        JSON.stringify({ error: "Access denied. This download link does not belong to your account.", verified: false }),
+        JSON.stringify({ error: "Access denied. This purchase does not belong to your account.", verified: false }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -151,7 +168,7 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: err.message, verified: false }),
+      JSON.stringify({ error: err instanceof Error ? err.message : "Internal error", verified: false }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
