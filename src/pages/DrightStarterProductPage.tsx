@@ -150,12 +150,12 @@ export default function DrightStarterProductPage() {
         }}
       />
 
-      <main className="min-h-screen bg-slate-950 text-white">
+      <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-950 text-white">
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top_right,_#2563eb_0,_transparent_35%),radial-gradient(circle_at_bottom_left,_#10b981_0,_transparent_30%)]" />
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-14">
             <div className="grid lg:grid-cols-[1.15fr_.85fr] gap-8 lg:gap-12 items-start">
-              <div>
+              <div className="min-w-0">
                 <div className="flex flex-wrap gap-2 mb-5">
                   <span className="rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wide">
                     {product.category}
@@ -244,13 +244,13 @@ export default function DrightStarterProductPage() {
                 </div>
               </div>
 
-              <aside className="lg:sticky lg:top-6 rounded-3xl bg-white text-slate-900 shadow-2xl overflow-hidden">
+              <aside className="w-full max-w-full min-w-0 lg:sticky lg:top-6 rounded-3xl bg-white text-slate-900 shadow-2xl overflow-hidden">
                 <div className="p-5 sm:p-6 bg-gradient-to-br from-slate-50 to-white border-b border-slate-100">
                   <div className="flex items-center gap-3">
                     <DrightMark size={54} />
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-500 font-bold">{store.name}</p>
-                      <p className="font-black">{adminClientMode ? 'Client Starter checkout' : 'New-user Starter checkout'}</p>
+                      <p className="font-black">New-user Starter checkout</p>
                     </div>
                   </div>
                 </div>
@@ -284,41 +284,29 @@ export default function DrightStarterProductPage() {
                     </div>
                   ) : (
                     <form onSubmit={startCheckout} className="mt-6 space-y-4">
-                      {adminClientMode && (
-                        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
-                          <p className="font-black">Admin client purchase</p>
-                          <p className="mt-1 leading-5 text-indigo-700">
-                            Pay with the new client's exact name and email. This Starter purchase will remain unclaimed until you create that client's account from the DRIGHT admin store.
-                          </p>
-                        </div>
-                      )}
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{adminClientMode ? 'Client full name' : 'Full name'}</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Full name</label>
                         <input
                           required
                           value={buyerName}
                           onChange={(e) => setBuyerName(e.target.value)}
                           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none"
-                          placeholder={adminClientMode ? "Client's full name" : 'Your full name'}
+                          placeholder="Your full name"
                           autoComplete="name"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{adminClientMode ? 'Client email address' : 'Email address'}</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email address</label>
                         <input
                           required
                           type="email"
                           value={buyerEmail}
                           onChange={(e) => setBuyerEmail(e.target.value)}
                           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none"
-                          placeholder={adminClientMode ? 'client@example.com' : 'you@example.com'}
+                          placeholder="you@example.com"
                           autoComplete="email"
                         />
-                        <p className="text-xs text-slate-400 mt-1.5">
-                          {adminClientMode
-                            ? 'Use this exact email in Create account for client after payment.'
-                            : 'Use this same email when creating your DRIGHT account after payment.'}
-                        </p>
+                        <p className="text-xs text-slate-400 mt-1.5">Use this same email when creating your DRIGHT account after payment.</p>
                       </div>
 
                       <TurnstileWidget
@@ -338,9 +326,7 @@ export default function DrightStarterProductPage() {
                         className="w-full min-h-[52px] rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-black flex items-center justify-center gap-2 disabled:opacity-60"
                       >
                         {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Rocket className="w-5 h-5" />}
-                        {submitting
-                          ? 'Opening secure payment…'
-                          : (adminClientMode ? 'Pay Starter for client · ' : 'Buy for ') + formatCurrencyValue(product.price, product.currency)}
+                        {submitting ? 'Opening secure payment…' : 'Buy for ' + formatCurrencyValue(product.price, product.currency)}
                       </button>
 
                       <div className="flex items-start gap-2 text-xs text-slate-500">
@@ -360,22 +346,16 @@ export default function DrightStarterProductPage() {
                           to={`/dright/starter/payment?reference=${encodeURIComponent(pendingStarterPurchase.reference)}${adminClientMode ? '&flow=admin_client_onboarding' : ''}`}
                           className="text-primary-600 inline-flex items-center gap-1"
                         >
-                          <UserPlus className="w-4 h-4" /> {adminClientMode ? 'Verify client payment' : 'Verify payment & unlock signup'}
+                          <UserPlus className="w-4 h-4" /> Verify payment & unlock signup
                         </Link>
                       ) : (
                         <span className="text-slate-500 inline-flex items-center gap-1">
                           <LockKeyhole className="w-4 h-4" /> Pay first to unlock signup
                         </span>
                       )}
-                      {adminClientMode ? (
-                        <Link to="/admin/dright-store" className="text-slate-700 inline-flex items-center gap-1">
-                          Back to admin store <ArrowRight className="w-4 h-4" />
-                        </Link>
-                      ) : (
-                        <Link to="/sign-in" className="text-slate-700 inline-flex items-center gap-1">
-                          Existing user sign in <ArrowRight className="w-4 h-4" />
-                        </Link>
-                      )}
+                      <Link to="/sign-in" className="text-slate-700 inline-flex items-center gap-1">
+                        Existing user sign in <ArrowRight className="w-4 h-4" />
+                      </Link>
                     </div>
                   </div>
                 </div>
