@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const { data: purchase, error: purchaseError } = await db.from("dright_starter_purchases")
-      .select("id,buyer_email,amount,currency,payment_status,status,processed_at,included_trial_days")
+      .select("id,buyer_email,amount,currency,payment_status,status,processed_at,included_trial_days,metadata")
       .eq("payment_reference", reference)
       .maybeSingle();
 
@@ -47,6 +47,7 @@ Deno.serve(async (req: Request) => {
         amount: Number(purchase.amount),
         currency: purchase.currency,
         included_trial_days: purchase.included_trial_days,
+        checkout_mode: String(purchase.metadata?.checkout_mode || "guest_signup"),
       });
     }
 
@@ -119,6 +120,7 @@ Deno.serve(async (req: Request) => {
       amount: Number(purchase.amount),
       currency: purchase.currency,
       included_trial_days: purchase.included_trial_days,
+      checkout_mode: String(purchase.metadata?.checkout_mode || "guest_signup"),
     });
   } catch (error) {
     console.error("[dright-starter-payment-verify]", error);
