@@ -104,9 +104,12 @@ export default function RegisteredStarterAssistedSignup({ product }: { product: 
     setEmailWarning(null);
     try {
       const result = await createAssistedStarterAccount(purchase.reference, temporaryPassword);
-      setSuccessEmail(result.email || purchase.email);
       if (result.email_sent === false) {
-        setEmailWarning(result.email_error || 'The account was created, but the login email could not be delivered. You can submit again with a new temporary password to retry while the user has not changed it.');
+        setSuccessEmail(null);
+        setEmailWarning(result.email_error || 'The account was created, but the login email could not be delivered. Generate or enter a new temporary password and submit again to retry delivery.');
+      } else {
+        setEmailWarning(null);
+        setSuccessEmail(result.email || purchase.email);
       }
       setTemporaryPassword('');
     } catch (err) {
@@ -179,6 +182,11 @@ export default function RegisteredStarterAssistedSignup({ product }: { product: 
             </div>
           ) : purchase ? (
             <form onSubmit={createAccount} className="space-y-4">
+              {emailWarning && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                  <strong>Account created, email not delivered.</strong> {emailWarning}
+                </div>
+              )}
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                 <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Payment verified</p>
                 <p className="mt-1 font-bold text-slate-900">{purchase.full_name}</p>
