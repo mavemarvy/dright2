@@ -137,9 +137,9 @@ export default function ProductCard({
   const sourceCurrency = String(
     specs.price_currency || specs.source_currency || specs.display_currency || (isDrightStarter ? 'NGN' : 'USD')
   ).toUpperCase();
-  const affiliatePercent = isDrightStarter
-    ? Number(product.affiliate_commission_percent ?? specs.affiliate_commission_percent ?? 0)
-    : Number(product.commission_rate || 0);
+  const affiliatePercent = Number(
+    product.affiliate_commission_percent ?? specs.affiliate_commission_percent ?? product.commission_rate ?? 0
+  );
   const commission = product.is_free ? 0 : (product.price * affiliatePercent) / 100;
   const priceText = formatDisplayCurrency(displayPrice, sourceCurrency);
   const oldPriceText = displayOldPrice
