@@ -41,7 +41,7 @@ import MobileActionBar from '../components/listing/MobileActionBar';
 import { trackListingEvent, trackUserActivity } from '../lib/marketplaceAnalytics';
 import { trackProductView } from '../lib/analyticsService';
 import { useRecentlyViewed } from '../lib/marketplaceHooks';
-import { formatCurrency } from '../lib/currency';
+import { formatDisplayCurrency } from '../lib/currency';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 
@@ -86,6 +86,7 @@ interface RelatedProduct {
   image_url: string | null;
   category: string;
   is_free: boolean;
+  specifications?: Record<string, unknown> | null;
 }
 
 interface Product {
@@ -201,7 +202,7 @@ export default function ProductDetailPage() {
       // Fetch related products (same category, exclude current)
       const { data: related } = await supabase
         .from('products')
-        .select('id, name, price, image_url, category, is_free')
+        .select('id, name, price, image_url, category, is_free, specifications')
         .eq('category', (prod as Product).category)
         .eq('approval_status', 'approved')
         .neq('id', id!)
@@ -302,14 +303,20 @@ export default function ProductDetailPage() {
   const selectedCustomizationObjs = customizations.filter(c => selectedCustomizations.has(c.id));
   const tierPrice = selectedTier ? Number(selectedTier.price) : 0;
   const extraDays = selectedCustomizationObjs.reduce((sum, c) => sum + c.additional_days, 0);
+  const productSpecs = product?.specifications && typeof product.specifications === 'object'
+    ? product.specifications
+    : {};
+  const sourceCurrency = String(
+    productSpecs.price_currency || productSpecs.source_currency || productSpecs.display_currency || 'USD'
+  ).toUpperCase();
 
   const pricing = product ? calculateCheckoutPricing({
     productBasePrice: Number(product.price),
     productIsFree: product.is_free,
     isAdminUploaded: false,
     affiliateCommissionPercent: Number(product.affiliate_commission_percent || 0),
-    adminTaskPercent: Number(product.admin_task_percent || 15),
-    salesTeamTaskPercent: Number(product.sales_team_task_percent || 0),
+    adminTaskPercent: Number(product.admin_task_percent ?? 15),
+    salesTeamTaskPercent: Number(product.sales_team_task_percent ?? 0),
     selectedTierPrice: tierPrice,
     customizationOptions: selectedCustomizationObjs.map(c => ({ additionalPrice: Number(c.additional_price) })),
   }) : null;
@@ -348,10 +355,17 @@ export default function ProductDetailPage() {
         throw new Error(result.error || 'Checkout failed');
       }
       if (result.is_free_order) {
+        setHasPurchased(true);
+        setPurchasedOrder({
+          id: result.order_id,
+          download_token: result.download_token || null,
+        });
         setCheckoutResult({
           success: true,
           orderId: result.order_id,
-          message: 'Free order completed! Check your downloads.',
+          message: product.product_type === 'COURSE'
+            ? 'Free enrollment completed. Your course is unlocked.'
+            : 'Free order completed! Check your downloads.',
         });
       } else {
         navigate(`/checkout/payment?order_id=${result.order_id}&product_id=${product.id}`);
@@ -551,7 +565,13 @@ export default function ProductDetailPage() {
       <div className="grid md:grid-cols-12 gap-6 lg:gap-8">
         {/* Left: Premium Media Gallery */}
         <div className="md:col-span-5 lg:col-span-5 space-y-4">
-          <PremiumGallery images={productImages} alt={product.name} videoUrl={product.demo_video_url} />
+          <PremiumGallery
+            images={productImages}
+            alt={product.name}
+            videoUrl={product.demo_video_url}
+            imageFit={product.product_type === 'COURSE' ? 'contain' : 'cover'}
+            aspect={product.product_type === 'COURSE' ? 'video' : 'square'}
+          />
 
           {isDigital && digitalDetails && (
             <div className="flex flex-wrap gap-2">
@@ -601,6 +621,7 @@ export default function ProductDetailPage() {
                   price={Number(product.price)}
                   isFree={product.is_free}
                   finalPrice={pricing?.finalPrice}
+                  sourceCurrency={sourceCurrency}
                   stockQuantity={product.stock_quantity}
                   quantity={quantity}
                   onIncrement={incrementQty}
@@ -617,7 +638,7 @@ export default function ProductDetailPage() {
               )}
 
               {/* Guest checkout fallback */}
-              {!user && !hasPurchased && (
+              {!user && !hasPurchased && product.product_type !== 'COURSE' && (
                 <div className="mt-3">
                   <GuestCheckout
                     productId={product.id}
@@ -708,7 +729,7 @@ export default function ProductDetailPage() {
           <div className="divide-y divide-gray-100">
             <SpecRow label="Type" value={product.product_type} />
             <SpecRow label="Category" value={product.category} />
-            <SpecRow label="Price" value={product.is_free ? 'Free' : formatCurrency(Number(product.price))} />
+            <SpecRow label="Price" value={product.is_free ? 'Free' : formatDisplayCurrency(Number(product.price), sourceCurrency)} />
             {product.stock_quantity !== null && <SpecRow label="Stock" value={`${product.stock_quantity} units`} />}
             {product.commission_rate > 0 && <SpecRow label="Commission Rate" value={`${product.commission_rate}%`} />}
             {isDigital && digitalDetails && (
@@ -801,7 +822,10 @@ export default function ProductDetailPage() {
                 </div>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate group-hover:text-primary-600 transition-colors">{rp.name}</p>
                 <p className="text-sm font-bold text-primary-600">
-                  {rp.is_free ? 'FREE' : formatCurrency(Number(rp.price))}
+                  {rp.is_free ? 'FREE' : formatDisplayCurrency(
+                    Number(rp.price),
+                    String(rp.specifications?.price_currency || rp.specifications?.source_currency || 'USD').toUpperCase()
+                  )}
                 </p>
               </Link>
             ))}
@@ -819,6 +843,7 @@ export default function ProductDetailPage() {
         price={Number(product.price)}
         isFree={product.is_free}
         finalPrice={pricing?.finalPrice}
+        sourceCurrency={sourceCurrency}
         onBuyNow={handleCheckout}
         checkoutLoading={checkoutLoading}
         isOutOfStock={isOutOfStock}
