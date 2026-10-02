@@ -271,7 +271,7 @@ Deno.serve(async (req: Request) => {
       const existing = existingProfiles[0];
       const { data: existingOnboarding } = await service
         .from("dright_client_onboarding")
-        .select("user_id,starter_purchase_id")
+        .select("user_id,starter_purchase_id,must_change_password")
         .eq("user_id", existing.id)
         .maybeSingle();
       const { data: existingAuth } = await service.auth.admin.getUserById(existing.id);
@@ -279,6 +279,12 @@ Deno.serve(async (req: Request) => {
 
       if (!existingOnboarding || createdVia !== "admin_client_onboarding") {
         return json({ success: false, error: "An account already exists for this email. Sign-in or password recovery must be used instead." }, 409);
+      }
+      if (existingOnboarding.must_change_password !== true) {
+        return json({
+          success: false,
+          error: "This client has already replaced the temporary password. Use the normal account-recovery process instead of resetting it here.",
+        }, 409);
       }
 
       const { error: resetError } = await service.auth.admin.updateUserById(existing.id, {
