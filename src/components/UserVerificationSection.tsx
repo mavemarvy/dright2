@@ -56,7 +56,8 @@ export default function UserVerificationSection({ onChanged }: { onChanged?: () 
       if (prof) {
         const sub = await createKycSubmission(prof.id, userId);
         if (sub) setActiveSubmission(sub.id);
-        setSuccess('Verification started. Upload the required identity documents below.');\n        onChanged?.();
+        setSuccess('Verification started. Upload the required identity documents below.');
+        onChanged?.();
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start verification');
@@ -70,7 +71,8 @@ export default function UserVerificationSection({ onChanged }: { onChanged?: () 
     try {
       await uploadKycDocument(activeSubmission, userId, docType, file);
       await refetchDocs();
-      setSuccess('Document uploaded successfully.');\n      onChanged?.();
+      setSuccess('Document uploaded successfully.');
+      onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -85,7 +87,8 @@ export default function UserVerificationSection({ onChanged }: { onChanged?: () 
     try {
       await replaceKycDocument(oldDocId, activeSubmission, userId, docType, file);
       await refetchDocs();
-      setSuccess('Document replaced successfully.');\n      onChanged?.();
+      setSuccess('Document replaced successfully.');
+      onChanged?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Replace failed');
     } finally {
