@@ -71,6 +71,43 @@ function expectedAdvertiserGrade(sourceType: SourceType, sourceLevel: string | n
   return null;
 }
 
+function productSourceCurrency(product: Record<string, any>): string {
+  const specs = product?.specifications && typeof product.specifications === "object" && !Array.isArray(product.specifications)
+    ? product.specifications as Record<string, unknown>
+    : {};
+  const value = String(specs.price_currency || specs.source_currency || "USD").trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(value) ? value : "USD";
+}
+
+async function getSourceToUsdRate(sourceCurrency: string): Promise<{ rate: number; source: string }> {
+  if (sourceCurrency === "USD") return { rate: 1, source: "identity" };
+
+  const sources = [
+    { url: "https://open.er-api.com/v6/latest/USD", source: "open.er-api.com" },
+    { url: "https://api.exchangerate-api.com/v4/latest/USD", source: "exchangerate-api.com" },
+  ];
+  for (const candidate of sources) {
+    try {
+      const response = await fetch(candidate.url, { headers: { Accept: "application/json" } });
+      if (!response.ok) continue;
+      const payload = await response.json().catch(() => null);
+      const sourcePerUsd = Number(payload?.rates?.[sourceCurrency]);
+      if (Number.isFinite(sourcePerUsd) && sourcePerUsd > 0) {
+        return { rate: 1 / sourcePerUsd, source: candidate.source };
+      }
+    } catch {
+      // Try the next provider.
+    }
+  }
+
+  if (sourceCurrency === "NGN") return { rate: 1 / 1600, source: "dright_ngn_fallback" };
+  throw new Error(`Unable to resolve a safe ${sourceCurrency} to USD conversion rate`);
+}
+
+function money(value: number): number {
+  return Math.round((Number(value) + Number.EPSILON) * 1_000_000) / 1_000_000;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
@@ -248,7 +285,7 @@ Deno.serve(async (req: Request) => {
     const checkoutId = body.checkout_id?.trim() || crypto.randomUUID();
     const { data: existingOrder } = await supabase
       .from("orders")
-      .select("id,status,final_price,is_free_order,download_token")
+      .select("id,status,final_price,is_free_order,download_token,source_currency,source_final_price")
       .eq("checkout_id", checkoutId)
       .maybeSingle();
 
@@ -297,35 +334,53 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 6. Calculate pricing from authoritative product configuration.
-    const isFree = product.is_free || Number(product.price) === 0;
-    const basePrice = Number(product.price);
+    // 6. Calculate source-currency buyer pricing, then normalize the order
+    // ledger amounts to canonical USD. This prevents an NGN 5,000 product from
+    // being interpreted as USD 5,000 while keeping the existing wallet/ledger
+    // accounting contract stable.
+    const sourceCurrency = productSourceCurrency(product);
+    const sourceBasePrice = Number(product.price);
+    const isFree = product.is_free || sourceBasePrice === 0;
     const affiliateCommPercent = Number(product.affiliate_commission_percent || 0);
     const adminTaskPct = Number(product.admin_task_percent || 15);
     const salesTeamPct = Number(product.sales_team_task_percent || 0);
 
-    let affiliateCommissionAmount = 0;
-    let adminTaskAmount = 0;
-    let salesTeamTaskAmount = 0;
-    let finalPrice = 0;
-    let sellerEarnings = 0;
+    let sourceAffiliateCommissionAmount = 0;
+    let sourceAdminTaskAmount = 0;
+    let sourceSalesTeamTaskAmount = 0;
+    let sourceFinalPrice = 0;
+    let sourceSellerEarnings = 0;
 
     if (!isFree) {
-      const subtotal = basePrice + tierPrice + customizationPrice;
+      const sourceSubtotal = sourceBasePrice + tierPrice + customizationPrice;
       const attributedTaskPool = usesAttributedTaskPool(sourceType) && salesTeamPct > 0;
       const effectiveTaskPct = attributedTaskPool ? salesTeamPct : adminTaskPct;
-      const taskAmount = (basePrice * effectiveTaskPct) / 100;
+      const sourceTaskAmount = (sourceBasePrice * effectiveTaskPct) / 100;
 
-      affiliateCommissionAmount = sourceType === "affiliate" ? (basePrice * affiliateCommPercent) / 100 : 0;
-      adminTaskAmount = attributedTaskPool ? 0 : taskAmount;
-      salesTeamTaskAmount = attributedTaskPool ? taskAmount : 0;
-      finalPrice = subtotal + taskAmount;
-      sellerEarnings = basePrice - affiliateCommissionAmount;
+      sourceAffiliateCommissionAmount = sourceType === "affiliate" ? (sourceBasePrice * affiliateCommPercent) / 100 : 0;
+      sourceAdminTaskAmount = attributedTaskPool ? 0 : sourceTaskAmount;
+      sourceSalesTeamTaskAmount = attributedTaskPool ? sourceTaskAmount : 0;
+      sourceFinalPrice = sourceSubtotal + sourceTaskAmount;
+      sourceSellerEarnings = sourceBasePrice - sourceAffiliateCommissionAmount;
     }
 
-    const isFreeOrder = isFree || finalPrice === 0;
+    const isFreeOrder = isFree || sourceFinalPrice === 0;
+    const fx = isFreeOrder ? { rate: 1, source: "free_order" } : await getSourceToUsdRate(sourceCurrency);
+    const toUsd = (value: number) => sourceCurrency === "USD" ? money(value) : money(value * fx.rate);
+
+    const basePrice = toUsd(sourceBasePrice);
+    const canonicalTierPrice = toUsd(tierPrice);
+    const canonicalCustomizationPrice = toUsd(customizationPrice);
+    const affiliateCommissionAmount = toUsd(sourceAffiliateCommissionAmount);
+    const adminTaskAmount = toUsd(sourceAdminTaskAmount);
+    const salesTeamTaskAmount = toUsd(sourceSalesTeamTaskAmount);
+    const finalPrice = toUsd(sourceFinalPrice);
+    const sellerEarnings = toUsd(sourceSellerEarnings);
+
     const orderStatus = isFreeOrder ? "COMPLETED" : "PENDING";
-    const downloadToken = product.product_type === "DIGITAL" ? crypto.randomUUID() : null;
+    const downloadToken = ["DIGITAL", "COURSE"].includes(String(product.product_type || "").toUpperCase())
+      ? crypto.randomUUID()
+      : null;
     const attributionAt = referrerId ? new Date().toISOString() : null;
 
     // 7. Create the order. All attribution comes from server-resolved records.
@@ -338,12 +393,16 @@ Deno.serve(async (req: Request) => {
         order_type: product.product_type || "PHYSICAL",
         status: orderStatus,
         base_price: basePrice,
-        tier_price: tierPrice,
-        customization_price: customizationPrice,
+        tier_price: canonicalTierPrice,
+        customization_price: canonicalCustomizationPrice,
         admin_task_amount: adminTaskAmount,
         sales_team_task_amount: salesTeamTaskAmount,
         affiliate_commission_amount: affiliateCommissionAmount,
         final_price: finalPrice,
+        source_currency: sourceCurrency,
+        source_base_price: sourceBasePrice,
+        source_final_price: sourceFinalPrice,
+        source_to_usd_rate: fx.rate,
         selected_tier_id: selected_tier_id || null,
         customization_options: customizationData.length ? customizationData : null,
         buyer_requirements: buyer_requirements || null,
@@ -425,14 +484,14 @@ Deno.serve(async (req: Request) => {
     const { error: sellerNotificationError } = await supabase.from("notifications").insert({
       user_id: product.uploaded_by,
       title: "New Order Received!",
-      message: `A customer purchased "${product.name}" for ${finalPrice.toFixed(2)}.`,
+      message: `A customer purchased "${product.name}" for ${sourceFinalPrice.toFixed(2)} ${sourceCurrency}.`,
       notification_type: "new_order",
       category: "orders",
       priority: "high",
       metadata: {
         product_title: product.name,
-        product_price: finalPrice,
-        product_currency: "$",
+        product_price: sourceFinalPrice,
+        product_currency: sourceCurrency,
         product_image: product.image_url || null,
         action_url: "/my-orders",
         event_module: "marketplace",
@@ -459,8 +518,8 @@ Deno.serve(async (req: Request) => {
       metadata: {
         product_id,
         product_title: product.name,
-        price: finalPrice,
-        currency: "$",
+        price: sourceFinalPrice,
+        currency: sourceCurrency,
         buyer_id: buyerId,
         order_id: order.id,
         source_type: sourceType,
@@ -479,6 +538,8 @@ Deno.serve(async (req: Request) => {
       order_id: order.id,
       status: orderStatus,
       final_price: finalPrice,
+      source_final_price: sourceFinalPrice,
+      source_currency: sourceCurrency,
       is_free_order: isFreeOrder,
       requires_payment: !isFreeOrder,
       download_token: downloadToken,
@@ -496,13 +557,26 @@ Deno.serve(async (req: Request) => {
       },
       pricing: {
         base_price: basePrice,
-        tier_price: tierPrice,
-        customization_price: customizationPrice,
+        tier_price: canonicalTierPrice,
+        customization_price: canonicalCustomizationPrice,
         admin_task_amount: adminTaskAmount,
         sales_team_task_amount: salesTeamTaskAmount,
         affiliate_commission_amount: affiliateCommissionAmount,
         final_price: finalPrice,
         seller_earnings: sellerEarnings,
+        source: {
+          currency: sourceCurrency,
+          base_price: sourceBasePrice,
+          tier_price: tierPrice,
+          customization_price: customizationPrice,
+          admin_task_amount: sourceAdminTaskAmount,
+          sales_team_task_amount: sourceSalesTeamTaskAmount,
+          affiliate_commission_amount: sourceAffiliateCommissionAmount,
+          final_price: sourceFinalPrice,
+          seller_earnings: sourceSellerEarnings,
+          usd_rate: fx.rate,
+          fx_source: fx.source,
+        },
       },
     });
   } catch (err) {
