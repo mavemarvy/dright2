@@ -14,6 +14,7 @@ import {
   type DrightAffiliateLevelSettings,
 } from '../../lib/drightStarter';
 import { formatCurrencyValue } from '../../lib/currency';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadOfficialProductImages } from '../../lib/drightOfficialStore';
 import MarketingMaterialsEditor from '../listing/MarketingMaterialsEditor';
@@ -43,6 +44,7 @@ function Toggle({
 
 export default function AdminDrightStarterProductSettings() {
   const { user, adminRole } = useAuth();
+  const { supportedCurrencies } = useCurrency();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<DrightStarterAdminSettings | null>(null);
   const [challenge, setChallenge] = useState<DrightStarterAffiliateChallengeSettings | null>(null);
@@ -358,16 +360,19 @@ export default function AdminDrightStarterProductSettings() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-            <input
-              type="text"
-              maxLength={3}
+            <label className="block text-sm font-medium text-gray-700 mb-1">Product currency</label>
+            <select
               value={product.currency}
-              onChange={(e) => setSettings({ ...settings, product: { ...product, currency: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) } })}
-              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500 uppercase"
-              placeholder="USD"
-            />
-            <p className="text-[11px] text-gray-500 mt-1">Payment provider must support this ISO currency.</p>
+              onChange={(e) => setSettings({ ...settings, product: { ...product, currency: e.target.value } })}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-primary-500"
+            >
+              {supportedCurrencies.map((currency) => (
+                <option key={currency.code} value={currency.code}>{currency.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Authoritative Starter price currency. Viewer currency conversion happens separately.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Affiliate commission %</label>
