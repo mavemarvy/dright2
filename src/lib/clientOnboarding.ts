@@ -2,9 +2,14 @@ import { supabase } from './supabase';
 
 export interface DrightClientOnboardingState {
   required: boolean;
+  onboarding_type?: 'admin_client' | 'assisted_signup' | string;
   must_change_password?: boolean;
   password_changed_at?: string | null;
+  must_verify_email?: boolean;
+  email_verified_at?: string | null;
+  defer_profile_setup?: boolean;
   must_complete_kyc?: boolean;
+  kyc_required_during_first_login?: boolean;
   kyc_submitted?: boolean;
   kyc_status?: string;
   kyc_submission_status?: string | null;
@@ -65,7 +70,7 @@ export async function createDrightStarterClientAccount(input: {
 }
 
 export async function changeDrightClientTemporaryPassword(newPassword: string): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('admin-client-onboarding', {
+  const { data, error } = await supabase.functions.invoke('starter-assisted-signup', {
     body: { action: 'change_password', new_password: newPassword },
   });
   if (error) throw new Error(await edgeErrorMessage(error, 'Unable to change your password.'));
