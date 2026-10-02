@@ -6,7 +6,7 @@ import {
   AlertCircle, FileText,
   ChevronLeft, ShoppingBag, Award,
   ChevronDown, Edit2,
-  TrendingUp,
+  BadgeCheck, Store, TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -209,22 +209,37 @@ export default function ProductDetailPage() {
         .limit(8);
       if (related) setRelatedProducts(related as RelatedProduct[]);
 
-      // Fetch seller profile
-      const { data: seller } = await supabase
-        .from('users')
-        .select('email, full_name, avatar_url, average_rating, total_reviews, account_status, store_title')
-        .eq('id', prod.uploaded_by)
-        .maybeSingle();
-      if (seller) {
-        setSellerEmail(seller.email);
+      // First-party DRIGHT inventory must never leak the owner/admin's personal
+      // seller identity onto the public product page.
+      const isOfficialProduct = loadedProduct.specifications?.official_store === true
+        || loadedProduct.specifications?.first_party === true;
+      if (isOfficialProduct) {
+        setSellerEmail('Official DRIGHT Store');
         setSellerProfile({
-          full_name: seller.full_name,
-          avatar_url: seller.avatar_url,
-          email: seller.email,
-          average_rating: Number(seller.average_rating || 0),
-          total_reviews: Number(seller.total_reviews || 0),
-          is_verified: seller.account_status === 'ACTIVE',
+          full_name: 'Official DRIGHT Store',
+          avatar_url: '/dright-logo.webp',
+          email: 'support@dright.store',
+          average_rating: 0,
+          total_reviews: 0,
+          is_verified: true,
         });
+      } else {
+        const { data: seller } = await supabase
+          .from('users')
+          .select('email, full_name, avatar_url, average_rating, total_reviews, account_status, store_title')
+          .eq('id', prod.uploaded_by)
+          .maybeSingle();
+        if (seller) {
+          setSellerEmail(seller.email);
+          setSellerProfile({
+            full_name: seller.full_name,
+            avatar_url: seller.avatar_url,
+            email: seller.email,
+            average_rating: Number(seller.average_rating || 0),
+            total_reviews: Number(seller.total_reviews || 0),
+            is_verified: seller.account_status === 'ACTIVE',
+          });
+        }
       }
 
       // Fetch portfolio items for SERVICE products
@@ -309,6 +324,7 @@ export default function ProductDetailPage() {
   const sourceCurrency = String(
     productSpecs.price_currency || productSpecs.source_currency || productSpecs.display_currency || 'USD'
   ).toUpperCase();
+  const isOfficialDrightProduct = productSpecs.official_store === true || productSpecs.first_party === true;
 
   const pricing = product ? calculateCheckoutPricing({
     productBasePrice: Number(product.price),
@@ -597,9 +613,9 @@ export default function ProductDetailPage() {
             isFree={product.is_free}
             averageRating={Number(product.average_rating || 0)}
             totalReviews={product.total_reviews}
-            sellerVerified={sellerProfile?.is_verified}
-            sellerName={sellerEmail}
-            sellerId={product.uploaded_by}
+            sellerVerified={isOfficialDrightProduct ? true : sellerProfile?.is_verified}
+            sellerName={isOfficialDrightProduct ? 'Official DRIGHT Store' : sellerEmail}
+            sellerId={isOfficialDrightProduct ? undefined : product.uploaded_by}
             viewCount={product.view_count}
             createdAt={product.created_at}
           />
@@ -632,7 +648,7 @@ export default function ProductDetailPage() {
                   checkoutLoading={checkoutLoading}
                   isOutOfStock={isOutOfStock}
                   hasPurchased={hasPurchased && isDigital}
-                  sellerId={product.uploaded_by}
+                  sellerId={isOfficialDrightProduct ? undefined : product.uploaded_by}
                   isOwner={isOwner}
                 />
               )}
@@ -657,23 +673,25 @@ export default function ProductDetailPage() {
 
               {/* Contact Seller + Affiliate + Compare */}
               <div className="mt-3 space-y-2">
-                <ContactSeller
-                  sellerId={product.uploaded_by}
-                  contextType="product_inquiry"
-                  contextId={product.id}
-                  contextData={{
-                    title: product.name,
-                    image_url: product.image_url || null,
-                    price: pricing?.finalPrice || Number(product.price),
-                    seller_name: sellerEmail || undefined,
-                    availability: product.stock_quantity != null
-                      ? product.stock_quantity > 0 ? `${product.stock_quantity} in stock` : 'Out of stock'
-                      : 'Available',
-                  }}
-                  productId={product.id}
-                  productName={product.name}
-                  sellerName={sellerEmail || undefined}
-                />
+                {!isOfficialDrightProduct && (
+                  <ContactSeller
+                    sellerId={product.uploaded_by}
+                    contextType="product_inquiry"
+                    contextId={product.id}
+                    contextData={{
+                      title: product.name,
+                      image_url: product.image_url || null,
+                      price: pricing?.finalPrice || Number(product.price),
+                      seller_name: sellerEmail || undefined,
+                      availability: product.stock_quantity != null
+                        ? product.stock_quantity > 0 ? `${product.stock_quantity} in stock` : 'Out of stock'
+                        : 'Available',
+                    }}
+                    productId={product.id}
+                    productName={product.name}
+                    sellerName={sellerEmail || undefined}
+                  />
+                )}
                 <button onClick={handleCopyAffiliateLink}
                   className={`w-full py-2.5 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
                     copied ? 'bg-success-muted text-success border border-success/20' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-primary-300'
@@ -692,9 +710,27 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Seller Profile Panel */}
+      {/* Seller / official merchant identity */}
       <div className="mt-6">
-        <SellerProfilePanel sellerId={product.uploaded_by} onChat={() => {}} />
+        {isOfficialDrightProduct ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-slate-950 text-white flex items-center justify-center shrink-0">
+              <Store className="w-6 h-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="font-black text-gray-900">Official DRIGHT Store</p>
+                <BadgeCheck className="w-5 h-5 text-emerald-600" />
+              </div>
+              <p className="text-sm text-gray-600 mt-1">First-party DRIGHT product. Product support is handled by DRIGHT, not an individual seller profile.</p>
+            </div>
+            <Link to="/dright/store" className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-700 shrink-0">
+              Official Store
+            </Link>
+          </div>
+        ) : (
+          <SellerProfilePanel sellerId={product.uploaded_by} onChat={() => {}} />
+        )}
       </div>
 
       {/* Product Description */}
