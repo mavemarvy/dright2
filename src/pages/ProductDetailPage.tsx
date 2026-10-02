@@ -326,7 +326,7 @@ export default function ProductDetailPage() {
     productSpecs.price_currency || productSpecs.source_currency || productSpecs.display_currency || 'USD'
   ).toUpperCase();
   const isOfficialDrightProduct = productSpecs.official_store === true || productSpecs.first_party === true;
-  const isMetaAdsCourse = product.product_type === 'COURSE'
+  const isMetaAdsCourse = product?.product_type === 'COURSE'
     && String(productSpecs.course_slug || '').toLowerCase() === 'facebook-instagram-ads-mastery-2026';
 
   const pricing = product ? calculateCheckoutPricing({
