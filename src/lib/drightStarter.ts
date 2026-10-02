@@ -22,6 +22,7 @@ export interface DrightStarterProduct {
   affiliate_commission_percent: number;
   included_trial_days: number;
   guest_only: boolean;
+  assisted_signup_enabled: boolean;
   official_badge_enabled: boolean;
   official_rating_enabled: boolean;
   official_rating: number;
@@ -62,6 +63,7 @@ export interface DrightStarterAdminSettings {
     affiliate_commission_percent: number;
     included_trial_days: number;
     is_enabled: boolean;
+    assisted_signup_enabled: boolean;
     public_visible: boolean;
     guest_only: boolean;
     official_badge_enabled: boolean;
@@ -147,6 +149,14 @@ export async function fetchDrightStarterProduct(): Promise<DrightStarterPublicSe
   };
 }
 
+export async function setDrightStarterAssistedSignupEnabled(enabled: boolean): Promise<boolean> {
+  const { data, error } = await supabase.rpc('super_admin_set_starter_assisted_signup_enabled', {
+    p_enabled: enabled,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 export async function getAdminDrightStarterSettings(): Promise<DrightStarterAdminSettings | null> {
   const { data, error } = await supabase.rpc('admin_get_dright_starter_settings');
   if (error || !data) {
@@ -217,7 +227,7 @@ export async function startDrightStarterCheckout(input: {
   buyerName: string;
   buyerEmail: string;
   turnstileToken: string;
-  checkoutMode?: 'admin_client_onboarding';
+  checkoutMode?: 'admin_client_onboarding' | 'assisted_signup';
 }) {
   const attribution = getAttribution();
   const trackingCode = attribution?.trackingCode || getAffiliateCookie();
