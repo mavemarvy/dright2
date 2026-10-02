@@ -11,14 +11,16 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, isAccountLocked, isAccountBanned } = useAuth();
   const location = useLocation();
-  const isAdminCreatedClient = user?.app_metadata?.created_via === 'admin_client_onboarding';
+  const managedFirstLogin = ['admin_client_onboarding', 'assisted_signup'].includes(
+    String(user?.app_metadata?.created_via || ''),
+  );
   const [clientOnboarding, setClientOnboarding] = useState<DrightClientOnboardingState | null>(null);
   const [clientOnboardingLoading, setClientOnboardingLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!user || !isAdminCreatedClient) {
+    if (!user || !managedFirstLogin) {
       setClientOnboarding({ required: false });
       setClientOnboardingLoading(false);
       return () => { cancelled = true; };
@@ -31,11 +33,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       })
       .catch(() => {
         if (!cancelled) {
-          // Fail closed for an account explicitly marked as admin-created.
+          // Fail closed for an account explicitly marked as a managed first-login account.
           setClientOnboarding({
             required: true,
             must_change_password: true,
-            must_complete_kyc: true,
+            must_verify_email: user?.app_metadata?.created_via === 'assisted_signup',
+            must_complete_kyc: user?.app_metadata?.created_via === 'admin_client_onboarding',
           });
         }
       })
@@ -44,7 +47,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       });
 
     return () => { cancelled = true; };
-  }, [user?.id, isAdminCreatedClient, location.pathname]);
+  }, [user?.id, managedFirstLogin, location.pathname]);
 
   if (loading) {
     return (
@@ -113,9 +116,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  const clientSetupRequired = isAdminCreatedClient
+  const clientSetupRequired = managedFirstLogin
     && clientOnboarding?.required === true
-    && (clientOnboarding.must_change_password === true || clientOnboarding.must_complete_kyc === true);
+    && (
+      clientOnboarding.must_change_password === true
+      || clientOnboarding.must_verify_email === true
+      || clientOnboarding.must_complete_kyc === true
+    );
 
   if (clientSetupRequired && location.pathname !== '/client-account-setup') {
     return <Navigate to="/client-account-setup" replace />;
