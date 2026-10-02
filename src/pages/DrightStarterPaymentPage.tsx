@@ -25,6 +25,7 @@ export default function DrightStarterPaymentPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const reference = params.get('reference') || params.get('trxref') || '';
+  const adminClientFlow = params.get('flow') === 'admin_client_onboarding';
   const [state, setState] = useState<PaymentState>('verifying');
   const [message, setMessage] = useState('Confirming your DRIGHT Starter payment…');
   const [result, setResult] = useState<Result | null>(null);
@@ -49,9 +50,16 @@ export default function DrightStarterPaymentPage() {
       setResult(payload);
       setPendingDrightStarterPurchase(reference);
       setState('success');
-      setMessage('Payment confirmed. Taking you to create your DRIGHT account…');
+      setMessage(adminClientFlow
+        ? 'Payment confirmed. Returning you to Create account for client…'
+        : 'Payment confirmed. Taking you to create your DRIGHT account…');
       redirectTimer.current = setTimeout(() => {
-        navigate('/sign-up?starter_reference=' + encodeURIComponent(reference), { replace: true });
+        navigate(
+          adminClientFlow
+            ? '/admin/dright-store?starter_paid=1&starter_reference=' + encodeURIComponent(reference)
+            : '/sign-up?starter_reference=' + encodeURIComponent(reference),
+          { replace: true },
+        );
       }, 2200);
       return;
     }
@@ -80,7 +88,7 @@ export default function DrightStarterPaymentPage() {
     setState('pending');
     setMessage(payload.message || 'Payment is still processing…');
     timer.current = setTimeout(() => void verify(), 3000);
-  }, [navigate, reference]);
+  }, [adminClientFlow, navigate, reference]);
 
   useEffect(() => {
     void verify();
@@ -144,14 +152,21 @@ export default function DrightStarterPaymentPage() {
 
           {state === 'success' && (
             <Link
-              to={'/sign-up?starter_reference=' + encodeURIComponent(reference)}
+              to={adminClientFlow
+                ? '/admin/dright-store?starter_paid=1&starter_reference=' + encodeURIComponent(reference)
+                : '/sign-up?starter_reference=' + encodeURIComponent(reference)}
               className="min-h-[48px] rounded-xl bg-primary-600 text-white font-black flex items-center justify-center gap-2"
             >
-              <UserPlus className="w-4 h-4" /> Create your DRIGHT account
+              <UserPlus className="w-4 h-4" /> {adminClientFlow ? 'Create account for client' : 'Create your DRIGHT account'}
             </Link>
           )}
 
-          <Link to="/dright/starter" className="text-sm text-slate-500 font-semibold">Back to Starter product</Link>
+          <Link
+            to={adminClientFlow ? '/dright/starter?client_onboarding=1' : '/dright/starter'}
+            className="text-sm text-slate-500 font-semibold"
+          >
+            Back to Starter product
+          </Link>
         </div>
       </section>
     </main>

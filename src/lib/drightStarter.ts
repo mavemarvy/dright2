@@ -217,6 +217,7 @@ export async function startDrightStarterCheckout(input: {
   buyerName: string;
   buyerEmail: string;
   turnstileToken: string;
+  checkoutMode?: 'admin_client_onboarding';
 }) {
   const attribution = getAttribution();
   const trackingCode = attribution?.trackingCode || getAffiliateCookie();
@@ -225,6 +226,7 @@ export async function startDrightStarterCheckout(input: {
       buyer_name: input.buyerName.trim(),
       buyer_email: input.buyerEmail.trim().toLowerCase(),
       turnstile_token: input.turnstileToken,
+      checkout_mode: input.checkoutMode || null,
       tracking_code: trackingCode || null,
       referral_link_id: attribution?.linkId || null,
       visitor_id: getVisitorId() || null,
