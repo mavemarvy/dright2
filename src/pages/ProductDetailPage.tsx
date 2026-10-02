@@ -532,6 +532,7 @@ export default function ProductDetailPage() {
           brandName: 'Dright',
         }}
       />
+      <ListingMarketingMaterialsPanel kind="product" listingId={product.id} />
       <div className="flex items-center justify-between mb-4">
         <Link to="/market" className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 text-sm">
           <ChevronLeft className="w-4 h-4" />Back to Market
