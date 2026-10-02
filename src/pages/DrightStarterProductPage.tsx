@@ -276,10 +276,12 @@ export default function DrightStarterProductPage() {
                         <LockKeyhole className="w-8 h-8 mx-auto text-slate-500" />
                         <p className="font-black mt-3">Starter purchase for your own account is locked</p>
                         <p className="text-sm text-slate-500 mt-1">
-                          You are already registered. You can still use Starter to register another new user below.
+                          {product.assisted_signup_enabled
+                            ? 'You are already registered. You can still use Starter to register another new user below.'
+                            : 'You are already registered. This Starter product is for new users.'}
                         </p>
                       </div>
-                      <RegisteredStarterAssistedSignup product={product} />
+                      {product.assisted_signup_enabled && <RegisteredStarterAssistedSignup product={product} />}
                     </>
                   ) : (
                     <form onSubmit={startCheckout} className="mt-6 space-y-4">
