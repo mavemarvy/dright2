@@ -50,8 +50,8 @@ export default function BuyerDashboardPage() {
   const [tab, setTab] = useState<Tab>('active');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [downloadLoading, setDownloadLoading] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
+  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+  const [downloadSuccesses, setDownloadSuccesses] = useState<Record<string, string>>({});
   const [playingVideoFor, setPlayingVideoFor] = useState<string | null>(null);
   const [orderVideoUrls, setOrderVideoUrls] = useState<Record<string, string>>({});
 
@@ -147,12 +147,20 @@ export default function BuyerDashboardPage() {
 
   const handleDownload = async (order: Order) => {
     setDownloadLoading(order.id);
-    setDownloadError(null);
-    setDownloadSuccess(null);
+    setDownloadErrors(prev => {
+      const next = { ...prev };
+      delete next[order.id];
+      return next;
+    });
+    setDownloadSuccesses(prev => {
+      const next = { ...prev };
+      delete next[order.id];
+      return next;
+    });
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
-        setDownloadError('Your session has expired. Please sign in again.');
+        setDownloadErrors(prev => ({ ...prev, [order.id]: 'Your session has expired. Please sign in again.' }));
         return;
       }
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-download`, {
@@ -168,7 +176,7 @@ export default function BuyerDashboardPage() {
       });
       const data = await response.json();
       if (!response.ok || !data.verified) {
-        setDownloadError(data.error || 'Download verification failed');
+        setDownloadErrors(prev => ({ ...prev, [order.id]: data.error || 'Download verification failed' }));
         return;
       }
       // Auto-open download or access link in a new tab
@@ -181,13 +189,14 @@ export default function BuyerDashboardPage() {
       if (data.video_url) {
         setOrderVideoUrls(prev => ({ ...prev, [order.id]: data.video_url }));
       }
-      setDownloadSuccess(
-        order.order_type === 'COURSE'
+      setDownloadSuccesses(prev => ({
+        ...prev,
+        [order.id]: order.order_type === 'COURSE'
           ? `Course access verified. ${data.access_link ? 'Course opened.' : 'Use View Product to continue learning.'}`
-          : `Access verified! ${data.download_url ? 'Download started.' : data.access_link ? 'Access link opened.' : ''} ${data.days_remaining ? `${data.days_remaining} days remaining.` : ''}`
-      );
+          : `Access verified! ${data.download_url ? 'Download started.' : data.access_link ? 'Access link opened.' : ''} ${data.days_remaining ? `${data.days_remaining} days remaining.` : ''}`,
+      }));
     } catch (err: any) {
-      setDownloadError(err.message || 'Failed to verify download');
+      setDownloadErrors(prev => ({ ...prev, [order.id]: err.message || 'Failed to verify download' }));
     } finally {
       setDownloadLoading(null);
     }
@@ -337,14 +346,14 @@ export default function BuyerDashboardPage() {
                   )}
 
                   {/* Download status messages */}
-                  {downloadError && downloadLoading !== order.id && (
+                  {downloadErrors[order.id] && downloadLoading !== order.id && (
                     <div className="mt-2 rounded-lg p-3 bg-error-muted border border-error/20 text-error flex items-center gap-2 text-sm">
-                      <AlertCircle className="w-4 h-4 shrink-0" />{downloadError}
+                      <AlertCircle className="w-4 h-4 shrink-0" />{downloadErrors[order.id]}
                     </div>
                   )}
-                  {downloadSuccess && downloadLoading !== order.id && !downloadError && (
+                  {downloadSuccesses[order.id] && downloadLoading !== order.id && !downloadErrors[order.id] && (
                     <div className="mt-2 rounded-lg p-3 bg-success-muted border border-success/20 text-success flex items-center gap-2 text-sm">
-                      <CheckCircle className="w-4 h-4 shrink-0" />{downloadSuccess}
+                      <CheckCircle className="w-4 h-4 shrink-0" />{downloadSuccesses[order.id]}
                     </div>
                   )}
 
