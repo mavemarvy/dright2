@@ -29,6 +29,7 @@ import {
 } from '../../lib/listingEngine';
 import { formatCurrencyValue } from '../../lib/currency';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { getDirectGuestSaleSetting, setDirectGuestSaleSetting } from '../../lib/directGuestSale';
 
 type ProductType = 'PHYSICAL' | 'DIGITAL' | 'SERVICE' | 'COURSE';
 
@@ -51,6 +52,7 @@ type ProductEditDraft = {
   official_badge_enabled: boolean;
   official_rating_enabled: boolean;
   official_rating: string;
+  allow_direct_sale: boolean;
 };
 
 function editDraftFromProduct(product: DrightOfficialProduct): ProductEditDraft {
@@ -76,6 +78,7 @@ function editDraftFromProduct(product: DrightOfficialProduct): ProductEditDraft 
     official_badge_enabled: product.official_badge_enabled,
     official_rating_enabled: product.official_rating_enabled,
     official_rating: String(product.official_rating),
+    allow_direct_sale: false,
   };
 }
 
@@ -101,6 +104,7 @@ const DEFAULT_FORM = {
   official_badge_enabled: true,
   official_rating_enabled: false,
   official_rating: '5',
+  allow_direct_sale: true,
 };
 
 export default function AdminDrightOfficialProductManager() {
@@ -251,6 +255,12 @@ export default function AdminDrightOfficialProductManager() {
         image_urls: imageUrls,
       });
 
+      try {
+        await setDirectGuestSaleSetting('product', result.marketplaceProductId, form.allow_direct_sale, 10);
+      } catch (directSaleError) {
+        console.warn('Official product created, but direct-sale setting could not be saved:', directSaleError);
+      }
+
       if (engine && (engine.taxonomy_enabled || engine.dynamic_forms_enabled)) {
         const extension = await upsertMarketplaceListingExtension({
           entityType: 'product',
@@ -350,7 +360,12 @@ export default function AdminDrightOfficialProductManager() {
     setEditMarketingMaterials([]);
     setMessage(null);
     try {
-      setEditMarketingMaterials(await loadListingMarketingMaterials('product', product.marketplace_product_id));
+      const [materials, directSetting] = await Promise.all([
+        loadListingMarketingMaterials('product', product.marketplace_product_id),
+        getDirectGuestSaleSetting('product', product.marketplace_product_id),
+      ]);
+      setEditMarketingMaterials(materials);
+      setEditDraft((current) => current ? { ...current, allow_direct_sale: directSetting.enabled } : current);
     } catch {
       setEditMarketingMaterials([]);
     }
@@ -467,6 +482,11 @@ export default function AdminDrightOfficialProductManager() {
         image_url: editDraft.image_urls[0] || null,
         image_urls: editDraft.image_urls,
       });
+      try {
+        await setDirectGuestSaleSetting('product', product.marketplace_product_id, editDraft.allow_direct_sale, 10);
+      } catch (directSaleError) {
+        console.warn('Product settings saved, but direct-sale setting failed:', directSaleError);
+      }
       if (user?.id) {
         await persistListingMarketingMaterials({
           kind: 'product',
@@ -671,6 +691,11 @@ export default function AdminDrightOfficialProductManager() {
             <ToggleCard label="Enabled" value={form.is_enabled} onChange={() => setForm({ ...form, is_enabled: !form.is_enabled })} />
             <ToggleCard label="Featured" value={form.is_featured} onChange={() => setForm({ ...form, is_featured: !form.is_featured })} />
             <ToggleCard label="Official badge" value={form.official_badge_enabled} onChange={() => setForm({ ...form, official_badge_enabled: !form.official_badge_enabled })} />
+          </div>
+
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <ToggleCard label="Allow affiliates/seller to sell directly to a buyer" value={form.allow_direct_sale} onChange={() => setForm({ ...form, allow_direct_sale: !form.allow_direct_sale })} compact />
+            <p className="mt-2 text-xs leading-5 text-emerald-900">Buyer requires only full name + email. Verified payment creates a private 10-day guest mode, then the buyer can claim the purchase into Orders with the same email.</p>
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-4 flex flex-wrap items-center gap-4">
@@ -957,6 +982,16 @@ export default function AdminDrightOfficialProductManager() {
                   <ToggleCard label="Enabled" value={editDraft.is_enabled} onChange={() => setEditDraft({ ...editDraft, is_enabled: !editDraft.is_enabled })} />
                   <ToggleCard label="Featured" value={editDraft.is_featured} onChange={() => setEditDraft({ ...editDraft, is_featured: !editDraft.is_featured })} />
                   <ToggleCard label="Official badge" value={editDraft.official_badge_enabled} onChange={() => setEditDraft({ ...editDraft, official_badge_enabled: !editDraft.official_badge_enabled })} />
+                </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <ToggleCard
+                    label="Allow affiliates/seller to sell directly to a buyer"
+                    value={editDraft.allow_direct_sale}
+                    onChange={() => setEditDraft({ ...editDraft, allow_direct_sale: !editDraft.allow_direct_sale })}
+                    compact
+                  />
+                  <p className="mt-2 text-xs leading-5 text-emerald-900">Recipient receives a secure 10-day guest-access email after payment and can later claim it into Orders.</p>
                 </div>
 
                 <div className="rounded-xl border border-gray-200 bg-white p-4 flex flex-wrap items-center gap-4">
