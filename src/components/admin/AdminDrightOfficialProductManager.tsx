@@ -41,6 +41,7 @@ type ProductEditDraft = {
   price: string;
   currency: string;
   affiliate_commission_percent: string;
+  expiry_days: string;
   benefits: string;
   image_url: string | null;
   image_urls: string[];
@@ -65,6 +66,7 @@ function editDraftFromProduct(product: DrightOfficialProduct): ProductEditDraft 
     price: String(product.price),
     currency: product.currency,
     affiliate_commission_percent: String(product.affiliate_commission_percent),
+    expiry_days: String(product.expiry_days ?? 365),
     benefits: product.benefits.join('\n'),
     image_url: images[0] || null,
     image_urls: images,
@@ -87,6 +89,7 @@ const DEFAULT_FORM = {
   price: '0',
   currency: 'NGN',
   affiliate_commission_percent: '0',
+  expiry_days: '365',
   stock_quantity: '0',
   tags: '',
   brand: '',
@@ -210,6 +213,7 @@ export default function AdminDrightOfficialProductManager() {
         price: Number(form.price || 0),
         currency: form.currency.toUpperCase(),
         affiliate_commission_percent: Number(form.affiliate_commission_percent || 0),
+        expiry_days: Number(form.expiry_days || 365),
         stock_quantity: Number(form.stock_quantity || 0),
         tags: form.tags.split(',').map((value) => value.trim()).filter(Boolean),
         brand: form.brand.trim() || null,
@@ -369,6 +373,7 @@ export default function AdminDrightOfficialProductManager() {
     const commission = Number(editDraft.affiliate_commission_percent);
     const rating = Number(editDraft.official_rating);
     const currency = editDraft.currency.trim().toUpperCase();
+    const expiryDays = Number(editDraft.expiry_days || 365);
     if (!editDraft.name.trim()) {
       setMessage('Product title is required.');
       return;
@@ -389,6 +394,10 @@ export default function AdminDrightOfficialProductManager() {
       setMessage('Official rating must be between 0 and 5.');
       return;
     }
+    if (['DIGITAL', 'COURSE'].includes(product.product_type) && (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 3650)) {
+      setMessage('Access expiry must be between 1 and 3650 days.');
+      return;
+    }
 
     setEditSaving(true);
     setMessage(null);
@@ -402,6 +411,7 @@ export default function AdminDrightOfficialProductManager() {
         price,
         currency,
         affiliate_commission_percent: commission,
+        expiry_days: expiryDays,
         public_visible: editDraft.public_visible,
         is_enabled: editDraft.is_enabled,
         is_featured: editDraft.is_featured,
@@ -560,11 +570,19 @@ export default function AdminDrightOfficialProductManager() {
             <Field label="Affiliate commission %">
               <input type="number" min="0" max="100" step="0.1" value={form.affiliate_commission_percent} onChange={(e) => setForm({ ...form, affiliate_commission_percent: e.target.value })} className={inputClass} />
             </Field>
-            {form.product_type === 'PHYSICAL' && (
+            {form.product_type === 'PHYSICAL' ? (
               <Field label="Stock">
                 <input type="number" min="0" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} className={inputClass} />
               </Field>
-            )}
+            ) : ['DIGITAL', 'COURSE'].includes(form.product_type) ? (
+              <Field label="Access expiry">
+                <select value={form.expiry_days} onChange={(e) => setForm({ ...form, expiry_days: e.target.value })} className={inputClass}>
+                  <option value="180">6 months (180 days)</option>
+                  <option value="365">1 year (365 days)</option>
+                  <option value="730">2 years (730 days)</option>
+                </select>
+              </Field>
+            ) : null}
           </div>
 
           <div className="grid sm:grid-cols-3 gap-4">
@@ -767,7 +785,7 @@ export default function AdminDrightOfficialProductManager() {
                   </div>
                 </div>
 
-                <div className="grid sm:grid-cols-3 gap-4">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <Field label="Price">
                     <input type="number" min="0" step="0.01" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} className={inputClass} />
                   </Field>
@@ -793,10 +811,30 @@ export default function AdminDrightOfficialProductManager() {
                       className={inputClass}
                     />
                   </Field>
+                  {['DIGITAL', 'COURSE'].includes(product.product_type) && (
+                    <Field label="Course / access expiry">
+                      <div className="space-y-2">
+                        <select value={['180','365','730'].includes(editDraft.expiry_days) ? editDraft.expiry_days : 'custom'} onChange={(e) => {
+                          if (e.target.value !== 'custom') setEditDraft({ ...editDraft, expiry_days: e.target.value });
+                        }} className={inputClass}>
+                          <option value="180">6 months (180 days)</option>
+                          <option value="365">1 year (365 days)</option>
+                          <option value="730">2 years (730 days)</option>
+                          <option value="custom">Custom days</option>
+                        </select>
+                        {!['180','365','730'].includes(editDraft.expiry_days) && (
+                          <input type="number" min="1" max="3650" step="1" value={editDraft.expiry_days} onChange={(e) => setEditDraft({ ...editDraft, expiry_days: e.target.value })} className={inputClass} placeholder="Custom days" />
+                        )}
+                      </div>
+                    </Field>
+                  )}
                 </div>
 
-                <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-900">
+                <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs leading-5 text-blue-900">
                   <strong>Currency authority:</strong> this source currency is the real product price. Marketplace may convert it for a viewer, but checkout preserves this amount and only normalizes internally for DRIGHT ledger accounting.
+                  {['DIGITAL', 'COURSE'].includes(product.product_type) && (
+                    <div className="mt-1"><strong>Access expiry:</strong> buyer access starts from the completed purchase date and expires after {editDraft.expiry_days || '365'} days.</div>
+                  )}
                 </div>
 
                 <Field label="Benefits / what buyers get">
