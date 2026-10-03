@@ -127,7 +127,17 @@ export default function GuestCheckout({
       };
 
       if (error || result.error || !result.success) {
-        throw new Error(result.error || error?.message || 'Unable to start guest checkout');
+        let message = result.error || 'Unable to start guest checkout';
+
+        const context = (error as { context?: Response } | null)?.context;
+        if (context && typeof context.clone === 'function') {
+          const payload = await context.clone().json().catch(() => null) as { error?: string; message?: string } | null;
+          message = payload?.error || payload?.message || message;
+        } else if (error?.message && !/non-2xx status code/i.test(error.message)) {
+          message = error.message;
+        }
+
+        throw new Error(message);
       }
 
       if (result.free) {
