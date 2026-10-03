@@ -68,7 +68,7 @@ export type PremiumCourseConfig = {
   title: string;
   subtitle: string;
   promise: string;
-  accent: 'instagram' | 'whatsapp';
+  accent: 'instagram' | 'whatsapp' | 'youtube' | 'google';
   productPath?: string;
   modules: PremiumCourseModule[];
   videos: PremiumCourseVideo[];
@@ -78,25 +78,48 @@ export type PremiumCourseConfig = {
 };
 
 function accentClasses(accent: PremiumCourseConfig['accent']) {
-  return accent === 'whatsapp'
-    ? {
-        badge: 'bg-emerald-400/15 text-emerald-200',
-        solid: 'bg-emerald-600 hover:bg-emerald-700',
-        text: 'text-emerald-600',
-        border: 'border-emerald-200',
-        soft: 'bg-emerald-50',
-        gradient: 'from-emerald-500 to-teal-400',
-        hero: 'from-emerald-950/55 via-slate-950 to-teal-950/40',
-      }
-    : {
-        badge: 'bg-fuchsia-400/15 text-fuchsia-200',
-        solid: 'bg-fuchsia-600 hover:bg-fuchsia-700',
-        text: 'text-fuchsia-600',
-        border: 'border-fuchsia-200',
-        soft: 'bg-fuchsia-50',
-        gradient: 'from-fuchsia-500 to-orange-400',
-        hero: 'from-indigo-950/50 via-slate-950 to-fuchsia-950/45',
-      };
+  if (accent === 'whatsapp') {
+    return {
+      badge: 'bg-emerald-400/15 text-emerald-200',
+      solid: 'bg-emerald-600 hover:bg-emerald-700',
+      text: 'text-emerald-600',
+      border: 'border-emerald-200',
+      soft: 'bg-emerald-50',
+      gradient: 'from-emerald-500 to-teal-400',
+      hero: 'from-emerald-950/55 via-slate-950 to-teal-950/40',
+    };
+  }
+  if (accent === 'youtube') {
+    return {
+      badge: 'bg-red-400/15 text-red-200',
+      solid: 'bg-red-600 hover:bg-red-700',
+      text: 'text-red-600',
+      border: 'border-red-200',
+      soft: 'bg-red-50',
+      gradient: 'from-red-600 to-rose-400',
+      hero: 'from-red-950/70 via-slate-950 to-zinc-950',
+    };
+  }
+  if (accent === 'google') {
+    return {
+      badge: 'bg-blue-400/15 text-blue-200',
+      solid: 'bg-blue-600 hover:bg-blue-700',
+      text: 'text-blue-600',
+      border: 'border-blue-200',
+      soft: 'bg-blue-50',
+      gradient: 'from-blue-600 to-emerald-400',
+      hero: 'from-blue-950/70 via-slate-950 to-emerald-950/35',
+    };
+  }
+  return {
+    badge: 'bg-fuchsia-400/15 text-fuchsia-200',
+    solid: 'bg-fuchsia-600 hover:bg-fuchsia-700',
+    text: 'text-fuchsia-600',
+    border: 'border-fuchsia-200',
+    soft: 'bg-fuchsia-50',
+    gradient: 'from-fuchsia-500 to-orange-400',
+    hero: 'from-indigo-950/50 via-slate-950 to-fuchsia-950/45',
+  };
 }
 
 export default function PremiumCourseLearningPage({ config }: { config: PremiumCourseConfig }) {
