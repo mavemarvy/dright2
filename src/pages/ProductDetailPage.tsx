@@ -122,7 +122,7 @@ interface Product {
 export default function ProductDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [productImages, setProductImages] = useState<string[]>([]);
   const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
@@ -181,6 +181,10 @@ export default function ProductDetailPage() {
         .from('products').select('*').eq('id', id!).maybeSingle();
       if (prodErr || !prod) { setError('Product not found'); return; }
       const loadedProduct = prod as Product;
+      if (loadedProduct.is_hidden && !isAdmin && loadedProduct.uploaded_by !== user?.id) {
+        setError('This product is not currently available to the public.');
+        return;
+      }
       if (loadedProduct.specifications?.system_product_kind === 'dright_starter_access') {
         navigate(`/dright/starter${window.location.search}`, { replace: true });
         return;
@@ -574,6 +578,18 @@ export default function ProductDetailPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {product.is_hidden && isAdmin && (
+        <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-black text-sm">ADMIN ONLY • NOT PUBLIC</p>
+              <p className="text-xs leading-5 mt-1">You can see this product because you are a DRIGHT admin. Regular marketplace users cannot see or open it while Admin only visibility is enabled.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Moderation Banner for Owner */}
       <ModerationBanner
