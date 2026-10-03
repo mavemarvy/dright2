@@ -289,6 +289,7 @@ export default function CourseMetaAdsPage() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
+  const [adminPreview, setAdminPreview] = useState(false);
   const [productId, setProductId] = useState('');
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -339,23 +340,44 @@ export default function CourseMetaAdsPage() {
         return;
       }
       setChecking(true);
-      const { data } = await supabase.rpc('get_public_dright_official_products');
-      const items = Array.isArray(data) ? data : [];
-      const course = items.find((item: any) => item.slug === COURSE_SLUG);
+      setAdminPreview(false);
+
+      const { data: publicData } = await supabase.rpc('get_public_dright_official_products');
+      const publicItems = Array.isArray(publicData) ? publicData : [];
+      let course = publicItems.find((item: any) => item.slug === COURSE_SLUG);
+      let isAdminPreview = false;
+
+      if (!course?.marketplace_product_id) {
+        const { data: adminData, error: adminError } = await supabase.rpc('admin_list_dright_official_products');
+        if (!adminError && Array.isArray(adminData)) {
+          const hiddenCourse = adminData.find((item: any) => item.slug === COURSE_SLUG);
+          if (hiddenCourse?.marketplace_product_id) {
+            course = hiddenCourse;
+            isAdminPreview = true;
+            setAdminPreview(true);
+            setAllowed(true);
+          }
+        }
+      }
+
       if (!course?.marketplace_product_id) {
         setChecking(false);
         return;
       }
+
       setProductId(String(course.marketplace_product_id));
-      const { data: order } = await supabase
-        .from('orders')
-        .select('id')
-        .eq('product_id', course.marketplace_product_id)
-        .eq('buyer_id', user.id)
-        .eq('status', 'COMPLETED')
-        .limit(1)
-        .maybeSingle();
-      setAllowed(Boolean(order));
+
+      if (!isAdminPreview) {
+        const { data: order } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('product_id', course.marketplace_product_id)
+          .eq('buyer_id', user.id)
+          .eq('status', 'COMPLETED')
+          .limit(1)
+          .maybeSingle();
+        setAllowed(Boolean(order));
+      }
       setChecking(false);
     };
     void check();
@@ -470,7 +492,7 @@ export default function CourseMetaAdsPage() {
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{modules.length} modules</span>
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{lessons.length} lessons</span>
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{embeddedVideos.length} embedded videos</span>
-                <span className="rounded-full bg-emerald-400/15 text-emerald-200 px-3 py-1.5 text-xs font-bold">Buyer-only access</span>
+                <span className="rounded-full bg-emerald-400/15 text-emerald-200 px-3 py-1.5 text-xs font-bold">{adminPreview ? 'ADMIN PREVIEW • NOT PUBLIC' : 'Buyer-only access'}</span>
               </div>
             </div>
 
