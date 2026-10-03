@@ -92,7 +92,7 @@ const DEFAULT_FORM = {
   brand: '',
   condition: 'new',
   benefits: '',
-  public_visible: true,
+  public_visible: false,
   is_enabled: true,
   is_featured: true,
   official_badge_enabled: true,
@@ -588,8 +588,12 @@ export default function AdminDrightOfficialProductManager() {
             <textarea rows={4} value={form.benefits} onChange={(e) => setForm({ ...form, benefits: e.target.value })} className={inputClass} placeholder="One benefit per line" />
           </Field>
 
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+            <strong>Visibility:</strong> new Official DRIGHT products start in <strong>Admin only</strong> test mode. Turn on Public visibility only after you finish testing the product, checkout and buyer access.
+          </div>
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <ToggleCard label="Public" value={form.public_visible} onChange={() => setForm({ ...form, public_visible: !form.public_visible })} />
+            <ToggleCard label={form.public_visible ? 'Public visibility' : 'Admin only'} value={form.public_visible} onChange={() => setForm({ ...form, public_visible: !form.public_visible })} />
             <ToggleCard label="Enabled" value={form.is_enabled} onChange={() => setForm({ ...form, is_enabled: !form.is_enabled })} />
             <ToggleCard label="Featured" value={form.is_featured} onChange={() => setForm({ ...form, is_featured: !form.is_featured })} />
             <ToggleCard label="Official badge" value={form.official_badge_enabled} onChange={() => setForm({ ...form, official_badge_enabled: !form.official_badge_enabled })} />
@@ -634,6 +638,9 @@ export default function AdminDrightOfficialProductManager() {
                 <h3 className="font-black text-gray-900">{product.name}</h3>
                 {product.official_badge_enabled && <BadgeCheck className="w-4 h-4 text-emerald-500" />}
                 <span className="text-[10px] rounded-full bg-gray-100 text-gray-600 px-2 py-1">{product.product_type}</span>
+                <span className={`text-[10px] rounded-full px-2 py-1 font-black ${product.public_visible ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+                  {product.public_visible ? 'PUBLIC' : 'ADMIN ONLY'}
+                </span>
               </div>
               <p className="text-xs text-gray-500 mt-1 line-clamp-2">{product.subtitle || product.description}</p>
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-600">
@@ -707,9 +714,14 @@ export default function AdminDrightOfficialProductManager() {
               </div>
             </div>
             <div className="flex sm:flex-col gap-2 shrink-0">
-              <button type="button" onClick={() => toggleProduct(product, 'public_visible')} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold inline-flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => toggleProduct(product, 'public_visible')}
+                className={`rounded-xl border px-3 py-2 text-xs font-black inline-flex items-center justify-center gap-1.5 ${product.public_visible ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}
+                title={product.public_visible ? 'Visible to the public. Tap to switch to admin-only testing.' : 'Visible only to DRIGHT admins. Tap to publish publicly.'}
+              >
                 {product.public_visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                {product.public_visible ? 'Public' : 'Hidden'}
+                {product.public_visible ? 'Public' : 'Admin only'}
               </button>
               <button type="button" onClick={() => toggleProduct(product, 'is_enabled')} className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold">
                 {product.is_enabled ? 'Enabled' : 'Disabled'}
@@ -731,7 +743,7 @@ export default function AdminDrightOfficialProductManager() {
                 <div>
                   <h4 className="font-black text-gray-900">Full product settings</h4>
                   <p className="text-xs text-gray-500 mt-1">
-                    Same commercial controls as Starter: source currency, price, commission, presentation, gallery and public state. Price 0 automatically becomes a free product.
+                    Same commercial controls as Starter: source currency, price, commission, presentation, gallery and visibility. Keep unfinished products in Admin only mode while you test them. Price 0 automatically becomes a free product.
                   </p>
                 </div>
 
@@ -836,7 +848,7 @@ export default function AdminDrightOfficialProductManager() {
                 </div>
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <ToggleCard label="Public" value={editDraft.public_visible} onChange={() => setEditDraft({ ...editDraft, public_visible: !editDraft.public_visible })} />
+                  <ToggleCard label={editDraft.public_visible ? 'Public visibility' : 'Admin only'} value={editDraft.public_visible} onChange={() => setEditDraft({ ...editDraft, public_visible: !editDraft.public_visible })} />
                   <ToggleCard label="Enabled" value={editDraft.is_enabled} onChange={() => setEditDraft({ ...editDraft, is_enabled: !editDraft.is_enabled })} />
                   <ToggleCard label="Featured" value={editDraft.is_featured} onChange={() => setEditDraft({ ...editDraft, is_featured: !editDraft.is_featured })} />
                   <ToggleCard label="Official badge" value={editDraft.official_badge_enabled} onChange={() => setEditDraft({ ...editDraft, official_badge_enabled: !editDraft.official_badge_enabled })} />
