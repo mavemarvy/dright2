@@ -13,6 +13,7 @@ import DynamicListingFields from '../components/listing/DynamicListingFields';
 import TaxonomyCategoryPicker from '../components/listing/TaxonomyCategoryPicker';
 import MarketingMaterialsEditor from '../components/listing/MarketingMaterialsEditor';
 import { loadListingMarketingMaterials, persistListingMarketingMaterials, type MarketingMaterialDraft } from '../lib/marketingMaterials';
+import { getDirectGuestSaleSetting, setDirectGuestSaleSetting } from '../lib/directGuestSale';
 import {
   fetchMarketplaceEngineSettings,
   fetchMarketplaceAttributes,
@@ -66,6 +67,9 @@ export default function EditProductPage() {
   const [marketingMaterials, setMarketingMaterials] = useState<MarketingMaterialDraft[]>([]);
   const [savingMarketingMaterials, setSavingMarketingMaterials] = useState(false);
   const [marketingMessage, setMarketingMessage] = useState<string | null>(null);
+  const [allowAffiliateDirectSale, setAllowAffiliateDirectSale] = useState(false);
+  const [savingDirectSale, setSavingDirectSale] = useState(false);
+  const [directSaleMessage, setDirectSaleMessage] = useState<string | null>(null);
 
   const [editHistory, setEditHistory] = useState<ProductEditLog[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -100,6 +104,13 @@ export default function EditProductPage() {
       setStockQuantity(p.stock_quantity !== null ? String(p.stock_quantity) : '');
       setCategory(p.category);
       setImagePreview(p.image_url);
+
+      try {
+        const direct = await getDirectGuestSaleSetting('product', p.id);
+        setAllowAffiliateDirectSale(direct.enabled);
+      } catch {
+        setAllowAffiliateDirectSale(false);
+      }
 
       try {
         const materials = await loadListingMarketingMaterials('product', p.id);
@@ -213,6 +224,22 @@ export default function EditProductPage() {
       setMarketingMessage(materialError instanceof Error ? materialError.message : 'Unable to save marketing materials.');
     } finally {
       setSavingMarketingMaterials(false);
+    }
+  };
+
+  const saveDirectSaleSetting = async () => {
+    if (!product || savingDirectSale) return;
+    setSavingDirectSale(true);
+    setDirectSaleMessage(null);
+    try {
+      await setDirectGuestSaleSetting('product', product.id, allowAffiliateDirectSale, 10);
+      setDirectSaleMessage(allowAffiliateDirectSale
+        ? 'Direct-to-buyer assisted sales enabled with 10-day guest mode.'
+        : 'Direct-to-buyer assisted sales disabled.');
+    } catch (settingError) {
+      setDirectSaleMessage(settingError instanceof Error ? settingError.message : 'Unable to save direct-sale setting.');
+    } finally {
+      setSavingDirectSale(false);
     }
   };
 
@@ -433,6 +460,24 @@ export default function EditProductPage() {
               <AIGenerateButton type="description" productName={name} category={category} description={description} onApply={setDescription} />
               <AIGenerateButton type="rewrite" content={description} onApply={setDescription} />
             </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-black text-gray-900">Allow affiliates/seller to sell directly to a buyer</p>
+                <p className="mt-1 text-xs leading-5 text-gray-500">
+                  The payer enters only the buyer's full name and email. After verified payment the buyer gets a private 10-day guest-access link and can later claim the purchase into Orders using the same email.
+                </p>
+              </div>
+              <button type="button" onClick={() => setAllowAffiliateDirectSale(v => !v)} className={'relative w-12 h-7 rounded-full shrink-0 ' + (allowAffiliateDirectSale ? 'bg-emerald-600' : 'bg-gray-300')}>
+                <span className={'absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform ' + (allowAffiliateDirectSale ? 'translate-x-5' : '')} />
+              </button>
+            </div>
+            {directSaleMessage && <p className="mt-3 text-xs font-medium text-emerald-700">{directSaleMessage}</p>}
+            <button type="button" onClick={saveDirectSaleSetting} disabled={savingDirectSale} className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-800 disabled:opacity-50">
+              {savingDirectSale ? 'Saving…' : 'Save direct-sale setting'}
+            </button>
           </div>
 
           {/* Price + Stock */}
