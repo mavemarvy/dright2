@@ -18,6 +18,9 @@ interface GuestCheckoutProps {
   customizationOptionIds?: string[];
   buyerRequirements?: string;
   trigger: React.ReactNode;
+  assistedMode?: boolean;
+  guestAccessDays?: number;
+  sourceCurrency?: string;
 }
 
 export default function GuestCheckout({
@@ -29,6 +32,9 @@ export default function GuestCheckout({
   customizationOptionIds = [],
   buyerRequirements,
   trigger,
+  assistedMode = false,
+  guestAccessDays = 10,
+  sourceCurrency = 'USD',
 }: GuestCheckoutProps) {
   const { user } = useAuth();
   const { format } = useCurrency();
@@ -46,7 +52,7 @@ export default function GuestCheckout({
   const [turnstileKey, setTurnstileKey] = useState(0);
 
   const finalPrice = Math.max(0, productPrice - discount);
-  const requiresShipping = String(productType || '').toUpperCase() === 'PHYSICAL';
+  const requiresShipping = String(productType || '').toUpperCase() === 'PHYSICAL' && !assistedMode;
 
   const handleValidateCoupon = async () => {
     if (!couponCode || !user) return;
@@ -108,6 +114,7 @@ export default function GuestCheckout({
           referral_link_id: getAttribution()?.linkId || null,
           visitor_id: getVisitorId() || null,
           session_id: getSessionId() || null,
+          assisted_mode: assistedMode,
         },
       });
 
@@ -176,7 +183,7 @@ export default function GuestCheckout({
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-primary-600" />
-                  {step === 'form' ? 'Guest Checkout' : 'Order Created'}
+                  {step === 'form' ? (assistedMode ? 'Sell Directly to Buyer' : 'Guest Checkout') : (assistedMode ? 'Buyer Access Created' : 'Order Created')}
                 </h3>
                 <button onClick={reset} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
                   <X className="w-5 h-5" />
@@ -194,17 +201,17 @@ export default function GuestCheckout({
                       <div className="flex items-center gap-2">
                         {discount > 0 ? (
                           <>
-                            <span className="text-sm text-gray-400 line-through">{format(productPrice, 'USD')}</span>
-                            <span className="text-lg font-bold text-primary-600">{format(finalPrice, 'USD')}</span>
+                            <span className="text-sm text-gray-400 line-through">{format(productPrice, sourceCurrency)}</span>
+                            <span className="text-lg font-bold text-primary-600">{format(finalPrice, sourceCurrency)}</span>
                           </>
                         ) : (
-                          <span className="text-lg font-bold text-primary-600">{format(productPrice, 'USD')}</span>
+                          <span className="text-lg font-bold text-primary-600">{format(productPrice, sourceCurrency)}</span>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {user && (
+                  {user && !assistedMode && (
                     <div>
                       <label className="text-sm font-medium text-gray-700 mb-1.5 block">Coupon Code</label>
                       <div className="flex gap-2">
@@ -227,16 +234,26 @@ export default function GuestCheckout({
                       )}
                       {discount > 0 && (
                         <div className="mt-2 bg-green-50 rounded-lg p-2 text-xs text-green-600">
-                          <div className="flex justify-between"><span>Original:</span><span>{format(productPrice, 'USD')}</span></div>
-                          <div className="flex justify-between"><span>Discount:</span><span>-{format(discount, 'USD')}</span></div>
-                          <div className="flex justify-between font-bold"><span>Final:</span><span>{format(finalPrice, 'USD')}</span></div>
+                          <div className="flex justify-between"><span>Original:</span><span>{format(productPrice, sourceCurrency)}</span></div>
+                          <div className="flex justify-between"><span>Discount:</span><span>-{format(discount, sourceCurrency)}</span></div>
+                          <div className="flex justify-between font-bold"><span>Final:</span><span>{format(finalPrice, sourceCurrency)}</span></div>
                         </div>
                       )}
                     </div>
                   )}
 
+                  {assistedMode && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                      <p className="text-sm font-bold text-emerald-900">Pay for a buyer using only their name and email</p>
+                      <p className="mt-1 text-xs leading-5 text-emerald-800">
+                        DRIGHT emails the buyer a private access link after verified payment. Guest mode lasts {guestAccessDays} days.
+                        No password is created. If they later sign in or create a buyer account with the same email, the purchase moves into Orders and their saved course progress continues.
+                      </p>
+                    </div>
+                  )}
+
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">Full Name</label>
+                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">{assistedMode ? 'Buyer Full Name' : 'Full Name'}</label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <input
@@ -244,14 +261,14 @@ export default function GuestCheckout({
                         required
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="John Doe"
+                        placeholder={assistedMode ? 'Buyer full name' : 'John Doe'}
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-200"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">Email</label>
+                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">{assistedMode ? 'Buyer Gmail / Email' : 'Email'}</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <input
@@ -259,7 +276,7 @@ export default function GuestCheckout({
                         required
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="you@example.com"
+                        placeholder={assistedMode ? 'buyer@gmail.com' : 'you@example.com'}
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-200"
                       />
                     </div>
@@ -285,7 +302,9 @@ export default function GuestCheckout({
                   ) : (
                     <div className="rounded-xl bg-blue-50 border border-blue-100 p-3">
                       <p className="text-xs text-blue-700 font-medium">
-                        No shipping address is required for this {String(productType || 'digital').toLowerCase()} purchase.
+                        {assistedMode
+                          ? 'No password is required. The buyer receives delivery/access instructions by email after payment.'
+                          : `No shipping address is required for this ${String(productType || 'digital').toLowerCase()} purchase.`}
                       </p>
                     </div>
                   )}
@@ -293,7 +312,9 @@ export default function GuestCheckout({
                   <div className="bg-gray-50 rounded-xl p-3 flex items-center gap-2">
                     <Lock className="w-4 h-4 text-gray-400 shrink-0" />
                     <p className="text-xs text-gray-500">
-                      No account needed. We'll create your order first; payment completion is confirmed separately by the secure payment flow.
+                      {assistedMode
+                        ? `The buyer gets ${guestAccessDays} days of guest access after verified payment. They should create or sign in to a DRIGHT buyer account with the same email before guest mode expires.`
+                        : "No account needed. We'll create your order first; payment completion is confirmed separately by the secure payment flow."}
                     </p>
                   </div>
 
@@ -315,7 +336,7 @@ export default function GuestCheckout({
                     disabled={submitting}
                     className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl py-3.5 disabled:opacity-50 transition-colors"
                   >
-                    {submitting ? 'Creating order...' : `Continue — ${format(finalPrice, 'USD')}`}
+                    {submitting ? 'Creating order...' : assistedMode ? `Pay for Buyer — ${format(finalPrice, sourceCurrency)}` : `Continue — ${format(finalPrice, sourceCurrency)}`}
                   </button>
                 </form>
               ) : (
@@ -328,28 +349,30 @@ export default function GuestCheckout({
                   >
                     <CheckCircle2 className="w-8 h-8 text-success" />
                   </motion.div>
-                  <h4 className="text-lg font-bold text-gray-900 mb-2">Order Created</h4>
+                  <h4 className="text-lg font-bold text-gray-900 mb-2">{assistedMode ? 'Buyer access is ready' : 'Order Created'}</h4>
                   <p className="text-sm text-gray-500 mb-1">
-                    Your order for <span className="font-medium text-gray-700">{productName}</span> has been created.
+                    {assistedMode ? 'The buyer order for ' : 'Your order for '}<span className="font-medium text-gray-700">{productName}</span> has been created.
                   </p>
                   <p className="text-xs text-gray-400 mb-6">
-                    Order contact: {orderEmail}. A sale is recorded only after verified payment completion.
+                    Order contact: {orderEmail}. {assistedMode ? `After verified payment, DRIGHT emails the buyer their private ${guestAccessDays}-day guest-access link.` : 'A sale is recorded only after verified payment completion.'}
                   </p>
 
                   <div className="bg-primary-50 rounded-xl p-4 mb-6 text-left">
                     <p className="text-sm font-medium text-primary-900 mb-1">
-                      Create an account to track your order, contact the seller, leave reviews, and more.
+                      {assistedMode
+                        ? 'No password was created for the buyer. They can use guest mode immediately, then sign in or create a buyer account with the same email to keep the purchase in Orders.'
+                        : 'Create an account to track your order, contact the seller, leave reviews, and more.'}
                     </p>
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    <Link
+                    {!assistedMode && <Link
                       to="/sign-up"
                       onClick={reset}
                       className="bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl py-3 transition-colors"
                     >
                       Sign Up
-                    </Link>
+                    </Link>}
                     <button
                       onClick={reset}
                       className="text-gray-500 text-sm font-medium hover:text-gray-700 transition-colors"
