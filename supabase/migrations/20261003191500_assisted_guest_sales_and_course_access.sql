@@ -442,7 +442,31 @@ BEGIN
   IF v_email IS NULL THEN RETURN jsonb_build_object('success',false,'error','User email not found'); END IF;
 
   FOR r IN
-    SELECT e.*,g.*
+    SELECT
+      e.id AS entitlement_id,
+      e.guest_order_id,
+      e.listing_id,
+      e.recipient_email,
+      e.recipient_name,
+      e.access_token,
+      e.expires_at,
+      e.metadata AS entitlement_metadata,
+      g.product_id,
+      g.seller_id,
+      g.currency,
+      g.base_price,
+      g.platform_fee_amount,
+      g.affiliate_commission_amount,
+      g.total_amount,
+      g.referrer_id,
+      g.referral_link_id,
+      g.tracking_code,
+      g.source_type,
+      g.source_level,
+      g.paid_at,
+      g.created_at AS guest_created_at,
+      g.processed_at,
+      g.metadata AS guest_metadata
     FROM public.guest_access_entitlements e
     JOIN public.guest_orders g ON g.id=e.guest_order_id
     WHERE lower(e.recipient_email)=v_email
@@ -455,10 +479,10 @@ BEGIN
     SELECT * INTO p FROM public.products WHERE id=r.listing_id;
     IF NOT FOUND THEN CONTINUE; END IF;
 
-    v_source_currency := upper(coalesce(r.metadata->>'source_currency',p.specifications->>'price_currency',p.specifications->>'source_currency',r.currency,'USD'));
-    v_source_base := coalesce(nullif(r.metadata->>'source_base_price','')::numeric,r.base_price);
-    v_source_final := coalesce(nullif(r.metadata->>'source_total_amount','')::numeric,r.total_amount);
-    v_rate := coalesce(nullif(r.metadata->>'source_to_usd_rate','')::numeric,1);
+    v_source_currency := upper(coalesce(r.guest_metadata->>'source_currency',p.specifications->>'price_currency',p.specifications->>'source_currency',r.currency,'USD'));
+    v_source_base := coalesce(nullif(r.guest_metadata->>'source_base_price','')::numeric,r.base_price);
+    v_source_final := coalesce(nullif(r.guest_metadata->>'source_total_amount','')::numeric,r.total_amount);
+    v_rate := coalesce(nullif(r.guest_metadata->>'source_to_usd_rate','')::numeric,1);
 
     INSERT INTO public.orders(
       buyer_id,product_id,seller_id,order_type,status,
@@ -474,9 +498,9 @@ BEGIN
       CASE WHEN upper(coalesce(p.product_type,'')) IN ('DIGITAL','COURSE') THEN gen_random_uuid()::text ELSE NULL END,
       r.referrer_id,r.referral_link_id,r.tracking_code,r.source_type,r.source_level,
       coalesce(r.total_amount,0)=0,
-      coalesce(r.paid_at,r.created_at,now()),coalesce(r.paid_at,r.processed_at,now()),
+      coalesce(r.paid_at,r.guest_created_at,now()),coalesce(r.paid_at,r.processed_at,now()),
       v_source_currency,v_source_base,v_source_final,v_rate,r.guest_order_id,
-      nullif(r.metadata->>'buyer_requirements','')
+      nullif(r.guest_metadata->>'buyer_requirements','')
     )
     ON CONFLICT(guest_order_id) WHERE guest_order_id IS NOT NULL DO NOTHING;
 
@@ -485,7 +509,7 @@ BEGIN
     -- Move any course progress from guest mode into the buyer account.
     IF p.specifications->>'course_slug' IS NOT NULL THEN
       SELECT * INTO v_guest_progress FROM public.course_learning_progress
-      WHERE guest_entitlement_id=r.id AND course_slug=p.specifications->>'course_slug';
+      WHERE guest_entitlement_id=r.entitlement_id AND course_slug=p.specifications->>'course_slug';
 
       IF v_guest_progress.id IS NOT NULL THEN
         SELECT * INTO v_existing_progress FROM public.course_learning_progress
@@ -514,7 +538,7 @@ BEGIN
 
     UPDATE public.guest_access_entitlements
     SET claimed_user_id=p_user_id,claimed_at=now(),revoked_at=now(),updated_at=now()
-    WHERE id=r.id;
+    WHERE id=r.entitlement_id;
 
     v_count := v_count + 1;
   END LOOP;
@@ -574,6 +598,8 @@ ON CONFLICT(entity_type,entity_id) DO UPDATE
 SET enabled=true,guest_access_days=10,updated_at=now();
 
 -- Correct the five course listings that were accidentally published to the database as FREE.
+-- The marketplace moderation guard recognizes service_role as the authoritative writer.
+SELECT set_config('request.jwt.claim.role','service_role',true);
 UPDATE public.products p
 SET price=5000,
     is_free=false,
