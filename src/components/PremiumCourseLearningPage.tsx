@@ -103,6 +103,8 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [adminPreview, setAdminPreview] = useState(false);
+  const [expired, setExpired] = useState(false);
+  const [expiryDays, setExpiryDays] = useState<number | null>(null);
   const [productId, setProductId] = useState('');
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -155,6 +157,8 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
       }
       setChecking(true);
       setAdminPreview(false);
+      setExpired(false);
+      setExpiryDays(null);
 
       const { data: publicData } = await supabase.rpc('get_public_dright_official_products');
       const publicItems = Array.isArray(publicData) ? publicData : [];
@@ -185,15 +189,33 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
       setProductId(String(course.marketplace_product_id));
 
       if (!isAdminPreview) {
-        const { data: order } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('product_id', course.marketplace_product_id)
-          .eq('buyer_id', user.id)
-          .eq('status', 'COMPLETED')
-          .limit(1)
-          .maybeSingle();
-        setAllowed(Boolean(order));
+        const [{ data: order }, { data: digitalDetails }] = await Promise.all([
+          supabase
+            .from('orders')
+            .select('id, created_at')
+            .eq('product_id', course.marketplace_product_id)
+            .eq('buyer_id', user.id)
+            .eq('status', 'COMPLETED')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from('digital_product_details')
+            .select('expiry_days')
+            .eq('product_id', course.marketplace_product_id)
+            .maybeSingle(),
+        ]);
+        const days = Number(digitalDetails?.expiry_days || 365);
+        setExpiryDays(days);
+        if (order?.created_at) {
+          const purchasedAt = new Date(order.created_at).getTime();
+          const expiresAt = purchasedAt + days * 24 * 60 * 60 * 1000;
+          const isExpired = Date.now() > expiresAt;
+          setExpired(isExpired);
+          setAllowed(!isExpired);
+        } else {
+          setAllowed(false);
+        }
       }
       setChecking(false);
     };
@@ -265,10 +287,14 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
     return (
       <div className="max-w-xl mx-auto px-4 py-16 text-center">
         <div className="w-16 h-16 rounded-2xl bg-gray-100 mx-auto flex items-center justify-center"><Lock className="w-7 h-7 text-gray-500" /></div>
-        <h1 className="text-2xl font-black text-gray-900 mt-5">Course access locked</h1>
-        <p className="text-gray-600 mt-2">Purchase {config.title} from the Official DRIGHT Store to unlock this learning portal.</p>
+        <h1 className="text-2xl font-black text-gray-900 mt-5">{expired ? 'Course access expired' : 'Course access locked'}</h1>
+        <p className="text-gray-600 mt-2">
+          {expired
+            ? `Your paid access period has ended after ${expiryDays || 365} days. Repurchase or renew the course to continue learning.`
+            : `Purchase ${config.title} from the Official DRIGHT Store to unlock this learning portal.`}
+        </p>
         <div className="mt-6 flex gap-3 justify-center">
-          {productId && <Link to={'/product/' + productId} className={'px-5 py-3 rounded-xl text-white font-bold ' + colors.solid}>View product</Link>}
+          {productId && <Link to={'/product/' + productId} className={'px-5 py-3 rounded-xl text-white font-bold ' + colors.solid}>{expired ? 'Renew access' : 'View product'}</Link>}
           <Link to="/dright/store" className="px-5 py-3 rounded-xl border border-gray-200 font-bold text-gray-700">Official Store</Link>
         </div>
       </div>
