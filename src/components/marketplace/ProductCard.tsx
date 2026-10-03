@@ -51,6 +51,7 @@ export interface MarketplaceProduct {
   sku?: string | null;
   affiliate_commission_percent?: number | null;
   specifications?: Record<string, unknown> | null;
+  admin_only?: boolean;
 }
 
 interface ProductCardProps {
@@ -188,6 +189,11 @@ export default function ProductCard({
 
         {/* Badges top-left */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5">
+          {product.admin_only && (
+            <span className="text-[10px] font-black px-2 py-1 rounded-full shadow-sm bg-amber-500 text-black inline-flex items-center gap-1">
+              <LockKeyhole className="w-3 h-3" /> ADMIN ONLY
+            </span>
+          )}
           {isDrightStarter && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm bg-emerald-600 text-white inline-flex items-center gap-1">
               <BadgeCheck className="w-3 h-3" /> Official DRIGHT
