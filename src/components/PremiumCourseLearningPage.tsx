@@ -102,6 +102,7 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
   const colors = accentClasses(config.accent);
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
+  const [adminPreview, setAdminPreview] = useState(false);
   const [productId, setProductId] = useState('');
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -153,23 +154,47 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
         return;
       }
       setChecking(true);
-      const { data } = await supabase.rpc('get_public_dright_official_products');
-      const items = Array.isArray(data) ? data : [];
-      const course = items.find((item: any) => item.slug === config.slug);
+      setAdminPreview(false);
+
+      const { data: publicData } = await supabase.rpc('get_public_dright_official_products');
+      const publicItems = Array.isArray(publicData) ? publicData : [];
+      let course = publicItems.find((item: any) => item.slug === config.slug);
+      let isAdminPreview = false;
+
+      // Hidden Official DRIGHT products are intentionally absent from the public RPC.
+      // An authorized DRIGHT admin may still open the buyer portal for QA without
+      // publishing the product or creating a fake purchase.
+      if (!course?.marketplace_product_id) {
+        const { data: adminData, error: adminError } = await supabase.rpc('admin_list_dright_official_products');
+        if (!adminError && Array.isArray(adminData)) {
+          const hiddenCourse = adminData.find((item: any) => item.slug === config.slug);
+          if (hiddenCourse?.marketplace_product_id) {
+            course = hiddenCourse;
+            isAdminPreview = true;
+            setAdminPreview(true);
+            setAllowed(true);
+          }
+        }
+      }
+
       if (!course?.marketplace_product_id) {
         setChecking(false);
         return;
       }
+
       setProductId(String(course.marketplace_product_id));
-      const { data: order } = await supabase
-        .from('orders')
-        .select('id')
-        .eq('product_id', course.marketplace_product_id)
-        .eq('buyer_id', user.id)
-        .eq('status', 'COMPLETED')
-        .limit(1)
-        .maybeSingle();
-      setAllowed(Boolean(order));
+
+      if (!isAdminPreview) {
+        const { data: order } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('product_id', course.marketplace_product_id)
+          .eq('buyer_id', user.id)
+          .eq('status', 'COMPLETED')
+          .limit(1)
+          .maybeSingle();
+        setAllowed(Boolean(order));
+      }
       setChecking(false);
     };
     void check();
@@ -269,7 +294,7 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{config.modules.length} modules</span>
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{lessons.length} lessons</span>
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{config.videos.length} embedded tutorials</span>
-                <span className={'rounded-full px-3 py-1.5 text-xs font-bold ' + colors.badge}>Buyer-only access</span>
+                <span className={'rounded-full px-3 py-1.5 text-xs font-bold ' + colors.badge}>{adminPreview ? 'ADMIN PREVIEW • NOT PUBLIC' : 'Buyer-only access'}</span>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -423,12 +448,14 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
               </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-5">
-              <div className="flex items-center gap-2"><FileDown className="w-5 h-5" /><h3 className="font-black">Downloads & tools</h3></div>
-              <div className="mt-3 grid sm:grid-cols-2 gap-2">
-                {config.downloads.map((item) => <a key={item.href} href={item.href} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 flex items-center justify-between gap-3"><span><span className="block text-sm font-bold">{item.label}</span><span className="text-[11px] text-slate-400">{item.type}</span></span><FileDown className="w-4 h-4 text-slate-400" /></a>)}
-              </div>
-            </section>
+            {config.downloads.length > 0 && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex items-center gap-2"><FileDown className="w-5 h-5" /><h3 className="font-black">Downloads & tools</h3></div>
+                <div className="mt-3 grid sm:grid-cols-2 gap-2">
+                  {config.downloads.map((item) => <a key={item.href} href={item.href} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 flex items-center justify-between gap-3"><span><span className="block text-sm font-bold">{item.label}</span><span className="text-[11px] text-slate-400">{item.type}</span></span><FileDown className="w-4 h-4 text-slate-400" /></a>)}
+                </div>
+              </section>
+            )}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <h3 className="font-black">Official reference library</h3>
