@@ -18,6 +18,7 @@ import DynamicListingFields from '../components/listing/DynamicListingFields';
 import TaxonomyCategoryPicker from '../components/listing/TaxonomyCategoryPicker';
 import MarketingMaterialsEditor from '../components/listing/MarketingMaterialsEditor';
 import { persistListingMarketingMaterials, type MarketingMaterialDraft } from '../lib/marketingMaterials';
+import { setDirectGuestSaleSetting } from '../lib/directGuestSale';
 import {
   fetchMarketplaceEngineSettings,
   fetchMarketplaceAttributes,
@@ -79,6 +80,7 @@ interface FormState {
   description: string;
   applicationInstructions: string;
   affiliateCommission: string;
+  allowAffiliateDirectSale: boolean;
 }
 
 interface JobDraftStorage extends Partial<FormState> {
@@ -124,6 +126,7 @@ const INITIAL_FORM: FormState = {
   description: '',
   applicationInstructions: '',
   affiliateCommission: '10',
+  allowAffiliateDirectSale: false,
 };
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
@@ -454,6 +457,12 @@ export default function JobPostingPage() {
       }).select('id').single();
       if (insertError) throw insertError;
 
+      try {
+        await setDirectGuestSaleSetting('job', jobData.id, form.allowAffiliateDirectSale, 10);
+      } catch (directSaleError) {
+        console.warn('Job direct-sale/referral setting could not be saved:', directSaleError);
+      }
+
       if (
         engineSettings
         && (
@@ -673,6 +682,24 @@ export default function JobPostingPage() {
                       <input type="text" value={form.region} onChange={e => update('region', e.target.value)}
                         placeholder="e.g., Lagos, Nigeria or Remote (Worldwide)"
                         className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all" />
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <button
+                        type="button"
+                        onClick={() => update('allowAffiliateDirectSale', !form.allowAffiliateDirectSale)}
+                        className="w-full flex items-center justify-between gap-4 text-left"
+                      >
+                        <div>
+                          <p className="text-sm font-black text-emerald-950">Allow affiliates to share/serve this listing directly to a user</p>
+                          <p className="mt-1 text-xs leading-5 text-emerald-800">
+                            Optional listing-level permission. It uses the same DRIGHT direct-delivery framework. Jobs remain application listings rather than paid product orders.
+                          </p>
+                        </div>
+                        <span className={'relative w-12 h-7 rounded-full shrink-0 ' + (form.allowAffiliateDirectSale ? 'bg-emerald-600' : 'bg-gray-300')}>
+                          <span className={'absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ' + (form.allowAffiliateDirectSale ? 'translate-x-5' : '')} />
+                        </span>
+                      </button>
                     </div>
                   </div>
                 )}
