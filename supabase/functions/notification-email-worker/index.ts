@@ -85,7 +85,7 @@ async function syncCampaignRecipient(
 type OutboxRow = {
   id: string;
   notification_id: string | null;
-  user_id: string;
+  user_id: string | null;
   recipient_email: string;
   notification_type: string;
   category: string;
@@ -503,10 +503,14 @@ async function processOne(id: string) {
     : "";
   if (eventType === "new_login" && row.priority !== "critical") {
     const cooldownStart = new Date(Date.now() - 15 * 60_000).toISOString();
-    const { data: recentDuplicates } = await db
+    let duplicateQuery = db
       .from("notification_email_outbox")
       .select("id,metadata,sent_at")
-      .eq("user_id", row.user_id)
+      .eq("recipient_email", row.recipient_email);
+    duplicateQuery = row.user_id
+      ? duplicateQuery.eq("user_id", row.user_id)
+      : duplicateQuery.is("user_id", null);
+    const { data: recentDuplicates } = await duplicateQuery
       .eq("recipient_email", row.recipient_email)
       .eq("notification_type", row.notification_type)
       .eq("subject", row.subject)
@@ -550,10 +554,14 @@ async function processOne(id: string) {
   // Rate-limit per recipient. Critical/transactional email has a larger ceiling,
   // but cannot be used as an unlimited email relay.
   const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString();
-  const { count: sentLastHour } = await db
+  let rateQuery = db
     .from("notification_email_outbox")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", row.user_id)
+    .eq("recipient_email", row.recipient_email);
+  rateQuery = row.user_id
+    ? rateQuery.eq("user_id", row.user_id)
+    : rateQuery.is("user_id", null);
+  const { count: sentLastHour } = await rateQuery
     .eq("status", "sent")
     .gte("sent_at", oneHourAgo);
 
