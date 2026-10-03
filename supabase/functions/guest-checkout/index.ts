@@ -49,6 +49,13 @@ function money(value: number): number {
   return Math.round((Number(value) + Number.EPSILON) * 1_000_000) / 1_000_000;
 }
 
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 async function getUsdToNgnRate(): Promise<{ rate: number; source: string }> {
   const sources = [
     { url: "https://open.er-api.com/v6/latest/USD", source: "open.er-api.com" },
@@ -87,7 +94,9 @@ async function verifyTurnstile(token: string, ip: string | null) {
   const errorCodes = Array.isArray(result?.["error-codes"]) ? result["error-codes"] : [];
   const { error: verificationLogError } = await db.from("turnstile_verifications").insert({
     user_id: null,
+    ip_address: null,
     action: "guest_checkout",
+    token_hash: await sha256Hex(token),
     success: Boolean(result?.success),
     error_codes: errorCodes.length ? errorCodes : null,
     verified_at: new Date().toISOString(),
@@ -353,7 +362,19 @@ Deno.serve(async (req: Request) => {
         user_agent:req.headers.get("user-agent")||null
       },
     }).select("id").single();
-    if (orderError || !order) return json({ error: "Unable to create guest order" }, 500);
+    if (orderError || !order) {
+      console.error("[guest-checkout] guest order insert failed", {
+        code: orderError?.code || null,
+        message: orderError?.message || null,
+        details: orderError?.details || null,
+        product_id: productId,
+        assisted_mode: assistedMode,
+      });
+      return json({
+        error: orderError?.message || "Unable to create guest order",
+        code: orderError?.code || "guest_order_insert_failed",
+      }, 500);
+    }
 
     if (isFree) {
       const { data: processed, error: processError } = await db.rpc("process_verified_guest_order", { p_reference:reference,p_amount:0,p_currency:"USD",p_gateway_response:"Free guest order",p_paid_at:new Date().toISOString(),p_channel:"free" });
