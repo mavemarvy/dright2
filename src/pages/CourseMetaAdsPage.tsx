@@ -96,35 +96,95 @@ const modules: Module[] = [
 const embeddedVideos = [
   {
     module: 0,
-    title: 'Nigerian English: Meta Ads Full Course 2026',
-    url: 'https://www.youtube.com/watch?v=PCf0_PNpm0s',
-    description: 'Paul Chinedu Nnamani explains Meta Ads in clear English with practical campaign strategy and Nigerian-market context.',
+    title: 'Nigeria: Meta Ads Full Course 2026',
+    url: 'https://www.youtube.com/watch?v=1hBcvyGnaso',
+    description: 'Paul Chinedu Nnamani gives a Nigerian-English Meta Ads course covering the modern Facebook/Instagram advertising system for beginners.',
+    region: 'Nigeria • English • Full course',
   },
   {
     module: 0,
-    title: 'US English: Facebook & Instagram Ads Tutorial',
+    title: 'Facebook & Instagram Ads Manager: Complete Walkthrough',
     url: 'https://www.youtube.com/watch?v=jGyo2BJYg3A',
-    description: 'Santrel Media gives a clear English step-by-step walkthrough of Meta Ads Manager, campaign setup, ad sets and ad creation.',
+    description: 'Santrel Media starts with Meta Business Suite, explains Pixel setup, then builds the campaign, ad set and ad step by step.',
+    region: 'USA • English • Step-by-step',
+  },
+  {
+    module: 1,
+    title: 'Nigeria: Meta Ads Billing & Naira Payment Setup',
+    url: 'https://www.youtube.com/watch?v=DU2R9nCjVZI',
+    description: 'Nigeria-focused English billing tutorial covering Naira payment methods, failed payments and Meta billing setup from a phone.',
+    region: 'Nigeria • English • Billing',
   },
   {
     module: 5,
     title: 'Nigeria: Instagram Ads Step-by-Step',
     url: 'https://www.youtube.com/watch?v=haUZvNZWae0',
-    description: 'AYO IS MARKETING demonstrates how to create sponsored Instagram ads for a Nigerian audience and business context.',
-    section: 'instagram',
+    description: 'A Nigerian business-context walkthrough of creating Instagram sponsored advertising and setting up the campaign.',
+    region: 'Nigeria • English • Instagram',
   },
   {
     module: 5,
-    title: 'USA: Instagram Ads Step-by-Step',
-    url: 'https://www.youtube.com/watch?v=iTstnwkiizk',
-    description: 'Atlanta-based LYFE Marketing walks through Instagram ad campaign setup, ad sets, placements and creative step by step.',
-    section: 'instagram',
+    title: 'Instagram Ads for Beginners: Full Campaign Guide',
+    url: 'https://www.youtube.com/watch?v=iPw8vMoWiK0',
+    description: 'Ben Heath walks through an Instagram ad campaign from scratch, including Ads Manager structure, targeting, placements and creative.',
+    region: 'UK/International • English • Detailed',
+  },
+];
+
+type CourseStockVisual = {
+  title: string;
+  imageUrl: string;
+  sourceUrl: string;
+  sourceLabel: string;
+  caption: string;
+  videoUrl?: string;
+};
+
+const stockVisuals: CourseStockVisual[] = [
+  {
+    title: 'Facebook ad shown on a smartphone',
+    imageUrl: 'https://images.pexels.com/photos/4048095/pexels-photo-4048095.jpeg?auto=compress&dpr=1&h=750&w=1260',
+    sourceUrl: 'https://www.pexels.com/photo/photo-of-person-holding-phone-4048095/',
+    sourceLabel: 'Pexels stock photo',
+    caption: 'A real-world phone reference for studying how a Facebook ad occupies the screen and how quickly the viewer must understand the message.',
   },
   {
-    module: 6,
-    title: 'Nigerian English: Run Meta Ads from Your Phone',
-    url: 'https://www.youtube.com/watch?v=pIawYyNGZ-E',
-    description: 'A phone-first English tutorial for Nigerian businesses, freelancers and beginners using Meta Ads Manager on mobile.',
+    title: 'Facebook application on a smartphone',
+    imageUrl: 'https://images.pexels.com/photos/15406293/pexels-photo-15406293/free-photo-of-facebook-application-on-smartphone-touchscreen.jpeg?auto=compress&dpr=1&h=750&w=1260',
+    sourceUrl: 'https://www.pexels.com/photo/facebook-application-on-smartphone-touchscreen-15406293/',
+    sourceLabel: 'Pexels stock photo',
+    caption: 'Use this mobile-interface reference when thinking about placement, profile trust and the environment surrounding a Facebook ad.',
+  },
+  {
+    title: 'Instagram app on a smartphone',
+    imageUrl: 'https://images.pexels.com/photos/27552013/pexels-photo-27552013/free-photo-of-instagram-on-a-smartphone-with-the-instagram-app-open.jpeg?auto=compress&dpr=1&h=750&w=1260',
+    sourceUrl: 'https://www.pexels.com/photo/instagram-on-a-smartphone-with-the-instagram-app-open-27552013/',
+    sourceLabel: 'Pexels stock photo',
+    caption: 'A real mobile Instagram reference for Feed, profile and creative-planning lessons.',
+  },
+  {
+    title: 'Facebook browsing demonstration',
+    imageUrl: 'https://images.pexels.com/videos/5201209/cellphone-instagram-iphone-online-5201209.jpeg?auto=compress&dpr=1&h=750&w=1260',
+    videoUrl: 'https://www.pexels.com/download/video/5201209/',
+    sourceUrl: 'https://www.pexels.com/video/man-browsing-facebook-on-mobile-5201209/',
+    sourceLabel: 'Pexels stock video',
+    caption: 'A 10-second Facebook/mobile browsing clip. Watch how quickly content disappears under the viewer’s thumb; ads have to communicate fast.',
+  },
+  {
+    title: 'Instagram feed browsing demonstration',
+    imageUrl: 'https://images.pexels.com/photos/27552013/pexels-photo-27552013/free-photo-of-instagram-on-a-smartphone-with-the-instagram-app-open.jpeg?auto=compress&dpr=1&h=750&w=1260',
+    videoUrl: 'https://videos.pexels.com/video-files/4199353/4199353-uhd_3840_2160_25fps.mp4',
+    sourceUrl: 'https://www.pexels.com/video/close-up-shot-of-a-smartphone-4199353/',
+    sourceLabel: 'Pexels stock video',
+    caption: 'Stock footage of Instagram browsing for studying thumb-stop behavior, mobile framing and how little time a creative has to earn attention.',
+  },
+  {
+    title: 'Instagram sales-post browsing demonstration',
+    imageUrl: 'https://images.pexels.com/photos/27552013/pexels-photo-27552013/free-photo-of-instagram-on-a-smartphone-with-the-instagram-app-open.jpeg?auto=compress&dpr=1&h=750&w=1260',
+    videoUrl: 'https://videos.pexels.com/video-files/6115070/6115070-uhd_2160_4096_25fps.mp4',
+    sourceUrl: 'https://www.pexels.com/video/sales-posting-on-instagram-6115070/',
+    sourceLabel: 'Pexels stock video',
+    caption: 'Vertical stock footage useful for studying mobile commerce, Stories/Reels framing and sales-focused creative.',
   },
 ];
 
@@ -323,6 +383,10 @@ export default function CourseMetaAdsPage() {
   const percent = lessons.length ? Math.round((doneCount / lessons.length) * 100) : 0;
   const currentNumber = lessons.findIndex((lesson) => lesson.key === currentKey) + 1;
   const moduleVideos = embeddedVideos.filter((video) => video.module === activeModule);
+  const visualStart = stockVisuals.length > 0 ? (activeModule * 2) % stockVisuals.length : 0;
+  const moduleVisuals = stockVisuals.length <= 2
+    ? stockVisuals
+    : [stockVisuals[visualStart], stockVisuals[(visualStart + 1) % stockVisuals.length]];
   const moduleDone = currentModule.lessons.filter((_, index) => completed[String(activeModule) + '-' + String(index)]).length;
   const modulePercent = Math.round((moduleDone / Math.max(1, currentModule.lessons.length)) * 100);
   const isLastLesson = activeModule === modules.length - 1 && activeLesson === currentModule.lessons.length - 1;
@@ -768,6 +832,36 @@ export default function CourseMetaAdsPage() {
                       </div>
                     )}
 
+                    {moduleVisuals.length > 0 && (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Images className="w-5 h-5 text-primary-600" />
+                            <h3 className="font-black text-slate-950">Real visual reference</h3>
+                          </div>
+                          <p className="text-sm text-slate-500 mt-1">Stock photos and videos are included inside the course to make the lesson easier to understand visually.</p>
+                        </div>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {moduleVisuals.map((visual) => (
+                            <figure key={visual.sourceUrl} className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                              {visual.videoUrl ? (
+                                <video src={visual.videoUrl} poster={visual.imageUrl} controls playsInline preload="metadata" className="w-full aspect-video object-cover bg-black" />
+                              ) : (
+                                <img src={visual.imageUrl} alt={visual.title} loading="lazy" className="w-full aspect-[4/3] object-cover" />
+                              )}
+                              <figcaption className="p-4">
+                                <p className="font-black text-slate-900">{visual.title}</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">{visual.caption}</p>
+                                <a href={visual.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-primary-600">
+                                  {visual.sourceLabel}<ExternalLink className="w-3 h-3" />
+                                </a>
+                              </figcaption>
+                            </figure>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
                       <div className="flex items-center gap-2">
                         <Target className="w-5 h-5 text-emerald-700" />
@@ -975,14 +1069,40 @@ export default function CourseMetaAdsPage() {
                 </div>
                 <button type="button" onClick={() => setMediaOpen(false)} className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center"><X className="w-4 h-4" /></button>
               </div>
-              <div className="p-4 md:p-6 space-y-6">
-                {embeddedVideos.map((video) => (
-                  <div key={video.url}>
-                    <VideoPlayer url={video.url} title={video.title} />
-                    <p className="mt-3 font-black text-slate-900">{video.title}</p>
-                    <p className="text-sm text-slate-500 mt-1">{video.description}</p>
+              <div className="p-4 md:p-6 space-y-8">
+                <div className="space-y-6">
+                  {embeddedVideos.map((video) => (
+                    <div key={video.url}>
+                      <VideoPlayer url={video.url} title={video.title} />
+                      <p className="mt-3 font-black text-slate-900">{video.title}</p>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-1">{video.region}</p>
+                      <p className="text-sm text-slate-500 mt-1">{video.description}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-slate-200 pt-6">
+                  <div className="flex items-center gap-2">
+                    <Images className="w-5 h-5 text-primary-600" />
+                    <h3 className="font-black text-slate-950">Stock photo & video library</h3>
                   </div>
-                ))}
+                  <p className="text-xs text-slate-500 mt-1">Real visual references for Facebook, Instagram, mobile browsing and ad creative. They are educational references, not platform endorsements.</p>
+                  <div className="mt-4 grid md:grid-cols-2 gap-4">
+                    {stockVisuals.map((visual) => (
+                      <figure key={visual.sourceUrl} className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
+                        {visual.videoUrl ? (
+                          <video src={visual.videoUrl} poster={visual.imageUrl} controls playsInline preload="metadata" className="w-full aspect-video object-cover bg-black" />
+                        ) : (
+                          <img src={visual.imageUrl} alt={visual.title} loading="lazy" className="w-full aspect-[4/3] object-cover" />
+                        )}
+                        <figcaption className="p-3">
+                          <p className="font-black text-sm text-slate-900">{visual.title}</p>
+                          <p className="text-xs leading-5 text-slate-500 mt-1">{visual.caption}</p>
+                          <a href={visual.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-primary-600">{visual.sourceLabel}<ExternalLink className="w-3 h-3" /></a>
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
