@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Apple, CalendarDays, CheckCircle2, Dumbbell, Footprints, GlassWater,
-  Goal, Leaf, PartyPopper, Plus, Save, Scale, Smartphone, Trophy, X,
+  Goal, Leaf, PartyPopper, Play, Plus, Save, Scale, Smartphone, Trophy, X,
 } from 'lucide-react';
 
 type FitnessLog = {
@@ -252,9 +252,27 @@ export default function FitnessProgressPlanner({ storageKey }: { storageKey: str
             <div className="flex items-center gap-2"><Smartphone className="w-5 h-5 text-blue-700" /><p className="font-black text-blue-950">Workout app toolkit</p></div>
             <p className="mt-2 text-xs leading-5 text-blue-900">Use an app if it makes consistency easier. DRIGHT does not require any paid subscription.</p>
             <div className="mt-3 space-y-2">
-              <ResourceLink label="Hevy — workout planner & log" href="https://www.hevyapp.com/" note="Routine planning, exercise logging and progress history." />
-              <ResourceLink label="Nike Training Club" href="https://www.nike.com/ntc-app" note="Strength, conditioning, yoga, Pilates and recovery workouts." />
-              <ResourceLink label="FitOn" href="https://fitonapp.com/" note="Cardio, strength, HIIT, yoga and guided workout plans." />
+              <ResourceLink
+                label="Hevy — workout planner & log"
+                website="https://www.hevyapp.com/"
+                appStore="https://apps.apple.com/ng/app/hevy-gym-tracker-workout-log/id1458862350"
+                playStore="https://play.google.com/store/apps/details?id=com.hevy"
+                note="Routine planning, exercise logging, calendar history and progress tracking."
+              />
+              <ResourceLink
+                label="Nike Training Club"
+                website="https://www.nike.com/ntc-app"
+                appStore="https://apps.apple.com/us/app/nike-training-club/id301521403"
+                playStore="https://play.google.com/store/apps/details?id=com.nike.ntc"
+                note="Strength, conditioning, yoga, Pilates, mobility and recovery workouts."
+              />
+              <ResourceLink
+                label="FitOn"
+                website="https://fitonapp.com/"
+                appStore="https://apps.apple.com/us/app/fiton-workouts-fitness-plans/id1442473191"
+                playStore="https://play.google.com/store/apps/details?id=com.fiton.android"
+                note="Cardio, strength, HIIT, yoga and guided workout plans with free-access options."
+              />
             </div>
           </div>
         </div>
@@ -298,6 +316,19 @@ function Chip({ icon: Icon, text }: { icon: typeof Scale; text: string }) {
   return <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 border border-slate-200"><Icon className="w-3 h-3" />{text}</span>;
 }
 
-function ResourceLink({ label, href, note }: { label: string; href: string; note: string }) {
-  return <a href={href} target="_blank" rel="noreferrer" className="block rounded-xl bg-white/80 border border-blue-100 p-3 hover:bg-white"><p className="text-xs font-black text-blue-950">{label}</p><p className="mt-1 text-[11px] leading-4 text-blue-700">{note}</p></a>;
+function ResourceLink({ label, website, appStore, playStore, note }: { label: string; website: string; appStore: string; playStore: string; note: string }) {
+  return (
+    <div className="rounded-xl bg-white/80 border border-blue-100 p-3">
+      <a href={website} target="_blank" rel="noreferrer" className="text-xs font-black text-blue-950 hover:underline">{label}</a>
+      <p className="mt-1 text-[11px] leading-4 text-blue-700">{note}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <a href={appStore} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-slate-950 px-2.5 py-1.5 text-[10px] font-black text-white">
+          <Apple className="w-3 h-3" /> App Store
+        </a>
+        <a href={playStore} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[10px] font-black text-white">
+          <Play className="w-3 h-3 fill-current" /> Google Play
+        </a>
+      </div>
+    </div>
+  );
 }
