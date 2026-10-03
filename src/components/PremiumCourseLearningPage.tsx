@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Circle, Compass, ExternalLink,
   FileDown, FileText, Images, List, Lock, Menu, PlayCircle, RotateCcw,
@@ -101,6 +101,8 @@ function accentClasses(accent: PremiumCourseConfig['accent']) {
 
 export default function PremiumCourseLearningPage({ config }: { config: PremiumCourseConfig }) {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const guestToken = searchParams.get('guest') || '';
   const colors = accentClasses(config.accent);
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
@@ -118,6 +120,9 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
   const [tourStep, setTourStep] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [checkedAnswer, setCheckedAnswer] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
+  const [guestDaysRemaining, setGuestDaysRemaining] = useState(0);
+  const [guestEmail, setGuestEmail] = useState('');
 
   const lessons = useMemo(
     () => config.modules.flatMap((module, moduleIndex) =>
@@ -146,43 +151,89 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
   const modulePercent = Math.round((moduleDone / Math.max(1, currentModule.lessons.length)) * 100);
   const isLastLesson = activeModule === config.modules.length - 1 && activeLesson === currentModule.lessons.length - 1;
 
-  const progressKey = user?.id ? 'dright-course-progress:' + config.slug + ':' + user.id : '';
-  const notesKey = user?.id ? 'dright-course-notes:' + config.slug + ':' + user.id : '';
+  const progressIdentity = user?.id || (guestToken ? 'guest:' + guestToken : '');
+  const progressKey = progressIdentity ? 'dright-course-progress:' + config.slug + ':' + progressIdentity : '';
+  const notesKey = progressIdentity ? 'dright-course-notes:' + config.slug + ':' + progressIdentity : '';
 
   useEffect(() => {
-    if (!user?.id) return;
-    try { setCompleted(JSON.parse(localStorage.getItem(progressKey) || '{}')); } catch { setCompleted({}); }
-    try { setNotes(JSON.parse(localStorage.getItem(notesKey) || '{}')); } catch { setNotes({}); }
-  }, [user?.id, progressKey, notesKey]);
+    if (!progressIdentity) return;
+    let localCompleted: Record<string, boolean> = {};
+    let localNotes: Record<string, string> = {};
+    try { localCompleted = JSON.parse(localStorage.getItem(progressKey) || '{}'); } catch { /* ignore */ }
+    try { localNotes = JSON.parse(localStorage.getItem(notesKey) || '{}'); } catch { /* ignore */ }
+
+    void (async () => {
+      const { data, error } = await supabase.rpc('get_course_learning_progress', {
+        p_course_slug: config.slug,
+        p_guest_token: user?.id ? null : (guestToken || null),
+      });
+      const remote = data && typeof data === 'object' ? data as Record<string, any> : null;
+      if (!error && remote?.success) {
+        const remoteCompleted = remote.completed && typeof remote.completed === 'object' ? remote.completed : {};
+        const remoteNotes = remote.notes && typeof remote.notes === 'object' ? remote.notes : {};
+        const mergedCompleted = { ...localCompleted, ...remoteCompleted };
+        const mergedNotes = { ...localNotes, ...remoteNotes };
+        setCompleted(mergedCompleted);
+        setNotes(mergedNotes);
+        setActiveModule(Math.max(0, Math.min(config.modules.length - 1, Number(remote.active_module || 0))));
+        const remoteModule = Math.max(0, Math.min(config.modules.length - 1, Number(remote.active_module || 0)));
+        setActiveLesson(Math.max(0, Math.min(config.modules[remoteModule]?.lessons.length - 1 || 0, Number(remote.active_lesson || 0))));
+        try {
+          localStorage.setItem(progressKey, JSON.stringify(mergedCompleted));
+          localStorage.setItem(notesKey, JSON.stringify(mergedNotes));
+        } catch { /* local fallback is optional */ }
+      } else {
+        setCompleted(localCompleted);
+        setNotes(localNotes);
+      }
+    })();
+  }, [progressIdentity, config.slug, guestToken, user?.id]);
 
   useEffect(() => {
     const check = async () => {
+      setChecking(true);
+      setAdminPreview(false);
+      setGuestMode(false);
+      setGuestDaysRemaining(0);
+      setGuestEmail('');
+      setExpired(false);
+      setExpiryDays(null);
+      setAllowed(false);
+
       if (!user?.id) {
+        if (!guestToken) {
+          setChecking(false);
+          return;
+        }
+        const { data: guestData, error: guestError } = await supabase.rpc('get_guest_access', { p_token: guestToken });
+        const guest = Array.isArray(guestData) ? guestData[0] : guestData;
+        if (
+          !guestError
+          && guest?.active === true
+          && String(guest?.course_slug || '') === config.slug
+        ) {
+          setProductId(String(guest.product_id || ''));
+          setGuestMode(true);
+          setGuestDaysRemaining(Number(guest.days_remaining || 0));
+          setGuestEmail(String(guest.recipient_email || ''));
+          setAllowed(true);
+        }
         setChecking(false);
         return;
       }
-      setChecking(true);
-      setAdminPreview(false);
-      setExpired(false);
-      setExpiryDays(null);
 
       const { data: publicData } = await supabase.rpc('get_public_dright_official_products');
       const publicItems = Array.isArray(publicData) ? publicData : [];
       let course = publicItems.find((item: any) => item.slug === config.slug);
-      let isAdminPreview = false;
+      let hiddenAdminCourse = false;
 
-      // Hidden Official DRIGHT products are intentionally absent from the public RPC.
-      // An authorized DRIGHT admin may still open the buyer portal for QA without
-      // publishing the product or creating a fake purchase.
       if (!course?.marketplace_product_id) {
         const { data: adminData, error: adminError } = await supabase.rpc('admin_list_dright_official_products');
         if (!adminError && Array.isArray(adminData)) {
           const hiddenCourse = adminData.find((item: any) => item.slug === config.slug);
           if (hiddenCourse?.marketplace_product_id) {
             course = hiddenCourse;
-            isAdminPreview = true;
-            setAdminPreview(true);
-            setAllowed(true);
+            hiddenAdminCourse = true;
           }
         }
       }
@@ -194,58 +245,83 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
 
       setProductId(String(course.marketplace_product_id));
 
-      if (!isAdminPreview) {
-        const [{ data: order }, { data: digitalDetails }] = await Promise.all([
-          supabase
-            .from('orders')
-            .select('id, created_at')
-            .eq('product_id', course.marketplace_product_id)
-            .eq('buyer_id', user.id)
-            .eq('status', 'COMPLETED')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-          supabase
-            .from('digital_product_details')
-            .select('expiry_days')
-            .eq('product_id', course.marketplace_product_id)
-            .maybeSingle(),
-        ]);
-        const days = Number(digitalDetails?.expiry_days || 365);
-        setExpiryDays(days);
-        if (order?.created_at) {
-          const purchasedAt = new Date(order.created_at).getTime();
-          const expiresAt = purchasedAt + days * 24 * 60 * 60 * 1000;
-          const isExpired = Date.now() > expiresAt;
-          setExpired(isExpired);
-          setAllowed(!isExpired);
-        } else {
-          setAllowed(false);
-        }
+      const [{ data: order }, { data: digitalDetails }] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('id, created_at')
+          .eq('product_id', course.marketplace_product_id)
+          .eq('buyer_id', user.id)
+          .eq('status', 'COMPLETED')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('digital_product_details')
+          .select('expiry_days')
+          .eq('product_id', course.marketplace_product_id)
+          .maybeSingle(),
+      ]);
+
+      const days = Number(digitalDetails?.expiry_days || 365);
+      setExpiryDays(days);
+      if (order?.created_at) {
+        const purchasedAt = new Date(order.created_at).getTime();
+        const expiresAt = purchasedAt + days * 24 * 60 * 60 * 1000;
+        const isExpired = Date.now() > expiresAt;
+        setExpired(isExpired);
+        setAllowed(!isExpired);
+      } else if (hiddenAdminCourse) {
+        // Admin QA preview remains available, but once the admin buys the hidden
+        // product the real buyer-order entitlement above takes precedence.
+        setAdminPreview(true);
+        setAllowed(true);
       }
+
       setChecking(false);
     };
     void check();
-  }, [user?.id, config.slug]);
+  }, [user?.id, config.slug, guestToken]);
 
   useEffect(() => {
     setSelectedAnswer(null);
     setCheckedAnswer(false);
   }, [activeModule, activeLesson]);
 
+  const saveServerProgress = (
+    nextCompleted: Record<string, boolean>,
+    nextNotes: Record<string, string>,
+    moduleIndex = activeModule,
+    lessonIndex = activeLesson,
+  ) => {
+    if (!progressIdentity) return;
+    void supabase.rpc('save_course_learning_progress', {
+      p_course_slug: config.slug,
+      p_completed: nextCompleted,
+      p_notes: nextNotes,
+      p_active_module: moduleIndex,
+      p_active_lesson: lessonIndex,
+      p_guest_token: user?.id ? null : (guestToken || null),
+    }).then(({ error }) => {
+      if (error) console.warn('Course progress sync failed:', error.message);
+    });
+  };
+
   const persistCompleted = (next: Record<string, boolean>) => {
     setCompleted(next);
     if (progressKey) localStorage.setItem(progressKey, JSON.stringify(next));
+    saveServerProgress(next, notes);
   };
 
   const persistNotes = (next: Record<string, string>) => {
     setNotes(next);
     if (notesKey) localStorage.setItem(notesKey, JSON.stringify(next));
+    saveServerProgress(completed, next);
   };
 
   const goToLesson = (moduleIndex: number, lessonIndex: number) => {
     setActiveModule(moduleIndex);
     setActiveLesson(lessonIndex);
+    saveServerProgress(completed, notes, moduleIndex, lessonIndex);
     setOutlineOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -282,7 +358,7 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
     ['Course outline', 'Use the outline to see all 15 modules, jump to a lesson, and check what you have already completed.'],
     ['Watch + learn', 'Embedded tutorials play inside DRIGHT. Stock visuals and lesson explanations sit beside the practical work so the course stays visual.'],
     ['Practice', 'Every lesson ends with an action. Do the task with a real or sample business before marking the lesson complete.'],
-    ['Check + continue', 'Use the knowledge check, save notes, then press Complete & Continue. Your progress is saved on this device.'],
+    ['Check + continue', 'Use the knowledge check, save notes, then press Complete & Continue. Progress is synced to your DRIGHT buyer or guest access so it can continue after account claim.'],
   ];
 
   if (checking) {
@@ -339,6 +415,20 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
             </div>
           </div>
 
+          {guestMode && (
+            <div className="mt-6 rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-amber-100">Guest mode • {guestDaysRemaining} day{guestDaysRemaining === 1 ? '' : 's'} left</p>
+                  <p className="mt-1 text-xs leading-5 text-amber-100/90">
+                    This course was purchased for {guestEmail}. Sign in or create a DRIGHT buyer account with that same email before guest mode expires; the purchase and supported course progress will move into Orders.
+                  </p>
+                </div>
+                <Link to={'/guest-access/' + guestToken} className="shrink-0 rounded-xl bg-white px-4 py-2 text-xs font-black text-slate-950">Guest purchase</Link>
+              </div>
+            </div>
+          )}
+
           <div className="mt-7 rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="flex items-center justify-between gap-3">
               <div><p className="text-sm font-black">Your course progress</p><p className="text-xs text-slate-400">{doneCount}/{lessons.length} lessons complete</p></div>
@@ -355,7 +445,7 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
       <div className="max-w-7xl mx-auto px-4 py-6">
         {config.slug === 'weight-loss-fitness-business-affiliate-mastery-2026' && (
           <div className="mb-6">
-            <FitnessProgressPlanner storageKey={'dright:course006:fitness-planner:' + (user?.id || 'admin-preview')} />
+            <FitnessProgressPlanner storageKey={'dright:course006:fitness-planner:' + (progressIdentity || 'admin-preview')} />
           </div>
         )}
 
