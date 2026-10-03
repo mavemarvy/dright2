@@ -209,6 +209,8 @@ export default function ProductDetailPage() {
         .select('id, name, price, image_url, category, is_free, specifications')
         .eq('category', (prod as Product).category)
         .eq('approval_status', 'approved')
+        .eq('is_active', true)
+        .eq('is_hidden', false)
         .neq('id', id!)
         .limit(8);
       if (related) setRelatedProducts(related as RelatedProduct[]);
