@@ -171,7 +171,9 @@ export default function MarketPage() {
       Array.isArray(value) ? value.length > 0 : value !== '' && value !== null && value !== undefined
     )
   );
-  const useServerRecommended = recommendedMode && !hasTaxonomyFilters;
+  // Admins use the deterministic catalog path so admin-only Official DRIGHT
+  // products can be appended without exposing them through the public feed RPC.
+  const useServerRecommended = !isAdmin && recommendedMode && !hasTaxonomyFilters;
   const usingMarketplaceV2 = useServerRecommended && !marketV2Failed;
 
   const fetchCategoryCounts = useCallback(async () => {
@@ -225,26 +227,71 @@ export default function MarketPage() {
       .order('created_at', { ascending: false });
 
     if (error || !data) throw error || new Error('Unable to load marketplace');
-    const sellerIds = [...new Set(data.map(p => p.uploaded_by))];
-    const { data: sellers } = await supabase
-      .from('users')
-      .select('id, full_name, avatar_url, store_title, is_verified, account_status')
-      .in('id', sellerIds);
+
+    let catalog: MarketplaceProduct[] = data as MarketplaceProduct[];
+
+    if (isAdmin) {
+      const { data: officialAdminRows, error: officialError } = await supabase.rpc('admin_list_dright_official_products');
+      if (!officialError && Array.isArray(officialAdminRows)) {
+        const adminOnly = officialAdminRows
+          .filter((item: any) => item.public_visible === false && item.is_enabled !== false)
+          .map((item: any) => ({
+            id: String(item.marketplace_product_id),
+            name: String(item.name || ''),
+            description: item.description == null ? null : String(item.description),
+            price: Number(item.price || 0),
+            commission_rate: Number(item.commission_rate || 0),
+            image_url: item.image_url == null ? null : String(item.image_url),
+            category: String(item.category || 'General'),
+            uploaded_by: String(item.uploaded_by || ''),
+            created_at: String(item.product_created_at || item.created_at || new Date().toISOString()),
+            sales_team_tier: item.sales_team_tier ?? null,
+            admin_task_percent: Number(item.admin_task_percent || 0),
+            sales_team_task_percent: Number(item.sales_team_task_percent || 0),
+            is_free: item.is_free === true,
+            stock_quantity: item.stock_quantity ?? null,
+            initial_stock: item.initial_stock ?? null,
+            product_type: String(item.product_type || 'DIGITAL'),
+            demo_video_url: item.demo_video_url ?? null,
+            total_reviews: Number(item.total_reviews || 0),
+            average_rating: Number(item.average_rating || 0),
+            total_sales: Number(item.total_sales || 0),
+            view_count: Number(item.view_count || 0),
+            is_featured: item.is_featured === true,
+            is_sponsored: item.is_sponsored === true,
+            sku: item.sku ?? null,
+            affiliate_commission_percent: Number(item.affiliate_commission_percent || 0),
+            specifications: item.specifications || {},
+            admin_only: true,
+          } as MarketplaceProduct));
+
+        const publicIds = new Set(catalog.map((item) => item.id));
+        catalog = [...adminOnly.filter((item) => !publicIds.has(item.id)), ...catalog];
+      }
+    }
+
+    const sellerIds = [...new Set(catalog.map(p => p.uploaded_by).filter(Boolean))];
+    const { data: sellers } = sellerIds.length > 0
+      ? await supabase
+          .from('users')
+          .select('id, full_name, avatar_url, store_title, is_verified, account_status')
+          .in('id', sellerIds)
+      : { data: [] as any[] };
 
     const sellerMap = new Map((sellers || []).map(s => [s.id, s]));
-    const enriched = data.map(p => {
+    const enriched = catalog.map(p => {
       const seller = sellerMap.get(p.uploaded_by);
       return {
         ...p,
         seller_name: seller?.full_name || null,
         seller_avatar: seller?.avatar_url || null,
-        seller_verified: seller?.is_verified || false,
-        store_name: seller?.store_title || null,
+        seller_verified: p.admin_only ? true : (seller?.is_verified || false),
+        store_name: p.admin_only ? 'Official DRIGHT Store' : (seller?.store_title || null),
       } as MarketplaceProduct;
     });
     setProducts(enriched);
     return enriched;
-  }, []);
+  }, [isAdmin]);
 
   const fetchRecommendedPage = useCallback(async (reset: boolean) => {
     const cursor = reset ? null : marketCursor;
