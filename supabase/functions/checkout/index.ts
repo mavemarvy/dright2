@@ -136,7 +136,25 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (productErr || !product) return json({ error: "Product not found" }, 404);
-    if (product.approval_status !== "approved" || product.is_hidden || !product.is_active) {
+
+    const productSpecs = product.specifications && typeof product.specifications === "object" && !Array.isArray(product.specifications)
+      ? product.specifications as Record<string, unknown>
+      : {};
+    const isOfficialDright = productSpecs.official_store === true || productSpecs.first_party === true;
+    let adminHiddenQa = false;
+    if (product.is_hidden && isOfficialDright) {
+      const { data: buyerProfile } = await supabase
+        .from("users")
+        .select("is_admin,admin_status")
+        .eq("id", buyerId)
+        .maybeSingle();
+      adminHiddenQa = Boolean(
+        buyerProfile?.is_admin === true
+        && String(buyerProfile?.admin_status || "active").toLowerCase() !== "disabled"
+      );
+    }
+
+    if (product.approval_status !== "approved" || !product.is_active || (product.is_hidden && !adminHiddenQa)) {
       return json({ error: "Product is not available for purchase" }, 400);
     }
 
