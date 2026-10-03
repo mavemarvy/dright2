@@ -162,6 +162,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     catch (error) { console.warn('Pending signup onboarding could not be resumed yet:', error); }
   };
 
+  const claimGuestPurchases = async () => {
+    try {
+      const { error } = await supabase.rpc('claim_my_guest_purchases');
+      if (error) console.warn('Guest purchases could not be claimed yet:', error.message);
+    } catch (error) {
+      console.warn('Guest purchases could not be claimed yet:', error);
+    }
+  };
+
   useEffect(() => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession(); setSession(session); setUser(session?.user ?? null);
@@ -177,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await resumeOnboarding();
         const starterClaim = await claimPendingDrightStarterPurchase();
         if (starterClaim.error) console.warn('Pending DRIGHT Starter claim could not be completed yet:', starterClaim.error);
+        await claimGuestPurchases();
       } else setLoading(false);
     };
     void getSession();
@@ -197,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await resumeOnboarding();
           const starterClaim = await claimPendingDrightStarterPurchase();
           if (starterClaim.error) console.warn('Pending DRIGHT Starter claim could not be completed yet:', starterClaim.error);
+        await claimGuestPurchases();
           if (event === 'SIGNED_IN') {
             await logAuthActivity('login', true);
             await supabase.rpc('reset_login_attempts', { p_email: authSession.user.email || '' });
