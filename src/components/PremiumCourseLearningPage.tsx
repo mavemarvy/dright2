@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import VideoPlayer from './VideoPlayer';
+import FitnessProgressPlanner from './course/FitnessProgressPlanner';
 
 export type PremiumCourseLesson = {
   title: string;
@@ -352,6 +353,12 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
       </section>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {config.slug === 'weight-loss-fitness-business-affiliate-mastery-2026' && (
+          <div className="mb-6">
+            <FitnessProgressPlanner storageKey={'dright:course006:fitness-planner:' + (user?.id || 'admin-preview')} />
+          </div>
+        )}
+
         <div className="lg:hidden mb-4">
           <button onClick={() => setOutlineOpen(true)} className="w-full min-h-[46px] rounded-xl border border-slate-200 bg-white text-sm font-black inline-flex items-center justify-center gap-2"><Menu className="w-4 h-4" /> Course outline</button>
         </div>
