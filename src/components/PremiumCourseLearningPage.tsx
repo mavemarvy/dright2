@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Circle, Compass, ExternalLink,
-  FileDown, FileText, List, Lock, Menu, PlayCircle, RotateCcw,
+  FileDown, FileText, Images, List, Lock, Menu, PlayCircle, RotateCcw,
   Sparkles, Target, Trophy, Video, X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -45,6 +45,7 @@ export type PremiumCourseStockVisual = {
   sourceUrl: string;
   sourceLabel: string;
   caption: string;
+  videoUrl?: string;
 };
 
 export type PremiumCourseReference = {
@@ -136,6 +137,10 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
   const percent = lessons.length ? Math.round((doneCount / lessons.length) * 100) : 0;
   const currentNumber = lessons.findIndex((lesson) => lesson.key === currentKey) + 1;
   const moduleVideos = config.videos.filter((video) => video.module === activeModule);
+  const visualStart = config.visuals.length > 0 ? (activeModule * 2) % config.visuals.length : 0;
+  const lessonVisuals = config.visuals.length <= 2
+    ? config.visuals
+    : [config.visuals[visualStart], config.visuals[(visualStart + 1) % config.visuals.length]];
   const moduleDone = currentModule.lessons.filter((_, index) => completed[String(activeModule) + '-' + String(index)]).length;
   const modulePercent = Math.round((moduleDone / Math.max(1, currentModule.lessons.length)) * 100);
   const isLastLesson = activeModule === config.modules.length - 1 && activeLesson === currentModule.lessons.length - 1;
@@ -423,14 +428,23 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
                     </div>
                   )}
 
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {config.visuals.slice(0, 2).map((visual) => (
-                      <figure key={visual.sourceUrl} className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
-                        <img src={visual.imageUrl} alt={visual.title} className="w-full aspect-[4/3] object-cover" loading="lazy" />
-                        <figcaption className="p-3"><p className="font-black text-sm text-slate-900">{visual.title}</p><p className="text-xs text-slate-500 mt-1 leading-5">{visual.caption}</p><a href={visual.sourceUrl} target="_blank" rel="noreferrer" className={'mt-2 inline-flex items-center gap-1 text-xs font-bold ' + colors.text}>{visual.sourceLabel}<ExternalLink className="w-3 h-3" /></a></figcaption>
-                      </figure>
-                    ))}
-                  </div>
+                  {lessonVisuals.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3"><Images className="w-5 h-5" /><h3 className="font-black">Visual reference</h3></div>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {lessonVisuals.map((visual) => (
+                          <figure key={visual.sourceUrl} className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+                            {visual.videoUrl ? (
+                              <video src={visual.videoUrl} poster={visual.imageUrl} controls playsInline preload="metadata" className="w-full aspect-video object-cover bg-black" />
+                            ) : (
+                              <img src={visual.imageUrl} alt={visual.title} className="w-full aspect-[4/3] object-cover" loading="lazy" />
+                            )}
+                            <figcaption className="p-3"><p className="font-black text-sm text-slate-900">{visual.title}</p><p className="text-xs text-slate-500 mt-1 leading-5">{visual.caption}</p><a href={visual.sourceUrl} target="_blank" rel="noreferrer" className={'mt-2 inline-flex items-center gap-1 text-xs font-bold ' + colors.text}>{visual.sourceLabel}<ExternalLink className="w-3 h-3" /></a></figcaption>
+                          </figure>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className={'rounded-2xl border p-5 ' + colors.border + ' ' + colors.soft}>
                     <div className="flex items-center gap-2"><Target className={'w-5 h-5 ' + colors.text} /><h3 className="font-black">Practice challenge</h3></div>
@@ -508,7 +522,33 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
           <motion.div className="fixed inset-0 z-[95] bg-slate-950/75 p-3 md:p-8 overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="max-w-4xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl">
               <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between"><div><p className="font-black">Course media library</p><p className="text-xs text-slate-500">Tutorials play inside DRIGHT.</p></div><button onClick={() => setMediaOpen(false)} className="w-9 h-9 rounded-full border flex items-center justify-center"><X className="w-4 h-4" /></button></div>
-              <div className="p-4 md:p-6 space-y-6">{config.videos.map((video) => <div key={video.url}><VideoPlayer url={video.url} title={video.title} /><p className="mt-3 font-black">{video.title}</p><p className="text-sm text-slate-500 mt-1">{video.description}</p></div>)}</div>
+              <div className="p-4 md:p-6 space-y-8">
+                <div className="space-y-6">
+                  {config.videos.map((video) => <div key={video.url}><VideoPlayer url={video.url} title={video.title} /><p className="mt-3 font-black">{video.title}</p><p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-1">{video.region || 'English tutorial'}</p><p className="text-sm text-slate-500 mt-1">{video.description}</p></div>)}
+                </div>
+                {config.visuals.length > 0 && (
+                  <div className="border-t border-slate-200 pt-6">
+                    <div className="flex items-center gap-2"><Images className="w-5 h-5" /><h3 className="font-black">Stock visual & demonstration library</h3></div>
+                    <p className="text-xs text-slate-500 mt-1">These real-world visual references support the lessons; they are not endorsements by the platforms shown.</p>
+                    <div className="mt-4 grid md:grid-cols-2 gap-4">
+                      {config.visuals.map((visual) => (
+                        <figure key={visual.sourceUrl} className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
+                          {visual.videoUrl ? (
+                            <video src={visual.videoUrl} poster={visual.imageUrl} controls playsInline preload="metadata" className="w-full aspect-video object-cover bg-black" />
+                          ) : (
+                            <img src={visual.imageUrl} alt={visual.title} className="w-full aspect-[4/3] object-cover" loading="lazy" />
+                          )}
+                          <figcaption className="p-3">
+                            <p className="font-black text-sm">{visual.title}</p>
+                            <p className="text-xs leading-5 text-slate-500 mt-1">{visual.caption}</p>
+                            <a href={visual.sourceUrl} target="_blank" rel="noreferrer" className={'mt-2 inline-flex items-center gap-1 text-xs font-bold ' + colors.text}>{visual.sourceLabel}<ExternalLink className="w-3 h-3" /></a>
+                          </figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
