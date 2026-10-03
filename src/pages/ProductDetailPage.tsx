@@ -754,6 +754,30 @@ export default function ProductDetailPage() {
         )}
       </div>
 
+      {productImages.length > 1 && (
+        <section className="mt-8">
+          <div className="flex items-end justify-between gap-3 mb-3">
+            <div>
+              <h2 className="text-lg font-black text-gray-900 dark:text-gray-100">More product images</h2>
+              <p className="text-xs text-gray-500 mt-1">Swipe the gallery above or scroll through the additional product images below.</p>
+            </div>
+            <span className="text-xs font-bold text-gray-400">{productImages.length} images</span>
+          </div>
+          <div className="space-y-4">
+            {productImages.slice(1).map((url, index) => (
+              <figure key={url + index} className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700">
+                <img
+                  src={url}
+                  alt={product.name + ' — additional image ' + (index + 2)}
+                  className="w-full max-h-[720px] object-contain bg-gray-50 dark:bg-gray-900"
+                  loading="lazy"
+                />
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Product Description */}
       {description && (
         <div className="mt-10 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6">
