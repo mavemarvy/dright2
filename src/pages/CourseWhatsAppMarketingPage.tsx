@@ -263,12 +263,7 @@ const config: PremiumCourseConfig = {
       points: ['Useful product-content inspiration.', 'Shows phone-first selling workflow.', 'Check Pexels license before redistribution.'],
     },
   ],
-  downloads: [
-    { label: 'WhatsApp Sales Handbook', href: '/course-003-whatsapp-sales/WhatsApp_Marketing_Sales_Mastery_2026_Handbook.html', type: 'Offline handbook' },
-    { label: 'Broadcast & Sales Planner', href: '/course-003-whatsapp-sales/WhatsApp_Sales_Broadcast_Planner_2026.csv', type: 'CSV workbook' },
-    { label: 'WhatsApp Sales Checklist', href: '/course-003-whatsapp-sales/WhatsApp_Sales_Checklist.html', type: 'Checklist' },
-    { label: 'Sales Scripts & Follow-up Matrix', href: '/course-003-whatsapp-sales/WhatsApp_Sales_Scripts_Matrix.csv', type: 'CSV template' },
-  ],
+  downloads: [],
 };
 
 export default function CourseWhatsAppMarketingPage() {
