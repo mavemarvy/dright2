@@ -205,7 +205,7 @@ const config: PremiumCourseConfig = {
     },
   ],
   videos: [
-    { module: 1, title: 'TikTok Ads Complete Course 2026: Beginner to Pro', url: 'https://www.youtube.com/watch?v=OlfpzXoeliE', description: 'Detailed 2026 walkthrough covering Ads account creation, billing/deposit, Pixel setup, campaign creation and linking a TikTok account.', region: 'English • 2026 • Step-by-step' },
+    { module: 1, title: 'TikTok Ads Tutorial 2026 — Nigeria & Global Step-by-Step', url: 'https://www.youtube.com/watch?v=EiXPhkD3i1g', description: 'Deborah Oluwaseun Roselyn gives an English Nigeria/global walkthrough covering TikTok Ads setup, campaign strategy, in-feed ads, creatives, audience targeting, bidding and current 2026 methods.', region: 'Nigeria/Global • English • 2026' },
     { module: 6, title: 'The Full TikTok Ads Course 2026', url: 'https://www.youtube.com/watch?v=T1xOxbGUB-A', description: 'ZoCo Marketing covers account setup, Business Center, Pixel, creative psychology, competitor research, campaign creation, Search Ads, Spark Ads, Seller Center, GMV Max and retargeting.', region: 'English • 2026 • Full course' },
     { module: 3, title: 'TikTok Marketing for Business', url: 'https://www.youtube.com/watch?v=rIgPC7SfK58', description: 'HubSpot Marketing explains beginner-friendly TikTok business content strategy, audience growth and sales-oriented marketing principles.', region: 'USA/International • English' },
     { module: 2, title: 'TikTok Creative Center Tutorial 2026', url: 'https://www.youtube.com/watch?v=2LTJ2YA9fsk', description: 'Step-by-step walkthrough for finding top ads, filtering by industry/country/format and extracting creative patterns for testing.', region: 'English • Creative research' },
