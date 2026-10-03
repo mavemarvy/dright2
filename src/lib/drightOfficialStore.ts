@@ -21,6 +21,9 @@ export interface DrightOfficialProduct {
   official_rating_enabled: boolean;
   official_rating: number;
   benefits: string[];
+  expiry_days: number | null;
+  delivery_type?: string | null;
+  access_link?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -47,6 +50,9 @@ function normalize(row: Record<string, any>): DrightOfficialProduct {
     official_rating_enabled: row.official_rating_enabled === true,
     official_rating: Number(row.official_rating ?? 5),
     benefits: Array.isArray(row.benefits) ? row.benefits.map(String) : [],
+    expiry_days: row.expiry_days == null ? null : Number(row.expiry_days),
+    delivery_type: row.delivery_type == null ? null : String(row.delivery_type),
+    access_link: row.access_link == null ? null : String(row.access_link),
     created_at: row.created_at ? String(row.created_at) : undefined,
     updated_at: row.updated_at ? String(row.updated_at) : undefined,
   };
