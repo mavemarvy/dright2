@@ -270,12 +270,7 @@ const config: PremiumCourseConfig = {
       points: ['Visual reference for Story creative.', 'Useful production inspiration.', 'Check Pexels license before redistribution.'],
     },
   ],
-  downloads: [
-    { label: 'Instagram Ads Handbook', href: '/course-002-instagram-ads/Instagram_Ads_Mastery_2026_Handbook.html', type: 'Offline handbook' },
-    { label: 'Campaign Planner', href: '/course-002-instagram-ads/Instagram_Ads_Campaign_Planner_2026.csv', type: 'CSV workbook' },
-    { label: 'Launch Checklist', href: '/course-002-instagram-ads/Instagram_Ads_Launch_Checklist.html', type: 'Checklist' },
-    { label: 'Creative Testing Matrix', href: '/course-002-instagram-ads/Instagram_Creative_Testing_Matrix.csv', type: 'CSV template' },
-  ],
+  downloads: [],
 };
 
 export default function CourseInstagramAdsPage() {
