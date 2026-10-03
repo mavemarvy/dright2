@@ -44,6 +44,7 @@ import { useRecentlyViewed } from '../lib/marketplaceHooks';
 import { formatDisplayCurrency } from '../lib/currency';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
+import { getDirectGuestSaleSetting, type DirectGuestSaleSetting } from '../lib/directGuestSale';
 
 interface ServiceTier {
   id: string;
@@ -131,7 +132,9 @@ export default function ProductDetailPage() {
   const [customizations, setCustomizations] = useState<CustomizationOption[]>([]);
   const [sellerEmail, setSellerEmail] = useState<string>('');
   const [sellerProfile, setSellerProfile] = useState<SellerProfile | null>(null);
-  const isOwner = user?.id === product?.uploaded_by;
+  const productIsOfficial = product?.specifications?.official_store === true || product?.specifications?.first_party === true;
+  const isOwner = user?.id === product?.uploaded_by && !productIsOfficial;
+  const [directSaleSetting, setDirectSaleSetting] = useState<DirectGuestSaleSetting>({ enabled: false, guest_access_days: 10 });
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +153,11 @@ export default function ProductDetailPage() {
   const { recordView } = useRecentlyViewed(user?.id);
   const recordViewRef = useRef<typeof recordView | null>(null);
   recordViewRef.current = recordView;
+
+  useEffect(() => {
+    if (!id) return;
+    void getDirectGuestSaleSetting('product', id).then(setDirectSaleSetting);
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -515,6 +523,25 @@ export default function ProductDetailPage() {
           checkoutResult={checkoutResult}
           onDismissResult={() => setCheckoutResult(null)}
         />
+        {directSaleSetting.enabled && (
+          <div className="max-w-5xl mx-auto px-4 pb-6">
+            <GuestCheckout
+              productId={product.id}
+              productName={product.name}
+              productPrice={Number(product.price)}
+              sellerId={product.uploaded_by}
+              productType={product.product_type}
+              sourceCurrency={sourceCurrency}
+              guestAccessDays={directSaleSetting.guest_access_days}
+              assistedMode={Boolean(user)}
+              trigger={
+                <button className="w-full min-h-[48px] rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-black">
+                  {user ? 'Sell this service directly to a buyer' : 'Buy this service as guest'}
+                </button>
+              }
+            />
+          </div>
+        )}
       </>
     );
   }
@@ -674,8 +701,8 @@ export default function ProductDetailPage() {
                 />
               )}
 
-              {/* Guest checkout fallback */}
-              {!user && !hasPurchased && product.product_type !== 'COURSE' && (
+              {/* Guest checkout is available only when the listing owner opted in. */}
+              {!user && !hasPurchased && directSaleSetting.enabled && (
                 <div className="mt-3">
                   <GuestCheckout
                     productId={product.id}
@@ -683,12 +710,38 @@ export default function ProductDetailPage() {
                     productPrice={pricing?.finalPrice || Number(product.price)}
                     sellerId={product.uploaded_by}
                     productType={product.product_type}
+                    sourceCurrency={sourceCurrency}
+                    guestAccessDays={directSaleSetting.guest_access_days}
                     trigger={
                       <button className="w-full py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2">
                         <ShoppingBag className="w-4 h-4" />Buy as Guest
                       </button>
                     }
                   />
+                </div>
+              )}
+
+              {/* Signed-in seller/affiliate can pay for a recipient using only name + email. */}
+              {user && directSaleSetting.enabled && (
+                <div className="mt-3">
+                  <GuestCheckout
+                    productId={product.id}
+                    productName={product.name}
+                    productPrice={pricing?.finalPrice || Number(product.price)}
+                    sellerId={product.uploaded_by}
+                    productType={product.product_type}
+                    sourceCurrency={sourceCurrency}
+                    guestAccessDays={directSaleSetting.guest_access_days}
+                    assistedMode
+                    trigger={
+                      <button className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-black text-sm transition-colors flex items-center justify-center gap-2">
+                        <ShoppingBag className="w-4 h-4" />Sell directly to a buyer
+                      </button>
+                    }
+                  />
+                  <p className="mt-1.5 text-center text-[11px] text-gray-500">
+                    Buyer needs only full name + email. Guest access lasts {directSaleSetting.guest_access_days} days before account claim.
+                  </p>
                 </div>
               )}
 
