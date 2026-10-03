@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BadgeCheck, ChevronDown, ChevronUp, Eye, EyeOff, ImagePlus, Loader2, PackagePlus, Save, Settings2, Star, Store, X,
+  BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, EyeOff, ImagePlus, Loader2, PackagePlus, Save, Settings2, Star, Store, X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -188,6 +188,27 @@ export default function AdminDrightOfficialProductManager() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const moveCreateImage = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= imageFiles.length) return;
+    setImageFiles((prev) => {
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setImagePreviews((prev) => {
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const setCreateCover = (index: number) => {
+    if (index <= 0 || index >= imageFiles.length) return;
+    setImageFiles((prev) => [prev[index], ...prev.filter((_, i) => i !== index)]);
+    setImagePreviews((prev) => [prev[index], ...prev.filter((_, i) => i !== index)]);
+  };
+
   const create = async () => {
     if (!user?.id || saving || !canCreate) return;
     const validation = engine?.dynamic_forms_enabled
@@ -367,6 +388,30 @@ export default function AdminDrightOfficialProductManager() {
     });
   };
 
+  const moveEditImage = (index: number, direction: -1 | 1) => {
+    if (!editDraft) return;
+    const target = index + direction;
+    if (target < 0 || target >= editDraft.image_urls.length) return;
+    const nextImages = [...editDraft.image_urls];
+    [nextImages[index], nextImages[target]] = [nextImages[target], nextImages[index]];
+    setEditDraft({
+      ...editDraft,
+      image_url: nextImages[0] || null,
+      image_urls: nextImages,
+    });
+  };
+
+  const setEditCover = (index: number) => {
+    if (!editDraft || index <= 0 || index >= editDraft.image_urls.length) return;
+    const selected = editDraft.image_urls[index];
+    const nextImages = [selected, ...editDraft.image_urls.filter((_, i) => i !== index)];
+    setEditDraft({
+      ...editDraft,
+      image_url: selected,
+      image_urls: nextImages,
+    });
+  };
+
   const saveFullSettings = async (product: DrightOfficialProduct) => {
     if (!editDraft || editingId !== product.id || editSaving) return;
     const price = Number(editDraft.price);
@@ -534,19 +579,30 @@ export default function AdminDrightOfficialProductManager() {
             <div className="flex items-center justify-between gap-3 mb-2">
               <div>
                 <h3 className="text-sm font-bold text-gray-900">Product images</h3>
-                <p className="text-xs text-gray-500">At least one image is required for an official listing.</p>
+                <p className="text-xs text-gray-500">The first image is the cover. Add extra images for the swipeable product gallery, then reorder them before saving.</p>
               </div>
               <button type="button" onClick={() => imageInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700">
-                <ImagePlus className="w-4 h-4" /> Upload images
+                <ImagePlus className="w-4 h-4" /> Add images
               </button>
             </div>
             <input ref={imageInputRef} type="file" multiple accept="image/*" className="hidden" onChange={(e) => addImages(e.target.files)} />
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {imagePreviews.map((src, index) => (
-                <div key={src + index} className="relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-white">
-                  <img src={src} alt="" className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removeImage(index)} className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1"><X className="w-3.5 h-3.5" /></button>
-                  {index === 0 && <span className="absolute left-2 bottom-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black">COVER</span>}
+                <div key={src + index} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                  <div className="relative aspect-square overflow-hidden bg-gray-50">
+                    <img src={src} alt="" className="w-full h-full object-contain" />
+                    <button type="button" onClick={() => removeImage(index)} className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1"><X className="w-3.5 h-3.5" /></button>
+                    {index === 0 && <span className="absolute left-2 top-2 rounded-full bg-emerald-600 text-white px-2 py-1 text-[10px] font-black">COVER</span>}
+                  </div>
+                  <div className="flex items-center justify-between gap-1 p-2">
+                    <button type="button" disabled={index === 0} onClick={() => moveCreateImage(index, -1)} className="rounded-lg border border-gray-200 p-1.5 disabled:opacity-30" title="Move left"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                    {index > 0 ? (
+                      <button type="button" onClick={() => setCreateCover(index)} className="text-[10px] font-black text-primary-700 px-1">Set cover</button>
+                    ) : (
+                      <span className="text-[10px] font-black text-emerald-700 px-1">Main image</span>
+                    )}
+                    <button type="button" disabled={index === imagePreviews.length - 1} onClick={() => moveCreateImage(index, 1)} className="rounded-lg border border-gray-200 p-1.5 disabled:opacity-30" title="Move right"><ChevronRight className="w-3.5 h-3.5" /></button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -851,11 +907,11 @@ export default function AdminDrightOfficialProductManager() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <p className="text-sm font-bold text-gray-900">Product cover & gallery</p>
-                      <p className="text-xs text-gray-500 mt-0.5">The first image is the marketplace/product-page cover.</p>
+                      <p className="text-xs text-gray-500 mt-0.5">The first image is the cover. Use “Add extra images” to build the swipeable gallery; reorder or set any image as the cover.</p>
                     </div>
                     <label className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 cursor-pointer">
                       {editUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
-                      {editUploading ? 'Uploading…' : 'Upload images'}
+                      {editUploading ? 'Uploading…' : 'Add extra images'}
                       <input
                         type="file"
                         multiple
@@ -869,12 +925,23 @@ export default function AdminDrightOfficialProductManager() {
                   {editDraft.image_urls.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
                       {editDraft.image_urls.map((url, index) => (
-                        <div key={url + index} className="relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-                          <img src={url} alt="" className="w-full h-full object-contain" />
-                          <button type="button" onClick={() => removeEditImage(index)} className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                          {index === 0 && <span className="absolute left-2 bottom-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black">COVER</span>}
+                        <div key={url + index} className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                          <div className="relative aspect-square overflow-hidden bg-gray-50">
+                            <img src={url} alt="" className="w-full h-full object-contain" />
+                            <button type="button" onClick={() => removeEditImage(index)} className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                            {index === 0 && <span className="absolute left-2 top-2 rounded-full bg-emerald-600 text-white px-2 py-1 text-[10px] font-black">COVER</span>}
+                          </div>
+                          <div className="flex items-center justify-between gap-1 bg-white p-2">
+                            <button type="button" disabled={index === 0} onClick={() => moveEditImage(index, -1)} className="rounded-lg border border-gray-200 p-1.5 disabled:opacity-30" title="Move left"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                            {index > 0 ? (
+                              <button type="button" onClick={() => setEditCover(index)} className="text-[10px] font-black text-primary-700 px-1">Set cover</button>
+                            ) : (
+                              <span className="text-[10px] font-black text-emerald-700 px-1">Main image</span>
+                            )}
+                            <button type="button" disabled={index === editDraft.image_urls.length - 1} onClick={() => moveEditImage(index, 1)} className="rounded-lg border border-gray-200 p-1.5 disabled:opacity-30" title="Move right"><ChevronRight className="w-3.5 h-3.5" /></button>
+                          </div>
                         </div>
                       ))}
                     </div>
