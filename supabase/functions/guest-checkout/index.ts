@@ -14,6 +14,41 @@ const PAYSTACK_BASE = "https://api.paystack.co";
 function safeText(value: unknown, max = 500): string { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 function validEmail(value: string): boolean { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 320; }
 
+function productSourceCurrency(product: Record<string, unknown>): string {
+  const specs = product.specifications && typeof product.specifications === "object" && !Array.isArray(product.specifications)
+    ? product.specifications as Record<string, unknown>
+    : {};
+  const value = String(specs.price_currency || specs.source_currency || "USD").trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(value) ? value : "USD";
+}
+
+async function getSourceToUsdRate(sourceCurrency: string): Promise<{ rate: number; source: string }> {
+  if (sourceCurrency === "USD") return { rate: 1, source: "identity" };
+  const sources = [
+    { url: "https://open.er-api.com/v6/latest/USD", source: "open.er-api.com" },
+    { url: "https://api.exchangerate-api.com/v4/latest/USD", source: "exchangerate-api.com" },
+  ];
+  for (const candidate of sources) {
+    try {
+      const response = await fetch(candidate.url, { headers: { Accept: "application/json" } });
+      if (!response.ok) continue;
+      const payload = await response.json().catch(() => null);
+      const unitsPerUsd = Number(payload?.rates?.[sourceCurrency]);
+      if (Number.isFinite(unitsPerUsd) && unitsPerUsd > 0) {
+        return { rate: 1 / unitsPerUsd, source: candidate.source };
+      }
+    } catch {
+      // Try the next provider.
+    }
+  }
+  if (sourceCurrency === "NGN") return { rate: 1 / 1600, source: "dright_ngn_fallback" };
+  throw new Error(`Unable to resolve a safe ${sourceCurrency} to USD conversion rate`);
+}
+
+function money(value: number): number {
+  return Math.round((Number(value) + Number.EPSILON) * 1_000_000) / 1_000_000;
+}
+
 async function getUsdToNgnRate(): Promise<{ rate: number; source: string }> {
   const sources = [
     { url: "https://open.er-api.com/v6/latest/USD", source: "open.er-api.com" },
@@ -71,6 +106,27 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   try {
     const body = await req.json().catch(() => ({}));
+    const assistedMode = body?.assisted_mode === true;
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    let actorUser: { id: string; email?: string | null } | null = null;
+    let actorProfile: { id: string; email: string; is_admin: boolean | null; account_status: string | null; referral_code: string | null } | null = null;
+    if (bearer) {
+      const { data: actorAuth } = await db.auth.getUser(bearer);
+      actorUser = actorAuth?.user ? { id: actorAuth.user.id, email: actorAuth.user.email } : null;
+      if (actorUser?.id) {
+        const { data: actorRow } = await db
+          .from("users")
+          .select("id,email,is_admin,account_status,referral_code")
+          .eq("id", actorUser.id)
+          .maybeSingle();
+        actorProfile = actorRow as typeof actorProfile;
+      }
+    }
+    if (assistedMode && !actorUser?.id) {
+      return json({ error: "Sign in before selling or paying directly for a buyer" }, 401);
+    }
+
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
     const security = await verifyTurnstile(safeText(body.turnstile_token, 4096), ip);
     if (!security.ok) return json({ error: security.error }, security.status);
@@ -89,9 +145,34 @@ Deno.serve(async (req: Request) => {
 
     const { data: product, error: productError } = await db.from("products").select("*").eq("id", productId).maybeSingle();
     if (productError || !product) return json({ error: "Product not found" }, 404);
-    if (product.approval_status !== "approved" || product.is_hidden || !product.is_active) return json({ error: "Product is not available" }, 409);
+
+    const specs = product.specifications && typeof product.specifications === "object" && !Array.isArray(product.specifications)
+      ? product.specifications as Record<string, unknown>
+      : {};
+    const isOfficialDright = specs.official_store === true || specs.first_party === true;
+    const adminHiddenQa = Boolean(product.is_hidden && actorProfile?.is_admin === true && isOfficialDright);
+
+    if (product.approval_status !== "approved" || !product.is_active || (product.is_hidden && !adminHiddenQa)) {
+      return json({ error: "Product is not available" }, 409);
+    }
+
+    let directSaleDays = 10;
+    if (assistedMode) {
+      const { data: directSetting } = await db
+        .from("listing_direct_sale_settings")
+        .select("enabled,guest_access_days")
+        .eq("entity_type", "product")
+        .eq("entity_id", productId)
+        .maybeSingle();
+      if (!directSetting?.enabled) {
+        return json({ error: "Direct affiliate/seller checkout is disabled for this listing" }, 403);
+      }
+      directSaleDays = Math.max(1, Math.min(30, Number(directSetting.guest_access_days || 10)));
+    }
+
     const productType = String(product.product_type || "").toUpperCase();
-    const requiresShipping = productType === "PHYSICAL";
+    const physicalProduct = productType === "PHYSICAL";
+    const requiresShipping = physicalProduct && !assistedMode;
     if (requiresShipping && !shippingAddress) return json({ error: "Shipping address is required for physical products" }, 400);
     if (product.stock_quantity !== null && Number(product.stock_quantity) < quantity) return json({ error: "Requested quantity is not available" }, 409);
 
@@ -149,6 +230,26 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // In assisted mode the signed-in payer is authoritative. A seller can pay
+    // for their own buyer without affiliate attribution. A different active user
+    // is attributed only when they have a valid product/generic affiliate link.
+    if (assistedMode && actorUser?.id) {
+      if (actorUser.id === product.uploaded_by) {
+        link = null;
+      } else {
+        const { data: actorLink } = await db
+          .from("referral_links")
+          .select("id,user_id,unique_code,product_id,source_type,source_level")
+          .eq("user_id", actorUser.id)
+          .eq("source_type", "affiliate")
+          .or(`product_id.eq.${productId},product_id.is.null`)
+          .order("product_id", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+        link = actorLink as ReferralLink | null;
+      }
+    }
+
     let referrerId:string|null=null, canonicalLinkId:string|null=null, canonicalCode:string|null=null, sourceType:string|null=null, sourceLevel:string|null=null;
     if (link && (!link.product_id || link.product_id === productId) && String(link.source_type || "affiliate").toLowerCase() === "affiliate") {
       const { data: owner } = await db.from("users").select("id,account_status").eq("id", link.user_id).maybeSingle();
@@ -156,28 +257,63 @@ Deno.serve(async (req: Request) => {
         referrerId=owner.id; canonicalLinkId=link.id || null; canonicalCode=link.unique_code || trackingCode || null; sourceType="affiliate"; sourceLevel=link.source_level || null;
       }
     }
+    if (
+      assistedMode
+      && actorUser?.id
+      && actorUser.id !== product.uploaded_by
+      && !referrerId
+      && String(actorProfile?.account_status || "").toUpperCase() === "ACTIVE"
+      && actorProfile?.referral_code
+    ) {
+      referrerId=actorUser.id;
+      canonicalCode=actorProfile.referral_code;
+      sourceType="affiliate";
+      sourceLevel=null;
+    }
+    if (assistedMode && actorUser?.id === product.uploaded_by) {
+      sourceType="seller_assisted";
+      sourceLevel=null;
+      referrerId=null;
+      canonicalLinkId=null;
+      canonicalCode=null;
+    }
 
-    const unitPrice=Math.max(0,Number(product.price)||0);
-    const basePrice=unitPrice*quantity;
-    const isFree=product.is_free===true || basePrice===0;
-    const platformPercent=Math.max(0,Number(product.admin_task_percent||15));
+    const sourceCurrency = productSourceCurrency(product);
+    const unitSourcePrice=Math.max(0,Number(product.price)||0);
+    const sourceBasePrice=unitSourcePrice*quantity;
+    const isFree=product.is_free===true || sourceBasePrice===0;
+    const platformPercent=Math.max(0,Number(product.admin_task_percent||0));
     const affiliatePercent=Math.max(0,Number(product.affiliate_commission_percent||0));
-    const platformFee=isFree?0:(basePrice*platformPercent)/100;
-    const affiliateCommission=!isFree&&referrerId?(basePrice*affiliatePercent)/100:0;
-    const subtotal=basePrice+tierPrice+customizationPrice;
-    const totalAmount=isFree?0:subtotal+platformFee;
-    const sellerEarnings=Math.max(0,subtotal-affiliateCommission);
+    const sourcePlatformFee=isFree?0:(sourceBasePrice*platformPercent)/100;
+    const sourceAffiliateCommission=!isFree&&referrerId?(sourceBasePrice*affiliatePercent)/100:0;
+    const sourceSubtotal=sourceBasePrice+tierPrice+customizationPrice;
+    const sourceTotalAmount=isFree?0:sourceSubtotal+sourcePlatformFee;
+    const sourceSellerEarnings=Math.max(0,sourceSubtotal-sourceAffiliateCommission);
+
+    const sourceToUsd = isFree ? { rate: 1, source: "free_order" } : await getSourceToUsdRate(sourceCurrency);
+    const toUsd=(value:number)=>sourceCurrency==="USD"?money(value):money(value*sourceToUsd.rate);
+    const basePrice=toUsd(sourceBasePrice);
+    const platformFee=toUsd(sourcePlatformFee);
+    const affiliateCommission=toUsd(sourceAffiliateCommission);
+    const totalAmount=toUsd(sourceTotalAmount);
+    const sellerEarnings=toUsd(sourceSellerEarnings);
     const reference=`DRG_GUEST_${Date.now()}_${crypto.randomUUID().slice(0,8)}`;
 
     let gatewayAmount = 0;
     let gatewayCurrency = "NGN";
-    let fxRate: number | null = null;
-    let fxSource: string | null = null;
+    let gatewayFxRate: number | null = null;
+    let gatewayFxSource: string | null = null;
     if (!isFree) {
-      const fx = await getUsdToNgnRate();
-      fxRate = fx.rate;
-      fxSource = fx.source;
-      gatewayAmount = Math.round(totalAmount * fx.rate * 100) / 100;
+      if (sourceCurrency === "NGN") {
+        gatewayAmount = Math.round(sourceTotalAmount * 100) / 100;
+        gatewayFxRate = 1;
+        gatewayFxSource = "source_currency_ngn";
+      } else {
+        const usdToNgn = await getUsdToNgnRate();
+        gatewayFxRate = usdToNgn.rate;
+        gatewayFxSource = usdToNgn.source;
+        gatewayAmount = Math.round(totalAmount * usdToNgn.rate * 100) / 100;
+      }
       if (!Number.isFinite(gatewayAmount) || gatewayAmount <= 0) {
         return json({ error: "Unable to calculate the Paystack payment amount" }, 503);
       }
@@ -192,8 +328,12 @@ Deno.serve(async (req: Request) => {
       visitor_id:safeText(body.visitor_id,100)||null, session_id:safeText(body.session_id,100)||null,
       metadata:{
         guest_checkout:true,
+        assisted_mode:assistedMode,
+        assisted_by_user_id:assistedMode ? actorUser?.id || null : null,
+        guest_access_days:directSaleDays,
         product_type:productType,
         requires_shipping:requiresShipping,
+        shipping_pending:physicalProduct && assistedMode,
         selected_tier:selectedTier,
         selected_tier_id:selectedTierId||null,
         tier_price:tierPrice,
@@ -201,10 +341,15 @@ Deno.serve(async (req: Request) => {
         customizations:selectedCustomizations,
         customization_price:customizationPrice,
         buyer_requirements:buyerRequirements||null,
+        source_currency:sourceCurrency,
+        source_base_price:sourceBasePrice,
+        source_total_amount:sourceTotalAmount,
+        source_to_usd_rate:sourceToUsd.rate,
+        source_to_usd_source:sourceToUsd.source,
         gateway_amount:gatewayAmount,
         gateway_currency:gatewayCurrency,
-        fx_rate:fxRate,
-        fx_source:fxSource,
+        gateway_fx_rate:gatewayFxRate,
+        gateway_fx_source:gatewayFxSource,
         user_agent:req.headers.get("user-agent")||null
       },
     }).select("id").single();
@@ -236,9 +381,11 @@ Deno.serve(async (req: Request) => {
           purpose:"guest_product_purchase",
           dright_amount:totalAmount,
           dright_currency:"USD",
+          source_amount:sourceTotalAmount,
+          source_currency:sourceCurrency,
           gateway_amount:gatewayAmount,
           gateway_currency:gatewayCurrency,
-          fx_rate:fxRate
+          gateway_fx_rate:gatewayFxRate
         }
       }),
     });
@@ -257,6 +404,8 @@ Deno.serve(async (req: Request) => {
       authorization_url:paystackData.data.authorization_url,
       amount:totalAmount,
       currency:"USD",
+      source_amount:sourceTotalAmount,
+      source_currency:sourceCurrency,
       gateway_amount:gatewayAmount,
       gateway_currency:gatewayCurrency,
       product_id:productId
