@@ -69,6 +69,7 @@ import {
   getLocalDrafts, markDraftPublished, removeLocalDraft,
   type DraftData,
 } from '../lib/drafts';
+import { setDirectGuestSaleSetting } from '../lib/directGuestSale';
 import {
   fetchMarketplaceEngineSettings,
   fetchMarketplaceAttributes,
@@ -180,6 +181,7 @@ export default function UploadProductPage() {
   const [adminTaskAgreed, setAdminTaskAgreed] = useState(false);
   const [selectedTier, setSelectedTier] = useState<SalesTeamTier | null>(null);
   const [affiliateCommission, setAffiliateCommission] = useState('10');
+  const [allowAffiliateDirectSale, setAllowAffiliateDirectSale] = useState(false);
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
   const [engineSettings, setEngineSettings] = useState<MarketplaceEngineSettings | null>(null);
   const [selectedTaxonomyCategoryId, setSelectedTaxonomyCategoryId] = useState<string | null>(null);
@@ -650,6 +652,12 @@ export default function UploadProductPage() {
       if (insertErr) throw insertErr;
       const productId = productData.id;
 
+      try {
+        await setDirectGuestSaleSetting('product', productId, allowAffiliateDirectSale, 10);
+      } catch (directSaleError) {
+        console.warn('Direct-sale setting could not be saved:', directSaleError);
+      }
+
       if (
         engineSettings
         && (
@@ -818,6 +826,7 @@ export default function UploadProductPage() {
       setStep(1);
       setProductType('DIGITAL');
       setHasDrightSalesTeam(false);
+      setAllowAffiliateDirectSale(false);
       setMarketingMaterials([]);
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
@@ -907,6 +916,24 @@ export default function UploadProductPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-5">
+              <button
+                type="button"
+                onClick={() => setAllowAffiliateDirectSale((value) => !value)}
+                className="w-full flex items-center justify-between gap-4 text-left"
+              >
+                <div>
+                  <p className="text-sm font-black text-gray-900">Allow affiliates/seller to sell directly to a buyer</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    Optional. A signed-in seller or affiliate can pay using only the buyer's full name and email. DRIGHT sends a secure purchase link with 10-day guest mode; when the buyer later signs in with the same email, the order moves into Orders.
+                  </p>
+                </div>
+                <span className={'relative w-12 h-7 rounded-full shrink-0 transition-colors ' + (allowAffiliateDirectSale ? 'bg-emerald-600' : 'bg-gray-300')}>
+                  <span className={'absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform ' + (allowAffiliateDirectSale ? 'translate-x-5' : '')} />
+                </span>
+              </button>
             </div>
 
             {/* Image Upload */}
