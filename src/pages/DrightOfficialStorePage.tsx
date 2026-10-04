@@ -4,10 +4,11 @@ import { BadgeCheck, ChevronRight, Loader2, ShieldCheck, Store, Users } from 'lu
 import { DrightBrand, DrightMark } from '../components/DrightBrand';
 import { fetchDrightStarterProduct, type DrightStarterPublicSettings } from '../lib/drightStarter';
 import { fetchPublicDrightOfficialProducts, type DrightOfficialProduct } from '../lib/drightOfficialStore';
-import { formatDisplayCurrency } from '../lib/currency';
+import { useCurrency } from '../contexts/CurrencyContext';
 import SeoHead from '../components/SeoHead';
 
 export default function DrightOfficialStorePage() {
+  const { format: formatMoney } = useCurrency();
   const [settings, setSettings] = useState<DrightStarterPublicSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [officialProducts, setOfficialProducts] = useState<DrightOfficialProduct[]>([]);
@@ -94,7 +95,7 @@ export default function DrightOfficialStorePage() {
               <div className="p-6 sm:p-8">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs font-bold text-primary-600 uppercase tracking-wide">{product.category}</span>
-                  <span className="text-xl font-black text-gray-900 dark:text-white">{formatDisplayCurrency(product.price, product.currency)}</span>
+                  <span className="text-xl font-black text-gray-900 dark:text-white">{formatMoney(product.price, product.currency)}</span>
                 </div>
                 <h3 className="mt-3 text-2xl font-black text-gray-900 dark:text-white">{product.title}</h3>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-6">{product.subtitle}</p>
@@ -146,12 +147,12 @@ export default function DrightOfficialStorePage() {
                       <h3 className="font-black text-gray-900 dark:text-white mt-2 line-clamp-2">{item.name}</h3>
                       <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.subtitle || item.description}</p>
                       <div className="mt-4 flex items-center justify-between gap-2">
-                        <span className="font-black text-gray-900 dark:text-white">{formatDisplayCurrency(item.price, item.currency)}</span>
+                        <span className="font-black text-gray-900 dark:text-white">{formatMoney(item.price, item.currency)}</span>
                         <span className="text-xs text-emerald-700 dark:text-emerald-300 text-right">
                           {item.affiliate_commission_percent}% affiliate
                           {item.price > 0 && item.affiliate_commission_percent > 0 && (
                             <span className="block font-bold">
-                              Earn {formatDisplayCurrency(item.price * item.affiliate_commission_percent / 100, item.currency)}
+                              Earn {formatMoney(item.price * item.affiliate_commission_percent / 100, item.currency)}
                             </span>
                           )}
                         </span>
