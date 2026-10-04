@@ -195,23 +195,34 @@ export default function AdminSiteSettingsPage() {
     setError(null);
 
     try {
-      const { error } = await supabase
-        .from('site_settings')
-        .update({
-          site_name: settings.site_name,
-          maintenance_mode: settings.maintenance_mode,
-          default_currency: settings.default_currency || 'USD',
-          force_default_currency: settings.force_default_currency === true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', settings.id);
+      const { data, error: saveError } = await supabase.rpc('admin_update_site_settings', {
+        p_site_name: settings.site_name,
+        p_maintenance_mode: settings.maintenance_mode,
+        p_default_currency: settings.default_currency || 'USD',
+        p_force_default_currency: settings.force_default_currency === true,
+      });
 
-      if (error) throw error;
+      if (saveError) throw saveError;
+
+      const saved = (data || {}) as Partial<SiteSettings> & { success?: boolean };
+      if (saved.success === false) throw new Error('Site settings were not saved.');
+
+      setSettings((current) => current ? {
+        ...current,
+        site_name: String(saved.site_name ?? current.site_name),
+        maintenance_mode: Boolean(saved.maintenance_mode ?? current.maintenance_mode),
+        default_currency: String(saved.default_currency ?? current.default_currency),
+        force_default_currency: Boolean(saved.force_default_currency ?? current.force_default_currency),
+      } : current);
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
-      setError('Failed to save settings. Please try again.');
+      console.error('Failed to save site settings:', err);
+      const message = err instanceof Error ? err.message : '';
+      setError(message && !message.includes('non-2xx')
+        ? message
+        : 'Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
     }
