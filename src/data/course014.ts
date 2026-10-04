@@ -103,7 +103,7 @@ freeTools:[
 {label:"Firebase",url:"https://firebase.google.com/",summary:"Google backend platform with database, auth, hosting and other services.",freeNote:"Spark/no-cost options for eligible services; check pricing"},
 {label:"Cloudflare Workers",url:"https://workers.cloudflare.com/",summary:"Deploy serverless code and Pages Functions for practice and small projects.",freeNote:"Workers Free plan available"},
 {label:"Google AI Studio",url:"https://aistudio.google.com/",summary:"Prototype Gemini prompts and structured outputs before integration.",freeNote:"Free usage available within current limits"},
-{label:"Vercel",url:"https://vercel.com/",summary:"Excellent deployment workflow for frontend apps; verify plan terms before commercial use.",freeNote:"Hobby is $0 but intended for personal/non-commercial use"}
+{label:"Vercel",url:"https://vercel.com/",summary:"Excellent deployment workflow for frontend apps; verify plan terms before commercial use.",freeNote:"No-cost Hobby tier is intended for personal/non-commercial use; check current terms"}
 ],
 projects:[
 {title:"Responsive business site",outcome:"A phone-first multi-page site with form validation.",steps:["Design routes","Build reusable components","Test on small screens"]},
