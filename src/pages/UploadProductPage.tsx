@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigationVisibility } from '../contexts/NavigationVisibilityContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { supabase } from '../lib/supabase';
 import { canCreateListing } from '../lib/listingAllowance';
 import {
@@ -160,11 +161,13 @@ const initialForm: FormData = {
 };
 
 export default function UploadProductPage() {
-  const { user, isAdmin, isAccountLocked, isAccountBanned } = useAuth();
+  const { user, profile, isAdmin, isAccountLocked, isAccountBanned } = useAuth();
   const { isVisible } = useNavigationVisibility();
+  const { supportedCurrencies, platformDefaultCurrency, formatInCurrency } = useCurrency();
   const salesTeamFeatureVisible = isVisible('sales_team_features', isAdmin);
   const location = useLocation();
   const [form, setForm] = useState<FormData>(initialForm);
+  const [listingCurrency, setListingCurrency] = useState('USD');
   const [productType, setProductType] = useState<ProductType>('DIGITAL');
   const [step, setStep] = useState(1);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -175,6 +178,12 @@ export default function UploadProductPage() {
   const [showCategories, setShowCategories] = useState(false);
   const [uploadedItem, setUploadedItem] = useState<{ id: string; type: UploadType } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!restoringDraftRef.current && profile?.preferred_currency) {
+      setListingCurrency(String(profile.preferred_currency).toUpperCase());
+    }
+  }, [profile?.preferred_currency]);
 
   // Pricing & Sales Team state
   const [isFree, setIsFree] = useState(false);
@@ -357,6 +366,7 @@ export default function UploadProductPage() {
         const d = draft.draft_data;
         restoringDraftRef.current = true;
         setForm({ name: d.name, description: d.description, price: d.price, category: d.category, stock: d.stock });
+        setListingCurrency((d.priceCurrency || profile?.preferred_currency || 'USD').toUpperCase());
         if (d.affiliateCommission) setAffiliateCommission(d.affiliateCommission);
         setProductType(d.productType as ProductType);
         setStep(d.step);
@@ -543,7 +553,7 @@ export default function UploadProductPage() {
     if (!draftId) setDraftId(id);
 
     const draftData: DraftData = {
-      name: form.name, description: form.description, price: form.price,
+      name: form.name, description: form.description, price: form.price, priceCurrency: listingCurrency,
       category: form.category, stock: form.stock,
       productType, step, isFree, adminTaskAgreed, selectedTier, affiliateCommission,
       deliveryType, downloadFileUrl, accessLink, fileFormat, downloadLimit, expiryDays,
@@ -646,6 +656,10 @@ export default function UploadProductPage() {
         initial_stock: stockNum,
         product_type: productType,
         demo_video_url: demoVideoUrl || null,
+        specifications: {
+          price_currency: listingCurrency,
+          source_currency: listingCurrency,
+        },
         has_dright_sales_team: isServiceType && salesTeamFeatureVisible ? hasDrightSalesTeam : false,
       }).select('id').single();
 
@@ -825,6 +839,7 @@ export default function UploadProductPage() {
       clearImages();
       setStep(1);
       setProductType('DIGITAL');
+      setListingCurrency(String(profile?.preferred_currency || platformDefaultCurrency || 'USD').toUpperCase());
       setHasDrightSalesTeam(false);
       setAllowAffiliateDirectSale(false);
       setMarketingMaterials([]);
@@ -1120,15 +1135,29 @@ export default function UploadProductPage() {
                 )}
               </div>
               {!isServiceType && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Product Price (USD) {isFree ? '' : <span className="text-error">*</span>}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Product Price {isFree ? '' : <span className="text-error">*</span>}</label>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input type="number" min="0" step="0.01" value={isFree ? '0' : form.price}
                         onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0.00" disabled={isFree}
                         className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900 disabled:bg-gray-100 disabled:text-gray-400" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Price Currency</label>
+                    <select
+                      value={listingCurrency}
+                      onChange={(e) => setListingCurrency(e.target.value)}
+                      disabled={isFree}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none bg-white disabled:bg-gray-100"
+                    >
+                      {supportedCurrencies.map(currency => (
+                        <option key={currency.code} value={currency.code}>{currency.label}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-[11px] text-gray-500">This is the currency you entered. DRIGHT converts it for buyers; it never relabels the number as USD.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Stock Quantity (optional)</label>
@@ -1139,6 +1168,12 @@ export default function UploadProductPage() {
                         className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-gray-900" />
                     </div>
                   </div>
+                  {!isFree && Number(form.price || 0) > 0 && (
+                    <div className="sm:col-span-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+                      Entered: <strong>{form.price} {listingCurrency}</strong>. Default DRIGHT display ({platformDefaultCurrency}) ≈ <strong>{formatInCurrency(Number(form.price || 0), platformDefaultCurrency, listingCurrency)}</strong>.
+                      Buyers who choose another display currency see the corresponding converted amount.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1631,15 +1666,15 @@ export default function UploadProductPage() {
                     <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
                       <p className="text-sm font-medium text-gray-700 flex items-center gap-2"><DollarSign className="w-4 h-4 text-gray-400" />Pricing Breakdown</p>
                       <div className="space-y-1 text-sm">
-                        <PriceRow label="Base Price" value={pricing.basePrice} />
-                        <PriceRow label={`Admin Task (${pricing.adminTaskPercent}%)`} value={pricing.adminTaskAmount} />
-                        {pricing.salesTeamTaskPercent > 0 && <PriceRow label={`Sales Team Task (${pricing.salesTeamTaskPercent}%)`} value={pricing.salesTeamTaskAmount} />}
-                        <PriceRow label={`Affiliate Commission (${pricing.affiliateCommissionPercent}%)`} value={pricing.affiliateCommissionAmount} muted />
-                        <PriceRow label="Seller Earns" value={pricing.sellerEarnings} muted />
+                        <PriceRow label="Base Price" value={pricing.basePrice} currency={listingCurrency} />
+                        <PriceRow label={`Admin Task (${pricing.adminTaskPercent}%)`} value={pricing.adminTaskAmount} currency={listingCurrency} />
+                        {pricing.salesTeamTaskPercent > 0 && <PriceRow label={`Sales Team Task (${pricing.salesTeamTaskPercent}%)`} value={pricing.salesTeamTaskAmount} currency={listingCurrency} />}
+                        <PriceRow label={`Affiliate Commission (${pricing.affiliateCommissionPercent}%)`} value={pricing.affiliateCommissionAmount} currency={listingCurrency} muted />
+                        <PriceRow label="Seller Earns" value={pricing.sellerEarnings} currency={listingCurrency} muted />
                         <div className="border-t border-gray-200 pt-2 mt-2">
                           <div className="flex justify-between items-center">
                             <span className="font-semibold text-gray-900">Buyer Pays</span>
-                            <span className="text-xl font-bold text-primary-600">{formatDisplayCurrency(Number(pricing.finalPrice.toFixed(2)))}</span>
+                            <span className="text-xl font-bold text-primary-600">{formatDisplayCurrency(Number(pricing.finalPrice.toFixed(2)), listingCurrency)}</span>
                           </div>
                         </div>
                       </div>
@@ -1720,10 +1755,10 @@ export default function UploadProductPage() {
   );
 }
 
-function PriceRow({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
+function PriceRow({ label, value, currency, muted }: { label: string; value: number; currency: string; muted?: boolean }) {
   return (
     <div className={`flex justify-between ${muted ? 'text-gray-500' : 'text-gray-700'}`}>
-      <span>{label}</span><span>{formatDisplayCurrency(Number(value.toFixed(2)))}</span>
+      <span>{label}</span><span>{formatDisplayCurrency(Number(value.toFixed(2)), currency)}</span>
     </div>
   );
 }
