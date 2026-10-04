@@ -181,25 +181,33 @@ function ProfileTab() {
   };
 
   const handleSave = async () => {
+    if (!user?.id) {
+      showToast('error', 'Please sign in again before saving your profile.');
+      return;
+    }
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          full_name: formData.full_name,
-          phone: formData.phone || null,
-          account_number: formData.account_number || null,
-          location: formData.location || null,
-          preferred_currency: formData.preferred_currency,
-        })
-        .eq('id', user?.id);
+      const { data, error } = await supabase.rpc('update_my_profile_settings', {
+        p_full_name: formData.full_name,
+        p_phone: formData.phone || '',
+        p_account_number: formData.account_number || '',
+        p_location: formData.location || '',
+        p_preferred_currency: formData.preferred_currency,
+      });
       if (error) throw error;
+      if (data && typeof data === 'object' && 'success' in data && data.success !== true) {
+        throw new Error('Profile update was not accepted.');
+      }
       setCurrency(formData.preferred_currency);
       await refreshProfile();
       setEditing(false);
       showToast('success', 'Profile updated successfully');
-    } catch {
-      showToast('error', 'Failed to update profile');
+    } catch (err) {
+      console.error('Profile settings update failed:', err);
+      const message = err && typeof err === 'object' && 'message' in err
+        ? String((err as { message?: unknown }).message || '')
+        : '';
+      showToast('error', message ? `Failed to update profile: ${message}` : 'Failed to update profile. Please try again.');
     } finally {
       setSaving(false);
     }
