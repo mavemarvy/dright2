@@ -128,7 +128,7 @@ BEGIN
         jsonb_build_array(
           '15 structured modules and 45 step-by-step lessons',
           '15 practical module deliverables and knowledge checks',
-          '5 guided portfolio or business projects plus a capstone',
+          '5 guided portfolio or business projects including the capstone',
           'Interactive course-specific calculator',
           'Downloadable toolkit and working tracker',
           'Free and easy practice-tool links with usage notes',
