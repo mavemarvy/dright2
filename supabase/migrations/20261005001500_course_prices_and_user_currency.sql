@@ -3,6 +3,7 @@
 -- Stored product source currencies are not rewritten.
 
 begin;
+select set_config('request.jwt.claim.role','service_role',true);
 
 update public.site_settings
 set default_currency = 'USD',
