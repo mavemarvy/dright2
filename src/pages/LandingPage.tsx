@@ -1,4 +1,3 @@
-import { formatDisplayCurrency } from '../lib/currency';
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useInView, useMotionValue, useTransform, animate } from 'framer-motion';
@@ -9,6 +8,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { useRecentlyViewed } from '../lib/marketplaceHooks';
 import { getRecentlyViewedIds } from '../lib/marketplace';
 import SeoHead from '../components/SeoHead';
@@ -19,6 +20,7 @@ import { CmsPageRenderer } from '../components/cms/CmsPageRenderer';
 interface FeaturedProduct {
   id: string; name: string; price: number; image_url: string | null;
   category: string; is_free: boolean; average_rating: number | null;
+  specifications?: Record<string, unknown> | null;
 }
 
 interface TrustStats {
@@ -33,6 +35,18 @@ interface TrustStatsResponse {
   mode?: 'live' | 'gamified';
   stats?: TrustStats;
   error?: string;
+}
+
+function getProductSourceCurrency(product: FeaturedProduct): string {
+  const specs = product.specifications || {};
+  const source = String(specs.source_currency || specs.price_currency || 'USD').trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(source) ? source : 'USD';
+}
+
+function LandingProductPrice({ product }: { product: FeaturedProduct }) {
+  const { format } = useCurrency();
+  if (product.is_free) return <>FREE</>;
+  return <>{format(Number(product.price || 0), getProductSourceCurrency(product))}</>;
 }
 
 
@@ -484,7 +498,7 @@ function ContinueBrowsingSection() {
       if (ids.length === 0) { setLoading(false); return; }
       const { data } = await supabase
         .from('products')
-        .select('id, name, price, image_url, category, is_free, average_rating')
+        .select('id, name, price, image_url, category, is_free, average_rating, specifications')
         .in('id', ids.slice(0, 8))
         .eq('is_active', true)
         .eq('approval_status', 'approved');
@@ -531,7 +545,7 @@ function ContinueBrowsingSection() {
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{product.name}</p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{product.category}</p>
                   <span className="text-sm font-bold text-gray-900 dark:text-gray-100 mt-1.5 block">
-                    {product.is_free ? 'FREE' : `${formatDisplayCurrency(Number(Number(product.price).toFixed(2)))}`}
+                    {<LandingProductPrice product={product} />}
                   </span>
                 </div>
               </Link>
@@ -553,7 +567,7 @@ function RecommendationPreview({ user }: { user: any }) {
     (async () => {
       const { data } = await supabase
         .from('products')
-        .select('id, name, price, image_url, category, is_free, average_rating')
+        .select('id, name, price, image_url, category, is_free, average_rating, specifications')
         .eq('is_active', true)
         .eq('is_hidden', false)
         .eq('approval_status', 'approved')
@@ -609,7 +623,7 @@ function RecommendationPreview({ user }: { user: any }) {
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{product.category}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {product.is_free ? 'FREE' : `${formatDisplayCurrency(Number(Number(product.price).toFixed(2)))}`}
+                      {<LandingProductPrice product={product} />}
                     </span>
                     {(product.average_rating ?? 0) > 0 && (
                       <div className="flex items-center gap-0.5">
@@ -910,7 +924,12 @@ function NavBar({ user, firstName }: { user: any; firstName: string | null }) {
 
 export default function LandingPage() {
   const { user } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [firstName, setFirstName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (theme !== 'light') setTheme('light');
+  }, [theme, setTheme]);
 
   useEffect(() => {
     if (!user) { setFirstName(null); return; }
