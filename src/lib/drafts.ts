@@ -5,6 +5,7 @@ export interface DraftData {
   name: string;
   description: string;
   price: string;
+  priceCurrency?: string;
   category: string;
   stock: string;
   // Product type & step
@@ -244,6 +245,7 @@ export function createDefaultDraftData(): DraftData {
     name: '',
     description: '',
     price: '',
+    priceCurrency: 'USD',
     category: 'General',
     stock: '',
     productType: 'DIGITAL',
