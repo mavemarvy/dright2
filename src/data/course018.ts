@@ -17,15 +17,10 @@ m("Niche and audience research","A good niche has recurring viewer questions, en
 ["Topic depth","Check whether the niche can support at least fifty useful original topics rather than one viral idea.","Draft fifty topic seeds and group them into five content pillars."],
 ["Risk screening","Identify niches with high factual, medical, financial, copyright or advertiser-suitability risk.","Create a risk score and escalation rule for sensitive topics."]
 ],"Produce a niche decision memo with audience, topic depth and risk assessment.","Choose a niche you can research and produce responsibly for many videos."),
-m("Channel and brand setup","A clear brand system makes every upload recognizable without requiring the creator's face.",[
-["Channel promise","Write a short promise that explains the audience and recurring value.","Create three channel descriptions and choose the clearest."],
-["Visual identity","Use a repeatable thumbnail system, fonts, logo and simple motion language without copying another creator.","Build a mini brand board."],
-["Upload defaults and permissions","Set description templates, links, channel roles and security with least-privilege access.","Create a channel-operations checklist including MFA and backup access."]
-],"Build a complete channel brand and setup checklist.","Brand consistency should support comprehension rather than imitate competitors."),
-m("Topic research and content calendar","Topic selection should combine audience need, search/discovery signals, seasonality and your own angle.",[
-["Idea sources","Use YouTube search, comments, Google Trends, competitor gaps and audience questions as research inputs.","Collect thirty ideas from at least four sources."],
-["Topic scoring","Score ideas by viewer value, originality, production effort, evidence availability and title potential.","Rank twenty ideas and choose the top eight."],
-["Calendar design","Balance proven formats, experiments and timely topics without overproducing.","Create a four-week publishing calendar with production deadlines."]
+m("Channel brand, topic research and content calendar","Topic selection should combine audience need, search/discovery signals, seasonality and your own angle.",[
+["Channel promise and brand","Define the recurring viewer promise and an original visual system for thumbnails, fonts and channel graphics.","Write the channel promise and build a mini brand board that does not copy another creator."],
+["Idea sources and topic scoring","Use YouTube search, comments, Google Trends, competitor gaps and audience questions, then score ideas by value, originality, effort and evidence.","Collect thirty ideas, score twenty and choose the top eight."],
+["Calendar and channel operations","Balance proven formats, experiments and timely topics; set production deadlines, upload roles and basic channel-security rules.","Create a four-week publishing calendar plus an MFA/permissions checklist."]
 ],"Create a scored eight-video content calendar.","A content calendar should manage evidence, production and learning, not only dates."),
 m("Research and fact checking","AI summaries are starting points; documentary or educational claims need reliable source verification.",[
 ["Research brief","Define the exact questions the video must answer and what evidence is needed.","Write a research brief for one 8-minute video."],
