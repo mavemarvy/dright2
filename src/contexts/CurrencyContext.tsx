@@ -48,6 +48,8 @@ export interface CurrencyContextType {
   loading: boolean;
   detectedCurrency: string | null;
   baseCurrency: string;
+  platformDefaultCurrency: string;
+  forceDefaultCurrency: boolean;
   supportedCurrencies: ReturnType<typeof buildSupportedCurrencies>;
 }
 
@@ -161,6 +163,8 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [detectedCurrency, setDetectedCurrency] = useState<string | null>(null);
+  const [platformDefaultCurrency, setPlatformDefaultCurrency] = useState(BASE_CURRENCY);
+  const [forceDefaultCurrency, setForceDefaultCurrency] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const supportedCurrencies = useMemo(
@@ -212,6 +216,20 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         if (currency) setDetectedCurrency(currency);
       }
     } catch { /* ignore */ }
+
+    void (async () => {
+      const { data } = await supabase
+        .from('site_settings')
+        .select('default_currency, force_default_currency')
+        .eq('singleton', true)
+        .maybeSingle();
+      if (data) {
+        const configured = getCurrencyInfo(data.default_currency || BASE_CURRENCY).code;
+        setPlatformDefaultCurrency(configured);
+        setForceDefaultCurrency(data.force_default_currency === true);
+        if (!localStorage.getItem(CURRENCY_PREF_KEY)) setSelectedCurrency(configured);
+      }
+    })();
 
     refreshRates();
     intervalRef.current = setInterval(refreshRates, REFRESH_INTERVAL_MS);
@@ -287,32 +305,24 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          await supabase
-            .from('users')
-            .update({ preferred_currency: normalized })
-            .eq('id', session.user.id);
-          await supabase
-            .from('user_currency_preferences')
-            .upsert({
-              user_id: session.user.id,
-              currency: normalized,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'user_id' });
+          await supabase.rpc('set_my_preferred_currency', { p_currency: normalized });
         }
       } catch { /* non-critical */ }
     })();
   }, []);
 
+  const effectiveCurrency = forceDefaultCurrency ? platformDefaultCurrency : selectedCurrency;
+
   const convert = useCallback((amount: number, fromCurrency: string = BASE_CURRENCY): number => {
-    return tryConvertCurrency(amount, fromCurrency, selectedCurrency, rates) ?? Number(amount || 0);
-  }, [rates, selectedCurrency]);
+    return tryConvertCurrency(amount, fromCurrency, effectiveCurrency, rates) ?? Number(amount || 0);
+  }, [rates, effectiveCurrency]);
 
   const format = useCallback((amount: number, fromCurrency: string = BASE_CURRENCY): string => {
     const source = getCurrencyInfo(fromCurrency).code;
-    const converted = tryConvertCurrency(amount, source, selectedCurrency, rates);
+    const converted = tryConvertCurrency(amount, source, effectiveCurrency, rates);
     if (converted === null) return formatCurrencyValue(amount, source);
-    return formatCurrencyValue(converted, selectedCurrency);
-  }, [rates, selectedCurrency]);
+    return formatCurrencyValue(converted, effectiveCurrency);
+  }, [rates, effectiveCurrency]);
 
   const formatInCurrency = useCallback((
     amount: number,
@@ -336,12 +346,12 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   // text-replacement hack and it does not mutate stored monetary values.
   const renderedChildren = useMemo(
     () => (isValidElement(children) ? cloneElement(children) : children),
-    [children, selectedCurrency, lastUpdated],
+    [children, effectiveCurrency, lastUpdated, forceDefaultCurrency, platformDefaultCurrency],
   );
 
   return (
     <CurrencyContext.Provider value={{
-      selectedCurrency,
+      selectedCurrency: effectiveCurrency,
       setCurrency,
       convert,
       format,
@@ -352,6 +362,8 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       loading,
       detectedCurrency,
       baseCurrency: BASE_CURRENCY,
+      platformDefaultCurrency,
+      forceDefaultCurrency,
       supportedCurrencies,
     }}>
       {renderedChildren}
