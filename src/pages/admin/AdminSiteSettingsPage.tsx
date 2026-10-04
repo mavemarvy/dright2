@@ -18,11 +18,14 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { clearBusinessSettingsCache } from '../../lib/seo';
+import { SUPPORTED_CURRENCIES } from '../../lib/currency';
 
 interface SiteSettings {
   id: string;
   site_name: string;
   maintenance_mode: boolean;
+  default_currency: string;
+  force_default_currency: boolean;
 }
 
 interface BusinessFooterSettings {
@@ -197,6 +200,9 @@ export default function AdminSiteSettingsPage() {
         .update({
           site_name: settings.site_name,
           maintenance_mode: settings.maintenance_mode,
+          default_currency: settings.default_currency || 'USD',
+          force_default_currency: settings.force_default_currency === true,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', settings.id);
 
@@ -325,6 +331,54 @@ export default function AdminSiteSettingsPage() {
             onChange={(e) => setSettings({ ...settings, site_name: e.target.value })}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-warning focus:ring-2 focus:ring-warning/20 outline-none text-gray-900"
           />
+        </div>
+      </div>
+
+      {/* Global Currency */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+        <div>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-primary-600" />
+            Global Marketplace Currency
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-2xl">
+            Product prices keep the currency chosen by the seller. DRIGHT converts that source amount into the display currency.
+            For example, ₦100,000 stays NGN in storage and is converted to its USD equivalent instead of being treated as $100,000.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <label className="block">
+            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Default display currency</span>
+            <select
+              value={settings.default_currency || 'USD'}
+              onChange={(e) => setSettings({ ...settings, default_currency: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            >
+              {SUPPORTED_CURRENCIES.map(currency => (
+                <option key={currency.code} value={currency.code}>{currency.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-gray-500">Used when a visitor has not chosen a personal currency.</p>
+          </label>
+
+          <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Force default currency for everyone</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                When ON, every marketplace visitor sees {settings.default_currency || 'USD'} even if they previously selected another display currency.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.force_default_currency === true}
+              onClick={() => setSettings({ ...settings, force_default_currency: !settings.force_default_currency })}
+              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${settings.force_default_currency ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${settings.force_default_currency ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
         </div>
       </div>
 
