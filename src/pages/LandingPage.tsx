@@ -20,7 +20,7 @@ import { CmsPageRenderer } from '../components/cms/CmsPageRenderer';
 interface FeaturedProduct {
   id: string; name: string; price: number; image_url: string | null;
   category: string; is_free: boolean; average_rating: number | null;
-  specifications?: Record<string, unknown> | null;
+  specifications: Record<string, unknown> | null;
 }
 
 interface TrustStats {
