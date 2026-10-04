@@ -7,7 +7,7 @@ interface ThemeToggleProps {
 }
 
 export default function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, canToggleTheme } = useTheme();
 
   const baseClasses = 'relative w-10 h-10 rounded-xl transition-colors flex items-center justify-center';
   const variantClasses = variant === 'dark'
@@ -17,8 +17,10 @@ export default function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
   return (
     <button
       onClick={toggleTheme}
-      className={`${baseClasses} ${variantClasses}`}
-      aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+      disabled={!canToggleTheme}
+      title={canToggleTheme ? undefined : 'Visitors use DRIGHT in bright mode. Sign in to change appearance.'}
+      className={`${baseClasses} ${variantClasses} ${!canToggleTheme ? 'cursor-default' : ''}`}
+      aria-label={canToggleTheme ? (theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode') : 'Bright mode for visitors'}
     >
       <motion.div
         initial={false}
