@@ -37,21 +37,16 @@ m("Editing and beta feedback","Editing separates structural problems, clarity pr
 ["Line and copy edit","Improve clarity, consistency, grammar and style without flattening the author's voice.","Line-edit 1,000 words and explain five major decisions."],
 ["Beta readers","Ask target readers structured questions about usefulness, confusion and missing material.","Create a five-question beta-reader form and analyze sample feedback."]
 ],"Create an editing plan and beta-feedback report.","Editing should improve the reader experience, not only remove typos."),
-m("Ebook formatting","Ebooks are reflowable documents; formatting should remain readable across devices and font sizes.",[
+m("Ebook formatting and Kindle Create","Ebooks are reflowable documents; formatting should remain readable across devices and font sizes.",[
 ["Styles and structure","Use headings, paragraphs, lists and page breaks cleanly instead of manual spaces and tabs.","Format a three-chapter sample using real styles."],
 ["Images and tables","Use images only when they remain readable on small screens and add real value.","Test one image and one table on a narrow ebook preview."],
-["Navigation","Create a functioning table of contents and sensible chapter starts.","Build and test clickable ebook navigation."]
+["Navigation and Kindle Create","Create functioning navigation, then use Kindle Create where suitable to import, theme, preview and export supported book workflows.","Build clickable navigation and document a Kindle Create import-preview-export test."]
 ],"Produce a clean ebook-format sample ready for preview.","Ebook formatting should survive device and font-size changes."),
 m("Paperback and hardcover interiors","Print interiors require trim size, margins, page count and bleed decisions before final export.",[
 ["Trim and margins","Choose trim size based on genre and reading experience, then set margins for the expected page count.","Create a print-spec sheet for one book."],
 ["Bleed and images","Understand when art reaches the edge and when bleed settings are required.","Mark which sample pages need bleed and why."],
 ["Print PDF QA","Check fonts, page size, image quality, blank pages and margin safety.","Run a print preflight on a ten-page sample."]
 ],"Create a print-ready interior sample plus preflight checklist.","Print files must match the exact physical specifications selected in KDP."),
-m("Kindle Create workflow","Kindle Create can simplify formatting for eligible book types while still requiring human inspection.",[
-["Import manuscript","Prepare clean source styles and import into Kindle Create.","Prepare a sample DOCX and record any import issues."],
-["Themes and chapter detection","Use consistent chapter structure and preview the result instead of over-formatting.","Format three chapters and compare theme choices."],
-["Export and proof","Generate the publishable file and preview it before upload.","Create a final checklist for Kindle Create output."]
-],"Produce a Kindle Create project sample and preview report.","Automation helps formatting, but previewing remains mandatory."),
 m("Cover design and print dimensions","A cover must communicate genre and promise at thumbnail size while meeting exact print dimensions.",[
 ["Market fit","Study visual conventions in the category without copying another cover.","Create a moodboard of patterns, then design an original direction."],
 ["Front cover hierarchy","Prioritize title, subtitle where needed and author name for small-thumbnail readability.","Create three thumbnail concepts and test them at phone size."],
