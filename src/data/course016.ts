@@ -47,16 +47,11 @@ m("Editing and revision","Editing happens at structural, paragraph, sentence and
 ["Line edit","Improve clarity, rhythm, transitions and word choice without changing meaning unnecessarily.","Line-edit 500 words and explain five changes."],
 ["Proofread","Check grammar, punctuation, names, numbers, formatting and links after major changes stop.","Create and run a proofread checklist."]
 ],"Deliver before/after editing evidence for one sample.","Edit from big structural problems down to small surface errors."),
-m("Articles, newsletters and thought leadership","Shorter recurring formats need strong positioning, consistent cadence and useful point of view.",[
+m("Articles, newsletters, thought leadership and scripts","Shorter recurring formats need strong positioning, consistent cadence and useful point of view.",[
 ["Thought-leadership angle","Start from a real experience, observation or argument the client can defend.","Turn five generic topics into specific angles."],
 ["Newsletter structure","Combine hook, useful idea, example and CTA in a repeatable format.","Draft a four-edition newsletter plan."],
-["Repurposing","Adapt one approved source piece into posts or scripts without distorting the original message.","Create a repurposing matrix for one article."]
+["Repurposing and scripts","Adapt approved source material into posts, newsletters or spoken scripts without distorting the message; write scripts for the ear with visual beats.","Create a repurposing matrix and a three-minute video-script outline from one approved article."]
 ],"Build a one-month thought-leadership package.","Recurring content should deepen a point of view, not repeat slogans."),
-m("YouTube and social scripts","Scripts are written for the ear, timing and visual sequence rather than for silent reading.",[
-["Hook and retention","Use an opening question, tension or promise that the script actually fulfils.","Write ten honest hooks for one video topic."],
-["Spoken language","Use shorter sentences, signposting and natural transitions.","Convert a 500-word article section into spoken script."],
-["Visual beats","Mark demonstrations, B-roll, graphics or on-screen text where they improve comprehension.","Storyboard a three-minute script."]
-],"Create a complete three-minute video script with visual notes.","A script should sound natural aloud and make visuals useful."),
 m("Pricing and proposals","A quote should reflect word count, research, interview load, revisions, timeline and risk.",[
 ["Estimate effort","Break the project into discovery, research, draft, edit, revision and management.","Estimate hours for three project types."],
 ["Quote structure","Use per-word, project, milestone or retainer pricing only when it fits scope.","Create three quote options using the calculator."],
