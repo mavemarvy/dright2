@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import VideoPlayer from './VideoPlayer';
 import FitnessProgressPlanner from './course/FitnessProgressPlanner';
+import CourseInteractiveToolbox, { type CourseCalculatorKind } from './course/CourseInteractiveToolbox';
 
 export type PremiumCourseLesson = {
   title: string;
@@ -68,16 +69,29 @@ export type PremiumCourseConfig = {
   title: string;
   subtitle: string;
   promise: string;
-  accent: 'instagram' | 'whatsapp' | 'youtube' | 'google';
+  accent: 'instagram' | 'whatsapp' | 'youtube' | 'google' | 'ai' | 'trade' | 'freelance' | 'affiliate' | 'digital' | 'builder' | 'pdf' | 'writing' | 'kdp';
   productPath?: string;
   modules: PremiumCourseModule[];
   videos: PremiumCourseVideo[];
   visuals: PremiumCourseStockVisual[];
   references: PremiumCourseReference[];
   downloads: PremiumCourseDownload[];
+  calculatorKind?: CourseCalculatorKind;
+  freeTools?: Array<{ label: string; url: string; summary: string; freeNote?: string }>;
+  projects?: Array<{ title: string; outcome: string; steps: string[] }>;
+  templates?: Array<{ label: string; href: string; type: string; description: string }>;
 };
 
 function accentClasses(accent: PremiumCourseConfig['accent']) {
+  if (accent === 'ai') return { badge: 'bg-cyan-400/15 text-cyan-100', solid: 'bg-cyan-700 hover:bg-cyan-800', text: 'text-cyan-700', border: 'border-cyan-200', soft: 'bg-cyan-50', gradient: 'from-cyan-500 to-violet-500', hero: 'from-cyan-950/70 via-slate-950 to-violet-950/55' };
+  if (accent === 'trade') return { badge: 'bg-amber-400/15 text-amber-100', solid: 'bg-amber-700 hover:bg-amber-800', text: 'text-amber-700', border: 'border-amber-200', soft: 'bg-amber-50', gradient: 'from-amber-500 to-orange-500', hero: 'from-amber-950/70 via-slate-950 to-orange-950/50' };
+  if (accent === 'freelance') return { badge: 'bg-indigo-400/15 text-indigo-100', solid: 'bg-indigo-700 hover:bg-indigo-800', text: 'text-indigo-700', border: 'border-indigo-200', soft: 'bg-indigo-50', gradient: 'from-indigo-500 to-sky-500', hero: 'from-indigo-950/70 via-slate-950 to-sky-950/50' };
+  if (accent === 'affiliate') return { badge: 'bg-lime-400/15 text-lime-100', solid: 'bg-lime-700 hover:bg-lime-800', text: 'text-lime-700', border: 'border-lime-200', soft: 'bg-lime-50', gradient: 'from-lime-500 to-emerald-500', hero: 'from-lime-950/65 via-slate-950 to-emerald-950/50' };
+  if (accent === 'digital') return { badge: 'bg-pink-400/15 text-pink-100', solid: 'bg-pink-700 hover:bg-pink-800', text: 'text-pink-700', border: 'border-pink-200', soft: 'bg-pink-50', gradient: 'from-pink-500 to-fuchsia-500', hero: 'from-pink-950/65 via-slate-950 to-fuchsia-950/50' };
+  if (accent === 'builder') return { badge: 'bg-sky-400/15 text-sky-100', solid: 'bg-sky-700 hover:bg-sky-800', text: 'text-sky-700', border: 'border-sky-200', soft: 'bg-sky-50', gradient: 'from-sky-500 to-blue-600', hero: 'from-sky-950/70 via-slate-950 to-blue-950/55' };
+  if (accent === 'pdf') return { badge: 'bg-rose-400/15 text-rose-100', solid: 'bg-rose-700 hover:bg-rose-800', text: 'text-rose-700', border: 'border-rose-200', soft: 'bg-rose-50', gradient: 'from-rose-500 to-red-500', hero: 'from-rose-950/70 via-slate-950 to-red-950/50' };
+  if (accent === 'writing') return { badge: 'bg-purple-400/15 text-purple-100', solid: 'bg-purple-700 hover:bg-purple-800', text: 'text-purple-700', border: 'border-purple-200', soft: 'bg-purple-50', gradient: 'from-purple-500 to-violet-500', hero: 'from-purple-950/70 via-slate-950 to-violet-950/50' };
+  if (accent === 'kdp') return { badge: 'bg-orange-400/15 text-orange-100', solid: 'bg-orange-700 hover:bg-orange-800', text: 'text-orange-700', border: 'border-orange-200', soft: 'bg-orange-50', gradient: 'from-orange-500 to-yellow-500', hero: 'from-orange-950/70 via-slate-950 to-yellow-950/40' };
   if (accent === 'whatsapp') {
     return {
       badge: 'bg-emerald-400/15 text-emerald-200',
@@ -425,6 +439,8 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{config.modules.length} modules</span>
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{lessons.length} lessons</span>
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{config.videos.length} embedded tutorials</span>
+                {!!config.projects?.length && <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{config.projects.length} guided projects</span>}
+                {!!config.freeTools?.length && <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">{config.freeTools.length} free/easy tools</span>}
                 <span className={'rounded-full px-3 py-1.5 text-xs font-bold ' + colors.badge}>{adminPreview ? 'ADMIN PREVIEW • NOT PUBLIC' : 'Buyer-only access'}</span>
               </div>
             </div>
@@ -470,6 +486,9 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
           <div className="mb-6">
             <FitnessProgressPlanner storageKey={'dright:course006:fitness-planner:' + (progressIdentity || 'admin-preview')} />
           </div>
+        )}
+        {config.calculatorKind && (
+          <div className="mb-6"><CourseInteractiveToolbox kind={config.calculatorKind} /></div>
         )}
 
         <div className="lg:hidden mb-4">
@@ -614,6 +633,29 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
                 <div className="mt-3 grid sm:grid-cols-2 gap-2">
                   {config.downloads.map((item) => <a key={item.href} href={item.href} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 flex items-center justify-between gap-3"><span><span className="block text-sm font-bold">{item.label}</span><span className="text-[11px] text-slate-400">{item.type}</span></span><FileDown className="w-4 h-4 text-slate-400" /></a>)}
                 </div>
+              </section>
+            )}
+
+            {!!config.projects?.length && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex items-center gap-2"><Target className="w-5 h-5 text-slate-600" /><h3 className="font-black">Guided portfolio projects</h3></div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Build evidence of skill, not just lesson completion. Adapt sample projects honestly; never present fictional results as client work.</p>
+                <div className="mt-4 grid md:grid-cols-2 gap-3">{config.projects.map((project, index) => <div key={project.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Project {index + 1}</p><h4 className="mt-1 font-black text-slate-900">{project.title}</h4><p className="mt-2 text-sm leading-6 text-slate-600">{project.outcome}</p><ol className="mt-3 space-y-1.5">{project.steps.map((step, stepIndex) => <li key={step} className="text-xs leading-5 text-slate-600"><strong>{stepIndex + 1}.</strong> {step}</li>)}</ol></div>)}</div>
+              </section>
+            )}
+
+            {!!config.templates?.length && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex items-center gap-2"><FileDown className="w-5 h-5 text-slate-600" /><h3 className="font-black">Templates & working files</h3></div>
+                <div className="mt-3 grid sm:grid-cols-2 gap-2">{config.templates.map((item) => <a key={item.href} href={item.href} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 flex items-start justify-between gap-3"><span><span className="block text-sm font-bold">{item.label}</span><span className="block mt-1 text-xs leading-5 text-slate-500">{item.description}</span><span className="block mt-1 text-[10px] font-black uppercase tracking-wider text-slate-400">{item.type}</span></span><FileDown className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></a>)}</div>
+              </section>
+            )}
+
+            {!!config.freeTools?.length && (
+              <section className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
+                <div className="flex items-center gap-2"><ExternalLink className="w-5 h-5 text-emerald-700" /><h3 className="font-black text-emerald-950">Free & easy practice tools</h3></div>
+                <p className="mt-1 text-xs leading-5 text-emerald-800/80">These links help learners practise with lower upfront cost. Free plans, regional availability and limits can change, so check each provider before relying on it commercially.</p>
+                <div className="mt-3 grid sm:grid-cols-2 gap-2">{config.freeTools.map((tool) => <a key={tool.url} href={tool.url} target="_blank" rel="noreferrer" className="rounded-xl border border-emerald-200 bg-white px-3 py-3"><span className="block text-sm font-black text-emerald-950">{tool.label}</span><span className="block mt-1 text-xs leading-5 text-slate-600">{tool.summary}</span>{tool.freeNote && <span className="block mt-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{tool.freeNote}</span>}</a>)}</div>
               </section>
             )}
 
