@@ -159,6 +159,9 @@ async function fetchRates(): Promise<Rates | null> {
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [selectedCurrency, setSelectedCurrency] = useState<string>(loadSelectedCurrency);
+  const [hasExplicitPreference, setHasExplicitPreference] = useState<boolean>(() => {
+    try { return Boolean(localStorage.getItem(CURRENCY_PREF_KEY)); } catch { return false; }
+  });
   const [rates, setRates] = useState<Rates>(FALLBACK_RATES);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -227,7 +230,10 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         const configured = getCurrencyInfo(data.default_currency || BASE_CURRENCY).code;
         setPlatformDefaultCurrency(configured);
         setForceDefaultCurrency(data.force_default_currency === true);
-        if (!localStorage.getItem(CURRENCY_PREF_KEY)) setSelectedCurrency(configured);
+        if (!localStorage.getItem(CURRENCY_PREF_KEY)) {
+          setSelectedCurrency(configured);
+          setHasExplicitPreference(false);
+        }
       }
     })();
 
@@ -257,6 +263,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       if (data?.preferred_currency) {
         const normalized = getCurrencyInfo(data.preferred_currency).code;
         setSelectedCurrency(normalized);
+        setHasExplicitPreference(true);
         localStorage.setItem(CURRENCY_PREF_KEY, normalized);
       } else if (data?.location) {
         const loc = data.location.toLowerCase();
@@ -290,6 +297,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     const handler = (event: StorageEvent) => {
       if (event.key === CURRENCY_PREF_KEY && event.newValue) {
         setSelectedCurrency(getCurrencyInfo(event.newValue).code);
+        setHasExplicitPreference(true);
       }
     };
     window.addEventListener('storage', handler);
@@ -299,6 +307,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const setCurrency = useCallback((code: string) => {
     const normalized = getCurrencyInfo(code).code;
     setSelectedCurrency(normalized);
+    setHasExplicitPreference(true);
     localStorage.setItem(CURRENCY_PREF_KEY, normalized);
 
     (async () => {
@@ -311,7 +320,13 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  const effectiveCurrency = forceDefaultCurrency ? platformDefaultCurrency : selectedCurrency;
+  // The site setting defines the first/default display currency. Once a visitor or
+  // signed-in user chooses a preference, that preference must remain authoritative.
+  // This prevents an admin 'force default' flag from making the currency selector look
+  // like it changed while marketplace prices remain visually static.
+  const effectiveCurrency = forceDefaultCurrency && !hasExplicitPreference
+    ? platformDefaultCurrency
+    : selectedCurrency;
 
   const convert = useCallback((amount: number, fromCurrency: string = BASE_CURRENCY): number => {
     return tryConvertCurrency(amount, fromCurrency, effectiveCurrency, rates) ?? Number(amount || 0);
