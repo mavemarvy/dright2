@@ -83,7 +83,18 @@ m("90-day capstone","Build one evidence-driven affiliate funnel from audience re
 ["Month 3: improve","Review conversion, questions, reversals and creative performance.","Write a scale, reposition or stop decision based on evidence."]
 ],"Submit a 90-day affiliate operating plan.","The capstone measures a repeatable process, not a promised earnings result.")
 ],
-videos:[],
+videos:[
+{module:1,title:"Affiliate Advantage Episode 1 — Affiliate Marketing 101",url:"https://www.youtube.com/watch?v=0pkgVlAiTu8",description:"Selar's beginner-focused affiliate marketing introduction for African digital sellers.",region:"Nigerian English • Practical"},
+{module:12,title:"Affiliate Advantage Episode 2 — Low-Cost Paid Ads for Affiliate Sales",url:"https://www.youtube.com/watch?v=JQV_THxrClo",description:"Paid-traffic lesson useful only after program permissions and break-even economics are understood.",region:"Nigerian English • Practical"},
+{module:7,title:"How to Increase Affiliate Sales with Email Marketing",url:"https://www.youtube.com/watch?v=1HNqluOIXZM",description:"Selar tutorial on using email as a permission-based affiliate follow-up channel.",region:"Nigerian English • Practical"},
+{module:7,title:"How to Increase Affiliate Sales via Community Building",url:"https://www.youtube.com/watch?v=rIbrLfWThX0",description:"Community-led affiliate selling and relationship building from an African commerce platform.",region:"Nigerian English • Practical"},
+{module:1,title:"Affiliate Marketing for Beginners — How to Get Started in 2026",url:"https://www.youtube.com/watch?v=jm67Q6OjIiQ",description:"Nigeria/Africa-oriented beginner guide with educational disclaimers and practical setup steps.",region:"Nigerian English • Practical"},
+{module:8,title:"Complete Affiliate Marketing Course for Beginners",url:"https://www.youtube.com/watch?v=CF3Uk2jc_ig",description:"Ahrefs' structured free course covering affiliate fundamentals, content and search strategy.",region:"International English • Practical"},
+{module:5,title:"How to Make Money with Affiliate Marketing",url:"https://www.youtube.com/watch?v=7d5v6zmS-No",description:"Long-form affiliate tutorial covering offer selection, content and conversion; results vary.",region:"International English • Practical"},
+{module:5,title:"Complete Affiliate Marketing Tutorial — Blueprint",url:"https://www.youtube.com/watch?v=24iYmwk8odA",description:"Detailed practical affiliate workflow; use the process, not headline earnings, as the lesson.",region:"International English • Practical"},
+{module:8,title:"How To Start Affiliate Marketing for Beginners in 2026 — Full Course",url:"https://www.youtube.com/watch?v=a6CQMsBDMP4",description:"Modern SEO-led affiliate course covering niche choice, websites, email, products, content and analytics.",region:"International English • Practical"},
+{module:3,title:"Affiliate Marketing for Beginners in 2026 — Full Course",url:"https://www.youtube.com/watch?v=HLMwinDXrFY",description:"Current course on choosing programs, building content plans and adding affiliate links with an explicit results disclaimer.",region:"International English • Practical"}
+],
 visuals:[
 {title:"Affiliate conversion funnel",imageUrl:"/course-012-affiliate/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Audience, useful content, qualified click, sale and commission."},
 {title:"Affiliate toolkit",imageUrl:"/course-012-affiliate/toolkit.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Offer scorecards, scripts, analytics and compliance checks."}

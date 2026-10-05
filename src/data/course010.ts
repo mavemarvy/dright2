@@ -83,7 +83,18 @@ m("90-day importation capstone","Run a controlled source-to-resale cycle and com
 ["Review and reorder","Compare contribution, stock velocity and complaints before restocking.","Write a reorder, renegotiate or stop decision with evidence."]
 ],"Submit a complete import business file.","A disciplined decision is a success even when the correct decision is not to import.")
 ],
-videos:[],
+videos:[
+{module:3,title:"New Mini Importation Process 2026 — China to Nigeria Step-by-Step",url:"https://www.youtube.com/watch?v=CSHgAnd5_go",description:"Nigeria-focused walkthrough of the current mini-importation process from China.",region:"Nigerian English • Practical"},
+{module:3,title:"Mini Importation from China to Nigeria — Full Beginner Guide",url:"https://www.youtube.com/watch?v=Mgf0-X0r3G0",description:"Beginner sourcing-to-Nigeria tutorial covering the overall import workflow.",region:"Nigerian English • Practical"},
+{module:1,title:"How To Do Mini Importation From China To Nigeria",url:"https://www.youtube.com/watch?v=i94_JA_O60I",description:"Nigeria-specific orientation for the mini-importation process and beginner planning.",region:"Nigerian English • Practical"},
+{module:3,title:"How To Source Cheap Products From 1688",url:"https://www.youtube.com/watch?v=wXj5lg84MkI",description:"Practical 1688 sourcing walkthrough for learners comparing Chinese wholesale platforms.",region:"Nigerian English • Practical"},
+{module:10,title:"How I Sell Imported Goods From China in Nigeria",url:"https://www.youtube.com/watch?v=-ruu0asdv8I",description:"Nigeria resale workflow useful for the sales, listing and stock-turn modules.",region:"Nigerian English • Practical"},
+{module:1,title:"Beginner's Guide to Importing From China — 7-Step Process",url:"https://www.youtube.com/watch?v=KL8vI6J1zdI",description:"Structured international overview of the import process from supplier search through delivery.",region:"International English • Practical"},
+{module:3,title:"1688 Tutorial — How to Source from 1688.com in English",url:"https://www.youtube.com/watch?v=eB9RLATRArM",description:"English-language 1688 sourcing tutorial for navigating products and suppliers.",region:"International English • Practical"},
+{module:3,title:"How to Import from Alibaba in 2026 — Complete Beginner's Guide",url:"https://www.youtube.com/watch?v=UjqA7IYylAc",description:"Current Alibaba beginner workflow for sourcing and ordering.",region:"International English • Practical"},
+{module:4,title:"How to Find Suppliers on Alibaba — Step-by-Step 2026",url:"https://www.youtube.com/watch?v=xr9_H89W4jg",description:"Supplier-discovery walkthrough that complements DRIGHT's due-diligence checklist.",region:"International English • Practical"},
+{module:4,title:"How to Buy from Alibaba Safely 2026 — Step-by-Step",url:"https://www.youtube.com/watch?v=3ha9EiH50t4",description:"Safety-focused buying tutorial; learners should still perform independent supplier verification.",region:"International English • Practical"}
+],
 visuals:[
 {title:"China sourcing to Nigeria resale",imageUrl:"/course-010-china-importation/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Demand, supplier verification, freight, landed cost and resale."},
 {title:"Importation toolkit",imageUrl:"/course-010-china-importation/toolkit.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Supplier scorecards, landed-cost planning and inventory tracking."}

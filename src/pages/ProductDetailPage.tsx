@@ -41,7 +41,7 @@ import MobileActionBar from '../components/listing/MobileActionBar';
 import { trackListingEvent, trackUserActivity } from '../lib/marketplaceAnalytics';
 import { trackProductView } from '../lib/analyticsService';
 import { useRecentlyViewed } from '../lib/marketplaceHooks';
-import { formatDisplayCurrency } from '../lib/currency';
+import { useCurrency } from '../contexts/CurrencyContext';
 import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCard';
 import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 import { getDirectGuestSaleSetting, type DirectGuestSaleSetting } from '../lib/directGuestSale';
@@ -121,6 +121,7 @@ interface Product {
 }
 
 export default function ProductDetailPage() {
+  const { format: formatMoney } = useCurrency();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user, profile, isAdmin } = useAuth();
@@ -863,7 +864,7 @@ export default function ProductDetailPage() {
           <div className="divide-y divide-gray-100">
             <SpecRow label="Type" value={product.product_type} />
             <SpecRow label="Category" value={product.category} />
-            <SpecRow label="Price" value={product.is_free ? 'Free' : formatDisplayCurrency(Number(product.price), sourceCurrency)} />
+            <SpecRow label="Price" value={product.is_free ? 'Free' : formatMoney(Number(product.price), sourceCurrency)} />
             {product.stock_quantity !== null && <SpecRow label="Stock" value={`${product.stock_quantity} units`} />}
             {product.commission_rate > 0 && <SpecRow label="Commission Rate" value={`${product.commission_rate}%`} />}
             {isDigital && digitalDetails && (
@@ -956,7 +957,7 @@ export default function ProductDetailPage() {
                 </div>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate group-hover:text-primary-600 transition-colors">{rp.name}</p>
                 <p className="text-sm font-bold text-primary-600">
-                  {rp.is_free ? 'FREE' : formatDisplayCurrency(
+                  {rp.is_free ? 'FREE' : formatMoney(
                     Number(rp.price),
                     String(rp.specifications?.price_currency || rp.specifications?.source_currency || 'USD').toUpperCase()
                   )}

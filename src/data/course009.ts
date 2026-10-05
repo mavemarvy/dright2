@@ -83,7 +83,18 @@ m("90-day capstone","Combine research, offer design, workflow, pricing, outreach
 ["Weeks 7-12: improve","Refine offer, templates and price from evidence before adding more services.","Write a before/after operating review with next-quarter decisions."]
 ],"Submit a 90-day AI business launch portfolio.","Success is disciplined execution and learning, not a guaranteed income number.")
 ],
-videos:[],
+videos:[
+{module:2,title:"Edtech Student Onboarding Automation with n8n, Google Workspace & Airtable",url:"https://www.youtube.com/watch?v=SPWxIdR2bO4",description:"Practical Nigerian automation build showing how several business tools can be connected into one workflow.",region:"Nigerian English • Practical"},
+{module:10,title:"Can AI Get Me a Client in 30 Days? Claude + Apify Experiment",url:"https://www.youtube.com/watch?v=_XQBjFsLD_c",description:"A real-world client-acquisition experiment useful for studying AI research, prospecting and evidence instead of assuming results.",region:"Nigerian English • Practical"},
+{module:1,title:"He Lost His Job Trying to Learn AI Automation — Was It Worth It?",url:"https://www.youtube.com/watch?v=gacc13V48oc",description:"Career-focused discussion about learning AI automation, trade-offs and realistic expectations.",region:"Nigerian English • Practical"},
+{module:6,title:"AI Sales Coaching System with n8n, Claude & Slack",url:"https://www.youtube.com/watch?v=fkteDCvD9Kc",description:"Workflow example for reviewing calls and turning AI analysis into a repeatable business process.",region:"Nigerian English • Practical"},
+{module:2,title:"Connect Claude Code to n8n — Beginner Tutorial",url:"https://www.youtube.com/watch?v=dLNY42qm9Uc",description:"Hands-on introduction to connecting an AI coding assistant with an automation workflow.",region:"Nigerian English • Practical"},
+{module:9,title:"How To Start an AI Automation Agency — Beginners Guide",url:"https://www.youtube.com/watch?v=Dgs1tQngbec",description:"Agency model overview covering offer selection, automation services and client acquisition.",region:"International English • Practical"},
+{module:8,title:"ChatGPT for Automation in Business and Personal Tasks",url:"https://www.youtube.com/watch?v=RcCFDnq-in4",description:"Shows practical ways to use ChatGPT in repeatable business and productivity workflows.",region:"International English • Practical"},
+{module:5,title:"How to Use ChatGPT Work — AI Workflow Automation Guide 2026",url:"https://www.youtube.com/watch?v=lmFAhaTNiZQ",description:"Current workflow-oriented tutorial for structuring AI-assisted work.",region:"International English • Practical"},
+{module:5,title:"How to Use ChatGPT for Business Automation — Step-by-Step 2026",url:"https://www.youtube.com/watch?v=-u02gYtNLjw",description:"Beginner workflow tutorial focused on business automation with AI.",region:"International English • Practical"},
+{module:9,title:"How To Actually Start an AI Automation Agency — Beginners Guide",url:"https://www.youtube.com/watch?v=q0g7Bl59QbY",description:"Practical agency-building walkthrough; learners should validate every earnings or market claim independently.",region:"International English • Practical"}
+],
 visuals:[
 {title:"AI business workflow",imageUrl:"/course-009-ai-business/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Problem, workflow, human QA and customer outcome before tool choice."},
 {title:"AI toolkit and projects",imageUrl:"/course-009-ai-business/toolkit.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Projects, templates, calculators and free/easy practice tools."}

@@ -354,7 +354,7 @@ export default function AdminSiteSettingsPage() {
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-2xl">
             Product prices keep the currency chosen by the seller. DRIGHT converts that source amount into the display currency.
-            For example, ₦100,000 stays NGN in storage and is converted to its USD equivalent instead of being treated as $100,000.
+            A listing stored in NGN remains NGN in storage and is converted to the selected display currency instead of being relabelled.
           </p>
         </div>
 

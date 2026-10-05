@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071711"/><stop offset=".58" stop-color="#050914"/><stop offset="1" stop-color="#071711"/></linearGradient>
+ <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a3e635"/><stop offset="1" stop-color="#10b981"/></linearGradient>
+ <radialGradient id="glow"><stop stop-color="#a3e635" stop-opacity=".42"/><stop offset="1" stop-color="#a3e635" stop-opacity="0"/></radialGradient>
+ <filter id="shadow"><feDropShadow dx="0" dy="24" stdDeviation="28" flood-opacity=".35"/></filter>
+</defs>
+<rect width="1200" height="1500" fill="url(#bg)"/>
+<circle cx="985" cy="470" r="480" fill="url(#glow)"/>
+<path d="M0 1180 1200 760v740H0Z" fill="#10b981" opacity=".09"/>
+<path d="M0 1280 1200 930v570H0Z" fill="#a3e635" opacity=".08"/>
+<g font-family="Arial,Helvetica,sans-serif">
+ <rect x="72" y="72" width="420" height="58" rx="29" fill="#fff" opacity=".1" stroke="#fff" stroke-opacity=".22"/>
+ <text x="102" y="111" font-size="25" font-weight="800" letter-spacing="3" fill="#fff">DRIGHT OFFICIAL • COURSE 012</text>
+ <text x="72" y="210" font-size="26" font-weight="800" letter-spacing="5" fill="#a3e635">2026 PREMIUM MASTERCLASS</text>
+ <text x="72" y="335" font-size="94" font-weight="900" fill="#fff">AFFILIATE</text>
+ <text x="72" y="435" font-size="94" font-weight="900" fill="#fff">MARKETING</text>
+ <rect x="72" y="490" width="540" height="68" rx="34" fill="url(#accent)"/>
+ <text x="104" y="535" font-size="27" font-weight="900" letter-spacing="2" fill="#fff">CONTENT • CONVERSION • COMMISSION</text>
+ <g transform="translate(650 500)"><path d="M50 70h500L390 270v150l-100 120V420L190 300v-30Z" fill="url(#accent)" stroke="#fff" stroke-width="10" stroke-linejoin="round"/><circle cx="300" cy="175" r="44" fill="#fff"/><path d="M220 300h160M245 360h110" stroke="#fff" stroke-width="18" stroke-linecap="round"/><circle cx="500" cy="520" r="70" fill="#a3e635" opacity=".95"/><path d="M480 520l18 18 32-42" fill="none" stroke="#07111f" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/></g>
+ <g transform="translate(72 1180)">
+   <rect width="1056" height="205" rx="40" fill="#fff" opacity=".075" stroke="#fff" stroke-opacity=".16"/>
+   <g fill="#fff">
+    <text x="48" y="65" font-size="30" font-weight="900">15 MODULES</text>
+    <text x="310" y="65" font-size="30" font-weight="900">45 LESSONS</text>
+    <text x="575" y="65" font-size="30" font-weight="900">10 VIDEOS</text>
+    <text x="820" y="65" font-size="30" font-weight="900">PROJECTS</text>
+   </g>
+   <path d="M275 25v95M545 25v95M795 25v95" stroke="#fff" stroke-opacity=".16" stroke-width="2"/>
+   <text x="48" y="135" font-size="23" font-weight="700" fill="#cbd5e1">Interactive calculator • templates • trackers • practical tools</text>
+   <text x="48" y="176" font-size="21" font-weight="800" fill="#a3e635">BUILT FOR NIGERIA • AFRICA • GLOBAL OPPORTUNITIES</text>
+ </g>
+</g>
+<rect x="0" y="1475" width="1200" height="25" fill="url(#accent)"/>
+</svg>

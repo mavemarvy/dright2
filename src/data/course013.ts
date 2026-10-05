@@ -84,7 +84,16 @@ m("90-day capstone","Take one validated problem from prototype to listing, launc
 ],"Submit a complete digital product business pack.","A successful capstone is a useful tested product with a repeatable improvement process.")
 ],
 videos:[
-{module:2,title:"Create & Start Selling Digital Products for Free — Canva, Gumroad & Payhip",url:"https://www.youtube.com/watch?v=u_T6r1w-27w",description:"Beginner walkthrough covering idea research, Canva creation and setup on Payhip/Gumroad.",region:"English • Beginner • Practical"}
+{module:10,title:"How to Sell Digital Products Online Using Selar",url:"https://www.youtube.com/watch?v=SJc-mHH8j_k",description:"Selar walkthrough for listing and delivering digital products in an African-friendly storefront.",region:"Nigerian English • Practical"},
+{module:10,title:"Selar — Sell Digital Products Online",url:"https://www.youtube.com/watch?v=cB2fL3jWuwo",description:"Practical store setup and digital product selling workflow on Selar.",region:"Nigerian English • Practical"},
+{module:2,title:"How to Make Money Selling Digital Products — Step-by-Step",url:"https://www.youtube.com/watch?v=uwUfrHeUYoU",description:"Nigeria-focused creator walkthrough from product idea to selling; income is not guaranteed.",region:"Nigerian English • Practical"},
+{module:12,title:"How To Create an Online Course in 7 Simple Steps for Free",url:"https://www.youtube.com/watch?v=Z8C_5WlJwv8",description:"Practical product-creation workflow useful for turning expertise into a structured digital learning product.",region:"Nigerian English • Practical"},
+{module:1,title:"10 Digital Products You Can Create as a Nigerian — No Laptop Required",url:"https://www.youtube.com/watch?v=lJ4CTv83Byg",description:"Mobile-first Nigerian digital-product idea and execution guide.",region:"Nigerian English • Practical"},
+{module:10,title:"Create & Start Selling Digital Products for Free — Canva, Gumroad & Payhip",url:"https://www.youtube.com/watch?v=u_T6r1w-27w",description:"Beginner walkthrough combining product creation and storefront setup.",region:"International English • Practical"},
+{module:10,title:"Sell Digital Products with Gumroad & Payhip — Step-by-Step",url:"https://www.youtube.com/watch?v=6lk0I2PifIQ",description:"Storefront and delivery workflow for creators selling downloadable products.",region:"International English • Practical"},
+{module:3,title:"Selling Digital Products with Canva — Practical Workflow",url:"https://www.youtube.com/watch?v=UkCojDw6wjg",description:"Canva-oriented product workflow; headline earnings should be treated as creator examples, not promises.",region:"International English • Practical"},
+{module:10,title:"How to Sell Digital Products 2026 — Full Tutorial",url:"https://www.youtube.com/watch?v=-O74EgXFJiw",description:"Current end-to-end digital product selling tutorial.",region:"International English • Practical"},
+{module:4,title:"Turn Your Skill Into an eBook With AI and Sell on Gumroad",url:"https://www.youtube.com/watch?v=VSTvNED3K38",description:"eBook creation and storefront workflow with AI used as an assistant rather than a substitute for QA.",region:"International English • Practical"}
 ],
 visuals:[
 {title:"Digital product system",imageUrl:"/course-013-digital-products/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Research, build, package, list, deliver and improve."},

@@ -4,7 +4,7 @@ import {
   ShoppingCart, Heart, Share2, Loader2, Check, ShoppingBag,
   MessageSquare, Send, Store,
 } from 'lucide-react';
-import { formatDisplayCurrency } from '../../lib/currency';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { getListingConfig } from './listingTypes';
 
 interface ActionPanelProps {
@@ -38,6 +38,7 @@ export default function ActionPanel({
   isOwner, applied, sourceCurrency = 'USD',
 }: ActionPanelProps) {
   const config = getListingConfig(listingType);
+  const { format: formatMoney } = useCurrency();
   const [saved, setSaved] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -88,9 +89,9 @@ export default function ActionPanel({
           ) : (
             <div className="space-y-1">
               <div className="flex items-baseline gap-3">
-                <p className="text-3xl font-bold text-gray-900">{formatDisplayCurrency(displayPrice, sourceCurrency)}</p>
+                <p className="text-3xl font-bold text-gray-900">{formatMoney(displayPrice, sourceCurrency)}</p>
                 {originalPrice && originalPrice > displayPrice && (
-                  <span className="text-lg text-gray-400 line-through">{formatDisplayCurrency(originalPrice, sourceCurrency)}</span>
+                  <span className="text-lg text-gray-400 line-through">{formatMoney(originalPrice, sourceCurrency)}</span>
                 )}
               </div>
               {discountPct > 0 && (
@@ -98,7 +99,7 @@ export default function ActionPanel({
                   <span className="px-2 py-0.5 rounded-full bg-error-muted text-error font-bold text-xs">
                     -{discountPct}%
                   </span>
-                  <span className="text-success font-medium">Save {formatDisplayCurrency(savings, sourceCurrency)}</span>
+                  <span className="text-success font-medium">Save {formatMoney(savings, sourceCurrency)}</span>
                 </div>
               )}
               {isService && (
@@ -199,7 +200,7 @@ export default function ActionPanel({
             >
               {checkoutLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>
                 {isService ? <ShoppingBag className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
-                {isFree ? 'Get for Free' : `${config.primaryActionLabel} — ${formatDisplayCurrency(displayPrice, sourceCurrency)}`}
+                {isFree ? 'Get for Free' : `${config.primaryActionLabel} — ${formatMoney(displayPrice, sourceCurrency)}`}
               </>}
             </button>
           </>

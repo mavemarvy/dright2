@@ -83,7 +83,18 @@ m("90-day KDP capstone","Take one original book from validated idea to publicati
 ["Month 3: release and learn","Publish only after QA, execute the launch plan and review reader/store data.","Write a post-launch improvement decision."]
 ],"Submit a complete KDP publishing portfolio: manuscript, formats, cover, metadata, rights, QA and launch plan.","The capstone proves a professional publishing process, not guaranteed bestseller status.")
 ],
-videos:[],
+videos:[
+{module:1,title:"Create a Verified Amazon KDP Account in Nigeria — Easy Tutorial",url:"https://www.youtube.com/watch?v=Tbb5HVdPPes",description:"Nigeria-specific KDP account setup walkthrough; learners must use truthful identity, tax and payout information.",region:"Nigerian English • Practical"},
+{module:1,title:"Create and Verify Amazon KDP Account in Nigeria",url:"https://www.youtube.com/watch?v=ggkSNJEdr7s",description:"Nigeria-focused KDP onboarding and account setup tutorial.",region:"Nigerian English • Practical"},
+{module:15,title:"Why You Should Not Buy the Viral Amazon KDP Course in Nigeria",url:"https://www.youtube.com/watch?v=SfD3129ILBU",description:"Critical Nigerian perspective useful for separating publishing fundamentals from hype.",region:"Nigerian English • Practical"},
+{module:1,title:"Create and Verify Your Amazon KDP Account in Nigeria — Step-by-Step",url:"https://www.youtube.com/watch?v=ftBbpQa51VU",description:"Detailed Nigerian KDP account, payment and verification walkthrough.",region:"Nigerian English • Practical"},
+{module:1,title:"Amazon Kindle Tutorial — Create a KDP Account in Nigeria",url:"https://www.youtube.com/watch?v=9BB3XelKIyc",description:"Nigeria-focused KDP beginner setup; ignore any outdated account-location workarounds and follow current KDP policies.",region:"Nigerian English • Practical"},
+{module:1,title:"How to Start Amazon KDP in 2026 — Beginner Tutorial",url:"https://www.youtube.com/watch?v=7BIjghZLJjs",description:"Current end-to-end KDP overview covering research, formatting, metadata, covers and publishing.",region:"International English • Practical"},
+{module:11,title:"Amazon KDP Keyword Research That Works — 2026",url:"https://www.youtube.com/watch?v=ceHBNpN3EcY",description:"Keyword and metadata research tutorial focused on current KDP discoverability.",region:"International English • Practical"},
+{module:11,title:"Discovering Metadata — Amazon KDP",url:"https://www.youtube.com/watch?v=grQb-T-jmvM",description:"Official Amazon KDP training on categories, keywords and book detail-page metadata.",region:"International English • Official"},
+{module:10,title:"34 Minutes of Amazon KDP Cover Creation Knowledge + Tutorial",url:"https://www.youtube.com/watch?v=H2NKimQBckA",description:"2026 cover-design walkthrough focusing on effective KDP cover creation.",region:"International English • Practical"},
+{module:14,title:"How to Publish an eBook and Paperback on KDP",url:"https://www.youtube.com/watch?v=H4x8fH-vd1g",description:"Step-by-step publishing workflow covering formatted files, upload, preview, territories and pricing.",region:"International English • Practical"}
+],
 visuals:[
 {title:"KDP publishing system",imageUrl:"/course-017-kdp/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Reader research, manuscript, formatting, cover, metadata, preview and launch."},
 {title:"KDP publishing toolkit",imageUrl:"/course-017-kdp/toolkit.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Book brief, rights ledger, QA, royalty planning and launch tracking."}

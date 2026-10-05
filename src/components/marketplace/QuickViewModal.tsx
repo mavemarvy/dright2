@@ -6,7 +6,7 @@ import {
   Package, Download,
 } from 'lucide-react';
 import type { MarketplaceProduct } from './ProductCard';
-import { formatDisplayCurrency } from '../../lib/currency';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { getBuyerFacingPrice } from '../../lib/pricing';
 
 interface QuickViewModalProps {
@@ -22,6 +22,7 @@ export default function QuickViewModal({
   product, onClose, inWishlist, onToggleWishlist, onShare, relatedProducts,
 }: QuickViewModalProps) {
     const [activeImg, setActiveImg] = useState(0);
+  const { format: formatMoney } = useCurrency();
 
   const images = product
     ? [product.image_url, ...(product.images || [])].filter(Boolean) as string[]
@@ -136,9 +137,9 @@ export default function QuickViewModal({
                     <span className="text-2xl font-bold text-success">FREE</span>
                   ) : (
                     <>
-                      <span className="text-2xl font-bold text-gray-900">{formatDisplayCurrency(getBuyerFacingPrice(product), sourceCurrency)}</span>
+                      <span className="text-2xl font-bold text-gray-900">{formatMoney(getBuyerFacingPrice(product), sourceCurrency)}</span>
                       {product.old_price && getBuyerFacingPrice(product, product.old_price) > getBuyerFacingPrice(product) && (
-                        <span className="text-base text-gray-400 line-through">{formatDisplayCurrency(getBuyerFacingPrice(product, product.old_price), sourceCurrency)}</span>
+                        <span className="text-base text-gray-400 line-through">{formatMoney(getBuyerFacingPrice(product, product.old_price), sourceCurrency)}</span>
                       )}
                     </>
                   )}
@@ -227,7 +228,7 @@ export default function QuickViewModal({
                           </div>
                           <p className="text-xs font-medium text-gray-700 mt-1.5 line-clamp-2">{rp.name}</p>
                           <p className="text-xs font-bold text-gray-900">
-                            {rp.is_free ? 'FREE' : formatDisplayCurrency(
+                            {rp.is_free ? 'FREE' : formatMoney(
                               getBuyerFacingPrice(rp),
                               String(rp.specifications?.price_currency || rp.specifications?.source_currency || 'USD').toUpperCase()
                             )}
