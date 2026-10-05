@@ -45,7 +45,7 @@ with course_media(course_number, slug, cover_path) as (
     ('018','youtube-ai-automation-faceless-channel-mastery-2026','/course-018-youtube-ai/cover.svg')
 )
 update public.dright_official_products dop
-set image_url = course_media.cover_path,
+set image_urls = jsonb_build_array(course_media.cover_path),
     metadata = coalesce(dop.metadata,'{}'::jsonb)
       || jsonb_build_object(
         'premium_cover', true,
