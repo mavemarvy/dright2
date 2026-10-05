@@ -64,7 +64,7 @@ const CONFIGS: Record<ListingType, ListingTypeConfig> = {
     type: 'COURSE',
     label: 'Course',
     icon: 'GraduationCap',
-    primaryActionLabel: 'Enroll Now',
+    primaryActionLabel: 'Buy Now',
     secondaryActionLabel: 'Add to Cart',
     saveLabel: 'Save',
     hasPrice: true,

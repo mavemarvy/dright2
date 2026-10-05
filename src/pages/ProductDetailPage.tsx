@@ -395,7 +395,7 @@ export default function ProductDetailPage() {
           success: true,
           orderId: result.order_id,
           message: product.product_type === 'COURSE'
-            ? 'Free enrollment completed. Your course is unlocked.'
+            ? 'Free course purchase completed. Your course access is unlocked.'
             : 'Free order completed! Check your downloads.',
         });
       } else {

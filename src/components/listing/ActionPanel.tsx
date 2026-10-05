@@ -78,6 +78,7 @@ export default function ActionPanel({
 
   const isJob = listingType.toUpperCase() === 'JOB';
   const isService = listingType.toUpperCase() === 'SERVICE';
+  const isCourse = listingType.toUpperCase() === 'COURSE';
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm sticky top-4">
@@ -179,7 +180,7 @@ export default function ActionPanel({
           </>
         ) : hasPurchased ? (
           <div className="flex items-center justify-center gap-2 py-4 bg-success-muted text-success rounded-2xl font-semibold">
-            <Check className="w-5 h-5" />Purchased — Check Downloads
+            <Check className="w-5 h-5" />{isCourse ? 'Purchased — Open Course' : 'Purchased — Check Downloads'}
           </div>
         ) : (
           // Product/Digital/Service/Course actions

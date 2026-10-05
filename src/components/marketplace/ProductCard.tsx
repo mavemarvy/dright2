@@ -112,6 +112,7 @@ export default function ProductCard({
   const isJob = isJobCategory(product.category, product.product_type);
   const isService = isServiceCategory(product.category);
   const imageCount = product.images?.length ?? 0;
+  const isCourseProduct = String(product.product_type || '').toUpperCase() === 'COURSE';
 
   const badges = getProductBadges({
     product_type: product.product_type,
@@ -166,7 +167,7 @@ export default function ProductCard({
       className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-xl hover:border-gray-200 dark:hover:border-gray-600 card-hover transition-all duration-300 group flex flex-col"
     >
       {/* Image area */}
-      <div className={`relative ${MARKETPLACE_IMAGE_HEIGHT_CLASSES[cardSize]} bg-gray-50 dark:bg-gray-700 overflow-hidden transition-[height] duration-200`}>
+      <div className={`relative ${isCourseProduct ? 'aspect-video' : MARKETPLACE_IMAGE_HEIGHT_CLASSES[cardSize]} bg-gray-50 dark:bg-gray-700 overflow-hidden transition-[height] duration-200`}>
         <Link to={productHref}>
           {!imgLoaded && (
             <div className="absolute inset-0 skeleton" />
@@ -178,7 +179,7 @@ export default function ProductCard({
               loading="lazy"
               onLoad={() => setImgLoaded(true)}
               onError={handleImgError}
-              className={`w-full h-full ${isDrightStarter || String(product.product_type || '').toUpperCase() === 'COURSE' ? 'object-contain p-1' : 'object-cover'} group-hover:scale-105 transition-transform duration-500 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+              className={`w-full h-full ${isDrightStarter ? 'object-contain p-1' : 'object-cover'} group-hover:scale-105 transition-transform duration-500 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center" onLoad={() => setImgLoaded(true)}>

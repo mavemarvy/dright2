@@ -128,12 +128,12 @@ export default function DrightOfficialStorePage() {
                     to={`/product/${item.marketplace_product_id}`}
                     className="group rounded-2xl overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:shadow-lg transition-shadow"
                   >
-                    <div className={`${item.product_type === 'COURSE' ? 'aspect-video p-2' : 'aspect-[4/3]'} bg-gray-100 dark:bg-gray-800 overflow-hidden`}>
+                    <div className={`${item.product_type === 'COURSE' ? 'aspect-video' : 'aspect-[4/3]'} bg-gray-100 dark:bg-gray-800 overflow-hidden`}>
                       {item.image_url ? (
                         <img
                           src={item.image_url}
                           alt={item.name}
-                          className={`w-full h-full ${item.product_type === 'COURSE' ? 'object-contain rounded-xl' : 'object-cover'} group-hover:scale-[1.02] transition-transform`}
+                          className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center"><DrightMark size={72} /></div>
@@ -157,6 +157,11 @@ export default function DrightOfficialStorePage() {
                           )}
                         </span>
                       </div>
+                      {item.product_type === 'COURSE' && (
+                        <div className="mt-4 inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 text-sm font-black text-white group-hover:bg-primary-700">
+                          Buy now <ChevronRight className="w-4 h-4" />
+                        </div>
+                      )}
                     </div>
                   </Link>
                 ))}
