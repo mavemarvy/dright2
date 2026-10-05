@@ -23,7 +23,6 @@ import {
   type Duration,
   type SystemConfig,
 } from '../lib/pricing';
-import { formatCurrency } from '../lib/currency';
 
 type ProductStatus = 'all' | 'approved' | 'pending' | 'rejected';
 
