@@ -84,7 +84,16 @@ m("90-day capstone","Turn skill practice into a professional portfolio and measu
 ],"Submit a 90-day freelancing operating portfolio.","Consistency is measured by quality actions and learning, not application volume.")
 ],
 videos:[
-{module:1,title:"How to Start Freelancing from Zero in 2026 — Fiverr & Upwork Beginner Guide",url:"https://www.youtube.com/watch?v=T69sWShK5JU",description:"Beginner roadmap covering service choice, profiles, portfolios, proposals and first-client strategy.",region:"English • 2026 • Beginner"}
+{module:4,title:"The Complete Upwork Tutorial for Beginners 2026",url:"https://www.youtube.com/watch?v=USEcniiaFIg",description:"Nigeria-relevant Upwork beginner walkthrough for profile, jobs and proposals.",region:"Nigerian English • Practical"},
+{module:1,title:"From Naira to Dollars: Freelancing Guide for Nigerians — Upwork & Fiverr 2026",url:"https://www.youtube.com/watch?v=GJXfZZKo00M",description:"Nigeria-focused introduction to international freelance marketplaces and realistic setup decisions.",region:"Nigerian English • Practical"},
+{module:6,title:"Fiverr Nigeria 2026 — How I'd Start and Make My First $100",url:"https://www.youtube.com/watch?v=qdIO6V5pApg",description:"Fiverr setup and first-offer strategy; income examples are illustrative, not guaranteed.",region:"Nigerian English • Practical"},
+{module:6,title:"How I'd Start on Fiverr in Nigeria in 2026",url:"https://www.youtube.com/watch?v=l_DvcN9Av88",description:"Nigeria-specific Fiverr orientation with practical beginner considerations.",region:"Nigerian English • Practical"},
+{module:6,title:"Fiverr Tutorial for Beginners in Nigeria",url:"https://www.youtube.com/watch?v=Dw32IwIiMAw",description:"Beginner Fiverr workflow covering account, gig and selling basics; earnings claims should not be treated as promises.",region:"Nigerian English • Practical"},
+{module:4,title:"How To Use Upwork for Beginners in 2026",url:"https://www.youtube.com/watch?v=orEoF8V1JqU",description:"Current international Upwork walkthrough for beginners.",region:"International English • Practical"},
+{module:4,title:"Upwork Tutorial for Beginners 2026",url:"https://www.youtube.com/watch?v=0CeK5qs0zb0",description:"Step-by-step Upwork orientation covering profile and client workflow.",region:"International English • Practical"},
+{module:5,title:"How to Submit the Right Upwork Proposals — 10 Steps",url:"https://www.youtube.com/watch?v=jqVL39wQ_7k",description:"Proposal-focused training that reinforces selective, job-specific applications.",region:"International English • Practical"},
+{module:6,title:"How to Create a Fiverr Account in 2026",url:"https://www.youtube.com/watch?v=ff01vIFwELA",description:"Fiverr beginner setup and seller workflow.",region:"International English • Practical"},
+{module:3,title:"Zero Experience? Here's How to Start on Fiverr",url:"https://www.youtube.com/watch?v=7ZNVAtbJH9U",description:"Beginner-friendly path from skill selection to a demonstrable service offer.",region:"International English • Practical"}
 ],
 visuals:[
 {title:"Freelance client pipeline",imageUrl:"/course-011-freelancing/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Skill, proof, profile, proposal, delivery and retention."},
