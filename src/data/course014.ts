@@ -84,8 +84,16 @@ m("90-day build capstone","Take one useful product from idea to deployed, tested
 ],"Submit a deployed MVP plus repository, architecture, test evidence and launch plan.","A successful capstone is a reliable useful workflow, not the largest feature list.")
 ],
 videos:[
-{module:2,title:"Learn Git & GitHub for Beginners — 2026 Tutorial",url:"https://www.youtube.com/watch?v=h2a3Kw-I_Ec",description:"Beginner walkthrough of Git and GitHub fundamentals for version-controlled projects.",region:"English • 2026 • Beginner"},
-{module:3,title:"React Tutorial for Beginners",url:"https://www.youtube.com/watch?v=SqcY0GlETPk",description:"Beginner-friendly React walkthrough covering core frontend concepts.",region:"English • Beginner"}
+{module:10,title:"Ultimate Hermes Agent Setup Guide for Beginners",url:"https://www.youtube.com/watch?v=3XjVUon8GSI",description:"Nigerian developer walkthrough covering VPS deployment, Telegram bot setup and AI-agent configuration.",region:"Nigerian English • Practical"},
+{module:1,title:"How to Build a Web App That Makes Money — Without Coding",url:"https://www.youtube.com/watch?v=CqfZnI2tYSg",description:"Product-building walkthrough that connects app creation with business-model thinking.",region:"Nigerian English • Practical"},
+{module:4,title:"Stop Building Ugly AI Websites — Do This Instead",url:"https://www.youtube.com/watch?v=_yF5ePCvroY",description:"UI quality and practical AI website-building guidance.",region:"Nigerian English • Practical"},
+{module:4,title:"Create and Launch a Complete Ecommerce Store With AI — No Coding",url:"https://www.youtube.com/watch?v=_LjKX3CKlIo",description:"End-to-end AI-assisted website launch example from a Nigerian builder.",region:"Nigerian English • Practical"},
+{module:11,title:"How to Add Paystack Payment Gateway to a Website",url:"https://www.youtube.com/watch?v=89SwYstQz6I",description:"Nigeria-relevant payment integration walkthrough; DRIGHT learners should still verify server-side payment state.",region:"Nigerian English • Practical"},
+{module:3,title:"Learn Git & GitHub for Beginners — 2026 Tutorial",url:"https://www.youtube.com/watch?v=h2a3Kw-I_Ec",description:"Version-control fundamentals for AI-assisted developers.",region:"International English • Practical"},
+{module:4,title:"React Tutorial for Beginners",url:"https://www.youtube.com/watch?v=SqcY0GlETPk",description:"Core React concepts for building reusable frontend interfaces.",region:"International English • Practical"},
+{module:10,title:"Create a Telegram Bot in Python for Beginners",url:"https://www.youtube.com/watch?v=vZtm1wuA2yc",description:"Step-by-step Telegram bot introduction with Python.",region:"International English • Practical"},
+{module:12,title:"How to Deploy React Apps on Vercel — 2026 Guide",url:"https://www.youtube.com/watch?v=SuZBpX7Y7EA",description:"Modern React deployment workflow using Vercel.",region:"International English • Practical"},
+{module:1,title:"The Simplest Way to Build an App with AI in 2026",url:"https://www.youtube.com/watch?v=4M-kUY0u2bk",description:"AI-assisted app-building workflow emphasizing fast prototyping.",region:"International English • Practical"}
 ],
 visuals:[
 {title:"Build stack from idea to deployment",imageUrl:"/course-014-ai-builder/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Frontend, backend, database, auth, APIs, bot and deployment."},
