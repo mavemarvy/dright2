@@ -83,7 +83,18 @@ m("90-day ghostwriting capstone","Build proof, acquisition and delivery systems 
 ["Month 3: delivery","Complete a mock or real permitted project using the full research-to-handoff system.","Review hours, quality, feedback and next pricing decision."]
 ],"Submit a complete ghostwriting business portfolio.","The capstone proves a professional process, not guaranteed client income.")
 ],
-videos:[],
+videos:[
+{module:1,title:"Ghostwriting Income Generator — Writing for Foreign Platforms",url:"https://www.youtube.com/watch?v=Dpmo1uwNpk4",description:"Nigerian ghostwriting overview; treat earnings claims as examples and focus on the writing/client workflow.",region:"Nigerian English • Practical"},
+{module:13,title:"Ghostwriting for Beginners — Earn From Ghostwriting",url:"https://www.youtube.com/watch?v=JL6CWQ7u-EE",description:"Nigeria-focused ghostwriting introduction and client-acquisition orientation; no income is guaranteed.",region:"Nigerian English • Practical"},
+{module:1,title:"How I'd Approach Ghostwriting in Nigeria With No Experience",url:"https://www.youtube.com/watch?v=d0GxtdoogvA",description:"Beginner Nigerian ghostwriting roadmap covering services, pricing and foreign-client positioning.",region:"Nigerian English • Practical"},
+{module:1,title:"From Classroom Teacher to Writing Stories for Foreign Companies",url:"https://www.youtube.com/watch?v=dzmvxR2RYjE",description:"Nigerian case-study lesson explaining story ghostwriting and how the work functions.",region:"Nigerian English • Practical"},
+{module:2,title:"Fiverr Writing Crash Course for Beginners in Nigeria",url:"https://www.youtube.com/watch?v=bI6TlCEQRm4",description:"Long-form Nigerian freelance-writing course covering samples, article/eBook work and client marketplace setup; skip any outdated account-evasion tactics and follow current platform rules.",region:"Nigerian English • Practical"},
+{module:1,title:"Ghostwriting for Beginners 2026 — How Writing for Others Works",url:"https://www.youtube.com/watch?v=tq5sY6pGg_E",description:"Modern beginner overview covering services, portfolio, voice, pricing, clients, AI and confidentiality.",region:"International English • Practical"},
+{module:4,title:"How to Become a Ghostwriter — Tips from a Full-Time Ghostwriter",url:"https://www.youtube.com/watch?v=tFarGdbayKc",description:"Interview-style practical lesson on client work, voice, qualifications and scheduling.",region:"International English • Practical"},
+{module:13,title:"How to Find Clients as a Ghostwriter",url:"https://www.youtube.com/watch?v=nWkjPjkFbJo",description:"Client-acquisition discussion covering outreach and a professional ghostwriting process.",region:"International English • Practical"},
+{module:1,title:"The Basics of Ghostwriting for Writers",url:"https://www.youtube.com/watch?v=2ZYf8ufhe1o",description:"Ghostwriting fundamentals including who hires writers, job sources and career considerations.",region:"International English • Practical"},
+{module:1,title:"Ghostwriting 101 for Beginner Ghostwriters",url:"https://www.youtube.com/watch?v=uw1zRLVlClk",description:"Beginner step-by-step introduction to ghostwriting and freelance-writing opportunities.",region:"International English • Practical"}
+],
 visuals:[
 {title:"Ghostwriting workflow",imageUrl:"/course-016-ghostwriting/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Research, interview, voice, outline, draft, edit and deliver."},
 {title:"Writer toolkit",imageUrl:"/course-016-ghostwriting/toolkit.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Briefs, proposals, voice guides, revision logs and pricing."}
