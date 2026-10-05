@@ -957,7 +957,7 @@ export default function ProductDetailPage() {
                 </div>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate group-hover:text-primary-600 transition-colors">{rp.name}</p>
                 <p className="text-sm font-bold text-primary-600">
-                  {rp.is_free ? 'FREE' : formatDisplayCurrency(
+                  {rp.is_free ? 'FREE' : formatMoney(
                     Number(rp.price),
                     String(rp.specifications?.price_currency || rp.specifications?.source_currency || 'USD').toUpperCase()
                   )}
