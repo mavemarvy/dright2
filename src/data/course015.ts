@@ -83,7 +83,18 @@ m("90-day PDF product capstone","Take one useful PDF system from research to tes
 ["Month 3: launch and improve","Publish, track questions and update the product from evidence.","Create version 1.1 from actual feedback."]
 ],"Submit a complete PDF product, source files, listing, QA and update plan.","The capstone is judged by usefulness and reliability, not page count.")
 ],
-videos:[],
+videos:[
+{module:4,title:"How to Create an eBook from Start to Finish",url:"https://www.youtube.com/watch?v=6EURVtWksPw",description:"Nigerian creator walkthrough of a full eBook creation workflow.",region:"Nigerian English • Practical"},
+{module:4,title:"How to Design an eBook Cover from Start to Finish",url:"https://www.youtube.com/watch?v=cKlqsZV3mic",description:"Cover-design tutorial from a Nigerian digital creator.",region:"Nigerian English • Practical"},
+{module:13,title:"How to Write, Publish and Sell Your eBook",url:"https://www.youtube.com/watch?v=sJr_i2okLHE",description:"Nigeria-focused eBook production and selling workflow.",region:"Nigerian English • Practical"},
+{module:7,title:"How to Create a Book Cover and Turn It to a 3D Mockup",url:"https://www.youtube.com/watch?v=6VX2JYd0Lzg",description:"Practical visual packaging and mockup lesson for digital books.",region:"Nigerian English • Practical"},
+{module:5,title:"How to Create an eBook in Canva — Step-by-Step",url:"https://www.youtube.com/watch?v=bt1Kt4_cNHE",description:"Canva-based eBook production tutorial from a Nigerian creator.",region:"Nigerian English • Practical"},
+{module:5,title:"Amazing eBook in Canva for Free in 15 Minutes",url:"https://www.youtube.com/watch?v=7lCUOeUCWa0",description:"Fast Canva eBook layout demonstration useful for prototyping.",region:"International English • Practical"},
+{module:5,title:"How to Make a Digital Planner on Canva — Step-by-Step",url:"https://www.youtube.com/watch?v=uaSqbNmSrUM",description:"Digital planner design workflow in Canva.",region:"International English • Practical"},
+{module:7,title:"How to Create a Fillable PDF Form for Free",url:"https://www.youtube.com/watch?v=9m8O0-n2X-s",description:"True fillable-form workflow; learners should test fields in multiple PDF viewers.",region:"International English • Practical"},
+{module:7,title:"How to Edit a Canva Workbook and Make the PDF Fillable",url:"https://www.youtube.com/watch?v=qva_cjPKuhk",description:"Shows the handoff from Canva design to actual fillable-PDF tooling.",region:"International English • Practical"},
+{module:7,title:"Create a Fillable PDF Form for Free with LibreOffice",url:"https://www.youtube.com/watch?v=6cYpJJxvZMc",description:"LibreOffice-based fillable-form workflow with local/offline tooling.",region:"International English • Practical"}
+],
 visuals:[
 {title:"Professional PDF product workflow",imageUrl:"/course-015-pdf-products/banner.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"Research, write, design, optimize, package and sell."},
 {title:"PDF creator toolkit",imageUrl:"/course-015-pdf-products/toolkit.svg",sourceUrl:"https://dright.store",sourceLabel:"DRIGHT original course artwork",caption:"QA, pricing, templates and repeatable export systems."}
