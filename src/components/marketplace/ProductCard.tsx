@@ -178,7 +178,7 @@ export default function ProductCard({
               loading="lazy"
               onLoad={() => setImgLoaded(true)}
               onError={handleImgError}
-              className={`w-full h-full ${isDrightStarter || String(product.product_type || '').toUpperCase() === 'COURSE' ? 'object-contain p-1' : 'object-cover'} group-hover:scale-105 transition-transform duration-500 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+              className={`w-full h-full ${isDrightStarter ? 'object-contain p-1' : 'object-cover'} group-hover:scale-105 transition-transform duration-500 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center" onLoad={() => setImgLoaded(true)}>
