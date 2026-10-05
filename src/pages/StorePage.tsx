@@ -1,4 +1,5 @@
 import { formatDisplayCurrency } from '../lib/currency';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -50,6 +51,7 @@ interface Product {
   demo_video_url: string | null;
   total_reviews: number;
   average_rating: number;
+  specifications?: Record<string, unknown> | null;
 }
 
 const STATUS_TABS: { value: ProductStatus; label: string; icon: typeof Package }[] = [
@@ -68,6 +70,7 @@ const DURATIONS: { value: Duration; label: string }[] = [
 export default function StorePage() {
   const { user, isAdmin, isAccountLocked, isAccountBanned, profile, refreshProfile } = useAuth();
   const { t } = useLanguage();
+  const { format: formatMoney } = useCurrency();
   const { isVisible } = useNavigationVisibility();
   const salesTeamFeatureVisible = isVisible('sales_team_features', isAdmin);
   const [products, setProducts] = useState<Product[]>([]);
@@ -778,7 +781,7 @@ export default function StorePage() {
                     {product.is_free ? (
                       <p className="text-lg font-bold text-success">FREE</p>
                     ) : (
-                      <p className="text-lg font-bold text-gray-900">{formatCurrency(Number(product.price))}</p>
+                      <p className="text-lg font-bold text-gray-900">{formatMoney(Number(product.price), String(product.specifications?.price_currency || product.specifications?.source_currency || 'USD').toUpperCase())}</p>
                     )}
                   </div>
                   <div className="text-right">
