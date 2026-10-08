@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import {
-  AlertTriangle, Archive, BarChart3, CalendarClock, CheckCircle2, ChevronDown,
-  ChevronUp, CircleDollarSign, Clock3, History, Loader2, Package, Plus,
+  AlertTriangle, Archive, BarChart3, CalendarClock, ChevronDown,
+  ChevronUp, History, Loader2, Package, Plus,
   RefreshCw, Save, Search, ShieldCheck, Trophy, Users, WalletCards, XCircle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -243,23 +243,31 @@ export default function AdminSalesChallengesPage() {
     if (saveError) throw saveError;
   }, 'Challenge settings saved.');
 
-  const createChallenge = () => run(async () => {
-    const { data: auth } = await supabase.auth.getUser();
-    const { data, error: createError } = await supabase.from('sales_challenges').insert({
-      title: 'New DRIGHT Sales Challenge',
-      tagline: 'Sell More. Earn More. Unlock Bigger Rewards.',
-      short_description: 'Promote Admin-selected products and unlock one-time rewards through fresh sales missions.',
-      long_description: 'Each mission starts from zero after the previous mission reward is successfully claimed. Normal affiliate commission remains separate from challenge bonuses.',
-      status: 'DRAFT',
-      currency: 'NGN',
-      minimum_product_price: 20000,
-      minimum_retained_margin_pct: 15,
-      created_by: auth.user?.id || null,
-    }).select('id').single();
-    if (createError) throw createError;
-    setChallengeId(data.id);
-    await load(data.id);
-  }, 'Draft challenge created.');
+  const createChallenge = async () => {
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const { data, error: createError } = await supabase.from('sales_challenges').insert({
+        title: 'New DRIGHT Sales Challenge',
+        tagline: 'Sell More. Earn More. Unlock Bigger Rewards.',
+        short_description: 'Promote Admin-selected products and unlock one-time rewards through fresh sales missions.',
+        long_description: 'Each mission starts from zero after the previous mission reward is successfully claimed. Normal affiliate commission remains separate from challenge bonuses.',
+        status: 'DRAFT',
+        currency: 'NGN',
+        minimum_product_price: 20000,
+        minimum_retained_margin_pct: 15,
+        created_by: auth.user?.id || null,
+      }).select('id').single();
+      if (createError) throw createError;
+      setChallengeId(data.id);
+      setMessage('Draft challenge created.');
+      await load(data.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to create challenge.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const toggleProduct = async (productId: string, active: boolean) => {
     await run(async () => {
@@ -445,14 +453,14 @@ export default function AdminSalesChallengesPage() {
           {tab === 'Overview' && (
             <div className="space-y-5">
               <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
-                {[
-                  ['Status', challenge.status, Trophy],
-                  ['Selected Products', selectedIds.size, Package],
-                  ['Enabled Tiers', tiers.filter(t => t.enabled).length, BarChart3],
-                  ['Participants', participants.length, Users],
-                  ['Claims', claims.length, WalletCards],
-                ].map(([label, value, Icon]) => (
-                  <div key={String(label)} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+                {([
+                  { label: 'Status', value: challenge.status, Icon: Trophy },
+                  { label: 'Selected Products', value: selectedIds.size, Icon: Package },
+                  { label: 'Enabled Tiers', value: tiers.filter(t => t.enabled).length, Icon: BarChart3 },
+                  { label: 'Participants', value: participants.length, Icon: Users },
+                  { label: 'Claims', value: claims.length, Icon: WalletCards },
+                ] satisfies Array<{ label: string; value: string | number; Icon: ComponentType<{ className?: string }> }>).map(({ label, value, Icon }) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
                     <Icon className="w-5 h-5 text-slate-500" />
                     <p className="mt-4 text-xs uppercase font-bold text-slate-500">{label}</p>
                     <p className="mt-1 text-xl font-black">{String(value)}</p>
@@ -514,7 +522,15 @@ export default function AdminSalesChallengesPage() {
 
           {tab === 'Milestones & Rewards' && (
             <div className="space-y-4">
-              {tiers.map((tier, index) => (
+              {tiers.map((tier, index) => {
+                const rewardValue = tier.reward_type === 'PRIZE'
+                  ? Number(tier.prize_estimated_cost || 0)
+                  : tier.reward_type === 'CASH_OR_PRIZE'
+                    ? Math.max(Number(tier.cash_reward || 0), Number(tier.prize_estimated_cost || 0))
+                    : Number(tier.cash_reward || 0);
+                const cumulativeSales = tiers.slice(0, index + 1).filter(t => t.enabled).reduce((sum, item) => sum + Number(item.sales_required || 0), 0);
+                const rewardPerSale = Number(tier.sales_required || 0) > 0 ? rewardValue / Number(tier.sales_required) : 0;
+                return (
                 <div key={tier.id || index} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 grid xl:grid-cols-[70px_1fr_1fr_1fr_1fr_120px] gap-3 items-end">
                   <div><p className="text-xs font-bold text-slate-500">Mission</p><p className="text-xl font-black">{index + 1}</p><div className="flex gap-1 mt-1"><button onClick={() => moveTier(index,-1)}><ChevronUp className="w-4 h-4" /></button><button onClick={() => moveTier(index,1)}><ChevronDown className="w-4 h-4" /></button></div></div>
                   <label><span className="text-xs font-bold text-slate-500">Fresh sales</span><input type="number" min={1} value={tier.sales_required} onChange={e => setTiers(rows => rows.map((r,i) => i===index ? {...r,sales_required:Number(e.target.value)} : r))} className="w-full rounded-xl border p-2 bg-transparent" /></label>
@@ -522,8 +538,14 @@ export default function AdminSalesChallengesPage() {
                   <label><span className="text-xs font-bold text-slate-500">Cash reward</span><input type="number" min={0} value={tier.cash_reward} onChange={e => setTiers(rows => rows.map((r,i) => i===index ? {...r,cash_reward:Number(e.target.value)} : r))} className="w-full rounded-xl border p-2 bg-transparent" /></label>
                   <label><span className="text-xs font-bold text-slate-500">Prize / cost</span><input value={tier.prize_name || ''} onChange={e => setTiers(rows => rows.map((r,i) => i===index ? {...r,prize_name:e.target.value} : r))} placeholder="Prize name" className="w-full rounded-xl border p-2 bg-transparent" /><input type="number" min={0} value={tier.prize_estimated_cost} onChange={e => setTiers(rows => rows.map((r,i) => i===index ? {...r,prize_estimated_cost:Number(e.target.value)} : r))} placeholder="Estimated cost" className="w-full mt-1 rounded-xl border p-2 bg-transparent" /></label>
                   <div className="flex gap-2"><label className="flex items-center gap-1"><input type="checkbox" checked={tier.enabled} onChange={e => setTiers(rows => rows.map((r,i) => i===index ? {...r,enabled:e.target.checked} : r))} /> Enabled</label><button onClick={() => setTiers(rows => rows.filter((_,i) => i!==index))}><XCircle className="w-5 h-5 text-red-500" /></button></div>
+                  <div className="xl:col-span-6 text-xs text-slate-500 flex flex-wrap gap-x-5 gap-y-1">
+                    <span>Reward / qualifying sale: <b>{money(rewardPerSale, challenge.currency)}</b></span>
+                    <span>Cumulative fresh sales through this mission: <b>{cumulativeSales.toLocaleString()}</b></span>
+                    <span>Estimated reward impact: <b>{money(rewardValue, challenge.currency)}</b></span>
+                  </div>
                 </div>
-              ))}
+                );
+              })}
               <div className="flex gap-3"><button onClick={() => setTiers(rows => [...rows,{sort_order:rows.length+1,sales_required:100,reward_type:'CASH',cash_reward:0,prize_name:null,prize_description:null,prize_estimated_cost:0,enabled:true}])} className="rounded-xl border px-4 py-3 font-bold"><Plus className="w-4 h-4 inline mr-1" /> Add Tier</button><button onClick={() => void saveTiers()} disabled={busy} className="rounded-xl bg-slate-950 text-white px-5 py-3 font-bold">Save Reward Ladder</button></div>
             </div>
           )}
@@ -577,7 +599,7 @@ function Empty({ text }: { text: string }) {
 
 function DataTable({ title, icon: Icon, rows }: {
   title: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   rows: Array<Array<string | number>>;
 }) {
   return <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
