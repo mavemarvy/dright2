@@ -130,6 +130,7 @@ export default function AdminSalesChallengesPage() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [audits, setAudits] = useState<Audit[]>([]);
   const [productSearch, setProductSearch] = useState('');
+  const [productFilter, setProductFilter] = useState<'ALL' | 'QUALIFYING' | 'BELOW_MINIMUM' | 'SELECTED'>('ALL');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [scheduleReason, setScheduleReason] = useState('');
@@ -174,18 +175,30 @@ export default function AdminSalesChallengesPage() {
       if (cycle) {
         setStartsAt(localInput(cycle.starts_at));
         setEndsAt(localInput(cycle.ends_at));
-        const [participantsRes, leadersRes, claimsRes] = await Promise.all([
+        const [participantsRes, claimsRes] = await Promise.all([
           supabase.from('sales_challenge_participants').select('*')
             .eq('challenge_cycle_id', cycle.id).order('lifetime_qualified_sales', { ascending: false }),
-          supabase.from('sales_challenge_leaderboard_view').select('*')
-            .eq('challenge_cycle_id', cycle.id).order('rank').limit(500),
           supabase.from('sales_challenge_claims').select('*')
             .eq('challenge_cycle_id', cycle.id).order('claimed_at', { ascending: false }),
         ]);
-        for (const result of [participantsRes, leadersRes, claimsRes]) if (result.error) throw result.error;
+        for (const result of [participantsRes, claimsRes]) if (result.error) throw result.error;
         setParticipants((participantsRes.data || []) as Participant[]);
-        setLeaders((leadersRes.data || []) as Leader[]);
         setClaims((claimsRes.data || []) as Claim[]);
+
+        const allLeaders: Leader[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data: page, error: pageError } = await supabase
+            .from('sales_challenge_leaderboard_view')
+            .select('*')
+            .eq('challenge_cycle_id', cycle.id)
+            .order('rank')
+            .range(from, from + 999);
+          if (pageError) throw pageError;
+          const typedPage = (page || []) as Leader[];
+          allLeaders.push(...typedPage);
+          if (typedPage.length < 1000) break;
+        }
+        setLeaders(allLeaders);
       } else {
         setParticipants([]); setLeaders([]); setClaims([]);
         const start = new Date(Date.now() + 60 * 60 * 1000);
@@ -310,10 +323,9 @@ export default function AdminSalesChallengesPage() {
 
   const launchCycle = () => run(async () => {
     if (!challenge || !startsAt || !endsAt) throw new Error('Choose a valid start and end time.');
-    const started = latestCycle && new Date(latestCycle.starts_at).getTime() <= Date.now()
-      && ['ACTIVE', 'SCHEDULED'].includes(latestCycle.status);
+    const startedBefore = Boolean(latestCycle && new Date(latestCycle.starts_at).getTime() <= Date.now());
     let force = false;
-    if (started) {
+    if (startedBefore) {
       force = window.confirm(
         'This will close the current challenge cycle and start a new cycle. All participant progress in the new cycle will begin from zero. Previous records will remain available in Challenge History.',
       );
@@ -328,6 +340,29 @@ export default function AdminSalesChallengesPage() {
     });
     if (launchError) throw launchError;
   }, latestCycle ? 'Challenge schedule updated.' : 'Challenge cycle scheduled.');
+
+  const restartCycle = () => run(async () => {
+    if (!challenge) return;
+    const confirmed = window.confirm(
+      'This will close the current challenge cycle and start a new cycle. All participant progress in the new cycle will begin from zero. Previous records will remain available in Challenge History.',
+    );
+    if (!confirmed) throw new Error('Reset / restart cancelled.');
+
+    const start = new Date();
+    let end = endsAt ? new Date(endsAt) : new Date(start.getTime() + 30 * 86400000);
+    if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+      end = new Date(start.getTime() + 30 * 86400000);
+    }
+
+    const { error: restartError } = await supabase.rpc('admin_launch_sales_challenge_cycle', {
+      p_challenge_id: challenge.id,
+      p_starts_at: start.toISOString(),
+      p_ends_at: end.toISOString(),
+      p_reason: scheduleReason || 'Reset / restart by admin',
+      p_force_new_cycle: true,
+    });
+    if (restartError) throw restartError;
+  }, 'New challenge cycle created. Participant progress starts from zero.');
 
   const stopChallenge = (archive = false) => run(async () => {
     if (!challenge) return;
@@ -353,21 +388,61 @@ export default function AdminSalesChallengesPage() {
       if (claimError) throw claimError;
     }, `Claim action ${action.toLowerCase()} completed.`);
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(productSearch.toLowerCase()),
-  );
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(productSearch.toLowerCase());
+    if (!matchesSearch || !challenge) return false;
+    const meetsMinimum = Number(p.price) >= Number(challenge.minimum_product_price);
+    if (productFilter === 'QUALIFYING') return meetsMinimum;
+    if (productFilter === 'BELOW_MINIMUM') return !meetsMinimum;
+    if (productFilter === 'SELECTED') return selectedIds.has(p.id);
+    return true;
+  });
+
+  const bulkSetProducts = (active: boolean) => run(async () => {
+    if (!challenge) return;
+    const ids = filteredProducts
+      .filter(p => active ? Number(p.price) >= Number(challenge.minimum_product_price) : selectedIds.has(p.id))
+      .map(p => p.id);
+    if (ids.length === 0) throw new Error(active ? 'No qualifying products are visible to add.' : 'No selected products are visible to remove.');
+
+    if (active) {
+      const { data: auth } = await supabase.auth.getUser();
+      const rows = ids.map(productId => ({
+        challenge_id: challenge.id,
+        product_id: productId,
+        active: true,
+        added_by: auth.user?.id || null,
+      }));
+      const { error: bulkError } = await supabase
+        .from('sales_challenge_products')
+        .upsert(rows, { onConflict: 'challenge_id,product_id' });
+      if (bulkError) throw bulkError;
+    } else {
+      const { error: bulkError } = await supabase
+        .from('sales_challenge_products')
+        .update({ active: false })
+        .eq('challenge_id', challenge.id)
+        .in('product_id', ids);
+      if (bulkError) throw bulkError;
+    }
+  }, active ? 'Visible qualifying products added.' : 'Visible selected products removed.');
 
   const financial = useMemo(() => {
     if (!challenge) return null;
     const chosen = products.filter(p => selectedIds.has(p.id) && Number(p.price) >= Number(challenge.minimum_product_price));
-    const conservative = chosen.map(p => {
+    const productModels = chosen.map(p => {
       const price = Number(p.price || 0);
       const affiliatePct = Number(p.affiliate_commission_percent || 0);
-      const affiliate = price * affiliatePct / 100;
-      const payment = price * Number(challenge.estimated_payment_cost_pct || 0) / 100
+      const affiliatePerSale = price * affiliatePct / 100;
+      const paymentPerSale = price * Number(challenge.estimated_payment_cost_pct || 0) / 100
         + Number(challenge.estimated_payment_cost_fixed || 0);
-      return { product: p, price, affiliatePct, retainedBeforeBonus: price - affiliate - payment };
-    }).sort((a, b) => a.retainedBeforeBonus - b.retainedBeforeBonus)[0];
+      const retainedBeforeBonus = price - affiliatePerSale - paymentPerSale;
+      const retainedBeforeBonusPct = price > 0 ? retainedBeforeBonus / price * 100 : -Infinity;
+      return { product: p, price, affiliatePct, affiliatePerSale, paymentPerSale, retainedBeforeBonus, retainedBeforeBonusPct };
+    });
+    const conservative = [...productModels].sort((a, b) =>
+      a.retainedBeforeBonusPct - b.retainedBeforeBonusPct || a.retainedBeforeBonus - b.retainedBeforeBonus
+    )[0];
 
     const enabledTiers = tiers.filter(t => t.enabled);
     const rewardCost = (tier: Tier) => {
@@ -377,18 +452,21 @@ export default function AdminSalesChallengesPage() {
       if (tier.reward_type === 'PRIZE') return prize;
       return Math.max(cash, prize);
     };
-    const rows = conservative ? enabledTiers.map(tier => {
+    const rows = productModels.length > 0 ? enabledTiers.map(tier => {
       const sales = Number(tier.sales_required || 0);
-      const gross = conservative.price * sales;
-      const affiliate = conservative.price * conservative.affiliatePct / 100 * sales;
-      const payment = (conservative.price * Number(challenge.estimated_payment_cost_pct || 0) / 100
-        + Number(challenge.estimated_payment_cost_fixed || 0)) * sales;
       const reward = rewardCost(tier);
-      const retained = gross - affiliate - payment - reward;
-      const pct = gross > 0 ? retained / gross * 100 : 0;
-      const status = retained < 0 ? 'UNSAFE / NEGATIVE MARGIN'
-        : pct < Number(challenge.minimum_retained_margin_pct) ? 'LOW MARGIN' : 'SAFE';
-      return { tier, gross, affiliate, payment, reward, retained, pct, status };
+      const candidates = productModels.map(model => {
+        const gross = model.price * sales;
+        const affiliate = model.affiliatePerSale * sales;
+        const payment = model.paymentPerSale * sales;
+        const retained = gross - affiliate - payment - reward;
+        const pct = gross > 0 ? retained / gross * 100 : -Infinity;
+        return { product: model.product, gross, affiliate, payment, retained, pct };
+      });
+      const worst = candidates.sort((a, b) => a.pct - b.pct || a.retained - b.retained)[0];
+      const status = worst.retained < 0 ? 'UNSAFE / NEGATIVE MARGIN'
+        : worst.pct < Number(challenge.minimum_retained_margin_pct) ? 'LOW MARGIN' : 'SAFE';
+      return { tier, product: worst.product, gross: worst.gross, affiliate: worst.affiliate, payment: worst.payment, reward, retained: worst.retained, pct: worst.pct, status };
     }) : [];
     return {
       chosen,
@@ -452,6 +530,14 @@ export default function AdminSalesChallengesPage() {
         <>
           {tab === 'Overview' && (
             <div className="space-y-5">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {(['ACTIVE','SCHEDULED','DRAFT','ENDED','ARCHIVED'] as const).map(status => (
+                  <div key={status} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+                    <p className="text-xs font-bold uppercase text-slate-500">{status}</p>
+                    <p className="mt-1 text-2xl font-black">{challenges.filter(item => item.status === status).length}</p>
+                  </div>
+                ))}
+              </div>
               <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3">
                 {([
                   { label: 'Status', value: challenge.status, Icon: Trophy },
@@ -493,6 +579,7 @@ export default function AdminSalesChallengesPage() {
               {latestCycle && <div className="rounded-2xl bg-slate-50 dark:bg-slate-800 p-4 text-sm">Current/latest: Cycle {latestCycle.cycle_number} · <b>{latestCycle.status}</b> · {new Date(latestCycle.starts_at).toLocaleString()} → {new Date(latestCycle.ends_at).toLocaleString()}</div>}
               <div className="flex flex-wrap gap-3">
                 <button onClick={() => void launchCycle()} disabled={busy} className="rounded-xl bg-emerald-600 text-white px-5 py-3 font-bold">Save Schedule / Launch</button>
+                <button onClick={() => void restartCycle()} disabled={busy || !latestCycle} className="rounded-xl border border-amber-300 text-amber-800 px-5 py-3 font-bold">Reset / Restart as New Cycle</button>
                 <button onClick={() => void stopChallenge(false)} disabled={busy} className="rounded-xl border border-red-200 text-red-700 px-5 py-3 font-bold">Stop Challenge</button>
                 <button onClick={() => void stopChallenge(true)} disabled={busy} className="rounded-xl border border-slate-300 px-5 py-3 font-bold flex gap-2 items-center"><Archive className="w-4 h-4" /> Archive</button>
               </div>
@@ -503,7 +590,20 @@ export default function AdminSalesChallengesPage() {
             <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div><h2 className="text-xl font-black">Challenge → Eligible Products</h2><p className="text-sm text-slate-500">No product joins automatically, even when it meets the price threshold.</p></div>
-                <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder="Search products" className="rounded-xl border pl-9 pr-3 py-2 bg-transparent" /></div>
+                <div className="flex flex-wrap gap-2">
+                  <select value={productFilter} onChange={e => setProductFilter(e.target.value as typeof productFilter)}
+                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2">
+                    <option value="ALL">All products</option>
+                    <option value="QUALIFYING">Meets minimum</option>
+                    <option value="BELOW_MINIMUM">Below minimum</option>
+                    <option value="SELECTED">Selected</option>
+                  </select>
+                  <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder="Search products" className="rounded-xl border pl-9 pr-3 py-2 bg-transparent" /></div>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={() => void bulkSetProducts(true)} disabled={busy} className="rounded-xl bg-slate-950 text-white px-4 py-2 text-sm font-bold">Add qualifying shown</button>
+                <button onClick={() => void bulkSetProducts(false)} disabled={busy} className="rounded-xl border border-red-200 text-red-700 px-4 py-2 text-sm font-bold">Remove selected shown</button>
               </div>
               <div className="mt-5 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-slate-500 border-b"><th className="py-3">Product</th><th>Price</th><th>Affiliate %</th><th>Approx. contribution</th><th className="text-right">Challenge</th></tr></thead>
                 <tbody>{filteredProducts.map(p => {
@@ -569,7 +669,7 @@ export default function AdminSalesChallengesPage() {
                 ].map(([label,value]) => <div key={String(label)} className="rounded-2xl bg-white dark:bg-slate-900 border p-4"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-2 font-black">{String(value)}</p></div>)}
               </div>
               {!financial.conservative ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800"><AlertTriangle className="w-5 h-5 inline mr-2" />Select at least one product that meets the minimum price to calculate safety.</div> :
-              <div className="overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><table className="w-full text-sm"><thead><tr className="text-left border-b text-slate-500"><th className="p-4">Mission</th><th>Gross revenue</th><th>Affiliate payout</th><th>Payment cost</th><th>Challenge bonus</th><th>DRIGHT retained</th><th>Retained %</th><th>Status</th></tr></thead><tbody>{financial.rows.map(row => <tr key={row.tier.sort_order} className="border-b border-slate-100 dark:border-slate-800"><td className="p-4 font-bold">{row.tier.sales_required.toLocaleString()} sales</td><td>{money(row.gross,challenge.currency)}</td><td>{money(row.affiliate,challenge.currency)}</td><td>{money(row.payment,challenge.currency)}</td><td>{money(row.reward,challenge.currency)}</td><td>{money(row.retained,challenge.currency)}</td><td>{row.pct.toFixed(1)}%</td><td><span className={`font-black ${row.status==='SAFE'?'text-emerald-600':row.status==='LOW MARGIN'?'text-amber-600':'text-red-600'}`}>{row.status}</span></td></tr>)}</tbody></table></div>}
+              <div className="overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><table className="w-full text-sm"><thead><tr className="text-left border-b text-slate-500"><th className="p-4">Mission</th><th>Conservative product</th><th>Gross revenue</th><th>Affiliate payout</th><th>Payment cost</th><th>Challenge bonus</th><th>DRIGHT retained</th><th>Retained %</th><th>Status</th></tr></thead><tbody>{financial.rows.map(row => <tr key={row.tier.sort_order} className="border-b border-slate-100 dark:border-slate-800"><td className="p-4 font-bold">{row.tier.sales_required.toLocaleString()} sales</td><td className="pr-4 font-semibold">{row.product.name}</td><td>{money(row.gross,challenge.currency)}</td><td>{money(row.affiliate,challenge.currency)}</td><td>{money(row.payment,challenge.currency)}</td><td>{money(row.reward,challenge.currency)}</td><td>{money(row.retained,challenge.currency)}</td><td>{row.pct.toFixed(1)}%</td><td><span className={`font-black ${row.status==='SAFE'?'text-emerald-600':row.status==='LOW MARGIN'?'text-amber-600':'text-red-600'}`}>{row.status}</span></td></tr>)}</tbody></table></div>}
             </div>
           )}
 
