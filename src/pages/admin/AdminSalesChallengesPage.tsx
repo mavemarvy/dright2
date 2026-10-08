@@ -110,7 +110,7 @@ const localInput = (iso?: string | null) => {
   if (!iso) return '';
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
-  return \`\${d.getFullYear()}-\${pad(d.getMonth() + 1)}-\${pad(d.getDate())}T\${pad(d.getHours())}:\${pad(d.getMinutes())}\`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 export default function AdminSalesChallengesPage() {
@@ -351,7 +351,7 @@ export default function AdminSalesChallengesPage() {
         p_payment_reference: paymentReference,
       });
       if (claimError) throw claimError;
-    }, \`Claim action \${action.toLowerCase()} completed.\`);
+    }, `Claim action ${action.toLowerCase()} completed.`);
 
   const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(productSearch.toLowerCase()),
@@ -440,7 +440,7 @@ export default function AdminSalesChallengesPage() {
       <nav className="flex gap-2 overflow-x-auto pb-1">
         {tabs.map(item => (
           <button key={item} onClick={() => setTab(item)}
-            className={\`shrink-0 rounded-xl px-4 py-2 text-sm font-bold border \${tab === item ? 'bg-slate-950 text-white border-slate-950' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}\`}>
+            className={`shrink-0 rounded-xl px-4 py-2 text-sm font-bold border ${tab === item ? 'bg-slate-950 text-white border-slate-950' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
             {item}
           </button>
         ))}
@@ -514,7 +514,7 @@ export default function AdminSalesChallengesPage() {
                     <td className="py-4 font-semibold">{p.name}<div className="text-xs text-slate-500">{meets ? 'Meets configured minimum' : 'Below configured minimum'}</div></td>
                     <td>{money(p.price, challenge.currency)}</td><td>{Number(p.affiliate_commission_percent || 0).toFixed(0)}%</td><td>{money(contribution, challenge.currency)}</td>
                     <td className="text-right"><button onClick={() => void toggleProduct(p.id, !active)} disabled={busy}
-                      className={\`rounded-lg px-3 py-2 font-bold \${active ? 'border border-red-200 text-red-700' : 'bg-slate-950 text-white'}\`}>{active ? 'Remove' : 'Add to Challenge'}</button></td>
+                      className={`rounded-lg px-3 py-2 font-bold ${active ? 'border border-red-200 text-red-700' : 'bg-slate-950 text-white'}`}>{active ? 'Remove' : 'Add to Challenge'}</button></td>
                   </tr>;
                 })}</tbody></table></div>
             </div>
@@ -564,17 +564,17 @@ export default function AdminSalesChallengesPage() {
                   ['Selected qualifying', financial.chosen.length],
                   ['Cheapest qualifying', financial.cheapest ? money(financial.cheapest.price,challenge.currency) : '—'],
                   ['Lowest-margin product', financial.conservative?.product.name || '—'],
-                  ['Highest affiliate %', \`\${financial.highestAffiliate.toFixed(0)}%\`],
+                  ['Highest affiliate %', `${financial.highestAffiliate.toFixed(0)}%`],
                   ['Cumulative liability', money(financial.cumulativeLiability,challenge.currency)],
                 ].map(([label,value]) => <div key={String(label)} className="rounded-2xl bg-white dark:bg-slate-900 border p-4"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-2 font-black">{String(value)}</p></div>)}
               </div>
               {!financial.conservative ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800"><AlertTriangle className="w-5 h-5 inline mr-2" />Select at least one product that meets the minimum price to calculate safety.</div> :
-              <div className="overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><table className="w-full text-sm"><thead><tr className="text-left border-b text-slate-500"><th className="p-4">Mission</th><th>Gross revenue</th><th>Affiliate payout</th><th>Payment cost</th><th>Challenge bonus</th><th>DRIGHT retained</th><th>Retained %</th><th>Status</th></tr></thead><tbody>{financial.rows.map(row => <tr key={row.tier.sort_order} className="border-b border-slate-100 dark:border-slate-800"><td className="p-4 font-bold">{row.tier.sales_required.toLocaleString()} sales</td><td>{money(row.gross,challenge.currency)}</td><td>{money(row.affiliate,challenge.currency)}</td><td>{money(row.payment,challenge.currency)}</td><td>{money(row.reward,challenge.currency)}</td><td>{money(row.retained,challenge.currency)}</td><td>{row.pct.toFixed(1)}%</td><td><span className={\`font-black \${row.status==='SAFE'?'text-emerald-600':row.status==='LOW MARGIN'?'text-amber-600':'text-red-600'}\`}>{row.status}</span></td></tr>)}</tbody></table></div>}
+              <div className="overflow-x-auto rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><table className="w-full text-sm"><thead><tr className="text-left border-b text-slate-500"><th className="p-4">Mission</th><th>Gross revenue</th><th>Affiliate payout</th><th>Payment cost</th><th>Challenge bonus</th><th>DRIGHT retained</th><th>Retained %</th><th>Status</th></tr></thead><tbody>{financial.rows.map(row => <tr key={row.tier.sort_order} className="border-b border-slate-100 dark:border-slate-800"><td className="p-4 font-bold">{row.tier.sales_required.toLocaleString()} sales</td><td>{money(row.gross,challenge.currency)}</td><td>{money(row.affiliate,challenge.currency)}</td><td>{money(row.payment,challenge.currency)}</td><td>{money(row.reward,challenge.currency)}</td><td>{money(row.retained,challenge.currency)}</td><td>{row.pct.toFixed(1)}%</td><td><span className={`font-black ${row.status==='SAFE'?'text-emerald-600':row.status==='LOW MARGIN'?'text-amber-600':'text-red-600'}`}>{row.status}</span></td></tr>)}</tbody></table></div>}
             </div>
           )}
 
-          {tab === 'Participants' && <DataTable title="Participants" icon={Users} rows={participants.map(p => [p.user_id, p.status, \`\${p.current_tier_sales} current\`, \`\${p.lifetime_qualified_sales} lifetime\`, new Date(p.joined_at).toLocaleString()])} />}
-          {tab === 'Leaderboard' && <DataTable title="Current-Cycle Leaderboard" icon={Trophy} rows={leaders.map(l => [\`#\${l.rank}\`, l.display_name, \`\${l.lifetime_qualified_sales} qualified sales\`, l.user_id])} />}
+          {tab === 'Participants' && <DataTable title="Participants" icon={Users} rows={participants.map(p => [p.user_id, p.status, `${p.current_tier_sales} current`, `${p.lifetime_qualified_sales} lifetime`, new Date(p.joined_at).toLocaleString()])} />}
+          {tab === 'Leaderboard' && <DataTable title="Current-Cycle Leaderboard" icon={Trophy} rows={leaders.map(l => [`#${l.rank}`, l.display_name, `${l.lifetime_qualified_sales} qualified sales`, l.user_id])} />}
 
           {tab === 'Claims & Payouts' && (
             <div className="space-y-3">{claims.map(c => <div key={c.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 flex flex-col xl:flex-row xl:items-center gap-4">
@@ -583,7 +583,7 @@ export default function AdminSalesChallengesPage() {
             </div>)}{claims.length===0 && <Empty text="No claims in the latest cycle." />}</div>
           )}
 
-          {tab === 'Cycle History' && <DataTable title="Cycle History" icon={History} rows={cycles.map(c => [\`Cycle \${c.cycle_number}\`, c.status, new Date(c.starts_at).toLocaleString(), new Date(c.ends_at).toLocaleString(), c.reset_reason || '—'])} />}
+          {tab === 'Cycle History' && <DataTable title="Cycle History" icon={History} rows={cycles.map(c => [`Cycle ${c.cycle_number}`, c.status, new Date(c.starts_at).toLocaleString(), new Date(c.ends_at).toLocaleString(), c.reset_reason || '—'])} />}
           {tab === 'Audit History' && <DataTable title="Audit History" icon={ShieldCheck} rows={audits.map(a => [new Date(a.created_at).toLocaleString(), a.event_type, a.target_type || '—', a.actor_id || 'system'])} />}
         </>
       )}
@@ -604,7 +604,7 @@ function DataTable({ title, icon: Icon, rows }: {
 }) {
   return <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
     <div className="flex items-center gap-2"><Icon className="w-6 h-6" /><h2 className="text-xl font-black">{title}</h2></div>
-    {rows.length===0 ? <div className="mt-4"><Empty text={\`No \${title.toLowerCase()} yet.\`} /></div> :
-    <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><tbody>{rows.map((row,i) => <tr key={i} className="border-b border-slate-100 dark:border-slate-800">{row.map((cell,j) => <td key={j} className={\`py-3 pr-5 \${j===0?'font-bold':''}\`}>{cell}</td>)}</tr>)}</tbody></table></div>}
+    {rows.length===0 ? <div className="mt-4"><Empty text={`No ${title.toLowerCase()} yet.`} /></div> :
+    <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><tbody>{rows.map((row,i) => <tr key={i} className="border-b border-slate-100 dark:border-slate-800">{row.map((cell,j) => <td key={j} className={`py-3 pr-5 ${j===0?'font-bold':''}`}>{cell}</td>)}</tr>)}</tbody></table></div>}
   </div>;
 }
