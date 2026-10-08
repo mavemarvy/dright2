@@ -103,6 +103,7 @@ export default function SalesChallengePage() {
   const [products, setProducts] = useState<EligibleProduct[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [affiliateEarnings, setAffiliateEarnings] = useState(0);
+  const [currentUserId, setCurrentUserId] = useState('');
   const [error, setError] = useState('');
   const [nowTick, setNowTick] = useState(Date.now());
 
@@ -113,6 +114,7 @@ export default function SalesChallengePage() {
       const { data: authData } = await supabase.auth.getUser();
       const user = authData.user;
       if (!user) throw new Error('Sign in to view your challenge progress.');
+      setCurrentUserId(user.id);
 
       const { data: challengeData, error: challengeError } = await supabase
         .from('sales_challenges')
@@ -204,7 +206,6 @@ export default function SalesChallengePage() {
   const missionComplete = Boolean(currentTier && currentSales >= target);
   const remaining = Math.max(0, target - currentSales);
   const progress = target > 0 ? Math.min(100, (currentSales / target) * 100) : 0;
-  const myRank = leaderboard.find(row => row.user_id === (undefined as unknown as string))?.rank;
   const bonusesEarned = claims
     .filter(c => c.status !== 'REJECTED' && c.reward_choice === 'CASH')
     .reduce((sum, c) => sum + Number(c.cash_amount_snapshot || 0), 0);
@@ -244,7 +245,7 @@ export default function SalesChallengePage() {
   }
 
   const timeRemaining = new Date(cycle.ends_at).getTime() - nowTick;
-  const currentRank = leaderboard.find(row => row.user_id && row.lifetime_qualified_sales === participant?.lifetime_qualified_sales)?.rank;
+  const currentRank = leaderboard.find(row => row.user_id === currentUserId)?.rank;
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
