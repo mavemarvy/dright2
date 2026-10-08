@@ -103,7 +103,8 @@ export default function SalesChallengePage() {
   const [products, setProducts] = useState<EligibleProduct[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [affiliateEarnings, setAffiliateEarnings] = useState(0);
-  const [currentUserId, setCurrentUserId] = useState('');
+  const [myRank, setMyRank] = useState<number | null>(null);
+  const [leaderboardLimit, setLeaderboardLimit] = useState<10 | 50>(10);
   const [error, setError] = useState('');
   const [nowTick, setNowTick] = useState(Date.now());
 
@@ -114,7 +115,6 @@ export default function SalesChallengePage() {
       const { data: authData } = await supabase.auth.getUser();
       const user = authData.user;
       if (!user) throw new Error('Sign in to view your challenge progress.');
-      setCurrentUserId(user.id);
 
       const { data: challengeData, error: challengeError } = await supabase
         .from('sales_challenges')
@@ -157,7 +157,7 @@ export default function SalesChallengePage() {
       const currentCycle = cycleData as Cycle;
       setCycle(currentCycle);
 
-      const [tiersRes, participantRes, claimsRes, productsRes, leaderRes, userRes] = await Promise.all([
+      const [tiersRes, participantRes, claimsRes, productsRes, leaderRes, userRes, rankRes] = await Promise.all([
         supabase.from('sales_challenge_cycle_tiers').select('*')
           .eq('challenge_cycle_id', currentCycle.id).eq('enabled', true).order('sort_order'),
         supabase.from('sales_challenge_participants').select('*')
@@ -170,9 +170,10 @@ export default function SalesChallengePage() {
         supabase.from('sales_challenge_leaderboard_view').select('*')
           .eq('challenge_cycle_id', currentCycle.id).order('rank').limit(50),
         supabase.from('users').select('affiliate_earnings').eq('id', user.id).maybeSingle(),
+        supabase.rpc('get_sales_challenge_my_rank', { p_cycle_id: currentCycle.id }),
       ]);
 
-      for (const result of [tiersRes, participantRes, claimsRes, productsRes, leaderRes, userRes]) {
+      for (const result of [tiersRes, participantRes, claimsRes, productsRes, leaderRes, userRes, rankRes]) {
         if (result.error) throw result.error;
       }
 
@@ -182,6 +183,7 @@ export default function SalesChallengePage() {
       setProducts((productsRes.data || []) as EligibleProduct[]);
       setLeaderboard((leaderRes.data || []) as LeaderboardRow[]);
       setAffiliateEarnings(Number((userRes.data as { affiliate_earnings?: number } | null)?.affiliate_earnings || 0));
+      setMyRank(rankRes.data == null ? null : Number(rankRes.data));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load the challenge.');
     } finally {
@@ -245,7 +247,7 @@ export default function SalesChallengePage() {
   }
 
   const timeRemaining = new Date(cycle.ends_at).getTime() - nowTick;
-  const currentRank = leaderboard.find(row => row.user_id === currentUserId)?.rank;
+  const currentRank = myRank;
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
@@ -396,10 +398,25 @@ export default function SalesChallengePage() {
         </section>
 
         <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm">
-          <h2 className="text-xl font-black text-slate-950 dark:text-white">Top Affiliates</h2>
-          <p className="text-sm text-slate-500 mt-1">Ranked by lifetime qualified sales in this cycle only.</p>
-          <div className="mt-4 space-y-2">
-            {leaderboard.slice(0, 10).map(row => (
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-black text-slate-950 dark:text-white">Top Affiliates</h2>
+              <p className="text-sm text-slate-500 mt-1">Ranked by lifetime qualified sales in this cycle only.</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mt-2">My Position: {currentRank ? `#${currentRank}` : '—'}</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setLeaderboardLimit(10)}
+                className={`rounded-lg px-3 py-2 text-sm font-bold border ${leaderboardLimit === 10 ? 'bg-slate-950 text-white border-slate-950' : 'border-slate-200 dark:border-slate-700'}`}>
+                Top 10
+              </button>
+              <button onClick={() => setLeaderboardLimit(50)}
+                className={`rounded-lg px-3 py-2 text-sm font-bold border ${leaderboardLimit === 50 ? 'bg-slate-950 text-white border-slate-950' : 'border-slate-200 dark:border-slate-700'}`}>
+                Top 50
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 space-y-2 max-h-[34rem] overflow-y-auto pr-1">
+            {leaderboard.slice(0, leaderboardLimit).map(row => (
               <div key={row.user_id} className="flex items-center gap-3 rounded-xl bg-slate-50 dark:bg-slate-800 p-3">
                 <span className="w-8 font-black text-slate-500">#{row.rank}</span>
                 <span className="flex-1 font-semibold text-slate-900 dark:text-white truncate">{row.display_name}</span>
