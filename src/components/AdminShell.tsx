@@ -82,6 +82,7 @@ const ALL_NAV_SECTIONS: NavSection[] = [
     items: [
       { path: '/admin/referral-analytics', label: 'Referral Analytics', icon: UsersIcon, page: 'referral_analytics' },
       { path: '/admin/competitions', label: 'Competitions', icon: Trophy, page: 'competitions' },
+      { path: '/admin/sales-challenges', label: 'Sales Challenges', icon: Award, page: 'competitions' },
       { path: '/admin/affiliate-analytics', label: 'Affiliate Analytics', icon: Share2, page: 'affiliate_analytics' },
     ],
   },
