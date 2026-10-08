@@ -63,6 +63,7 @@ const sellerNav: NavEntry[] = [
 
 const growthNav: NavEntry[] = [
   { path: '/refer', labelKey: 'refer', icon: Users },
+  { path: '/sales-challenge', label: 'Sales Challenge', icon: Trophy },
   { path: '/campaigns', labelKey: 'campaigns', icon: TrendingUp },
   { path: '/creator-campaigns', labelKey: 'creatorCampaigns', icon: Target },
   { path: '/rewards', labelKey: 'rewards', icon: Gift },
