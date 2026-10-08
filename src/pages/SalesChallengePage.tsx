@@ -88,8 +88,8 @@ const formatTime = (ms: number) => {
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;
-  if (days > 0) return \`\${days}d \${hours}h \${minutes}m\`;
-  return \`\${hours}h \${minutes}m\`;
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  return `${hours}h ${minutes}m`;
 };
 
 export default function SalesChallengePage() {
@@ -269,14 +269,14 @@ export default function SalesChallengePage() {
             <div>
               <p className="text-xs uppercase tracking-wider font-bold text-slate-500">Current Mission</p>
               <h2 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">
-                {participant?.status === 'COMPLETED' ? 'All missions complete' : currentTier ? \`\${currentSales} / \${target} Sales\` : '0 / —'}
+                {participant?.status === 'COMPLETED' ? 'All missions complete' : currentTier ? `${currentSales} / ${target} Sales` : '0 / —'}
               </h2>
             </div>
             <Target className="w-10 h-10 text-amber-500" />
           </div>
 
           <div className="mt-5 h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-            <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: \`\${progress}%\` }} />
+            <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${progress}%` }} />
           </div>
 
           {currentTier && (
@@ -334,7 +334,7 @@ export default function SalesChallengePage() {
             { label: 'Cycle Sales', value: String(participant?.lifetime_qualified_sales || 0), icon: ShoppingBag },
             { label: 'Affiliate Earnings', value: formatMoney(affiliateEarnings, challenge.currency), icon: Wallet },
             { label: 'Challenge Bonuses', value: formatMoney(bonusesEarned, challenge.currency), icon: Gift },
-            { label: 'Current Rank', value: currentRank ? \`#\${currentRank}\` : '—', icon: Medal },
+            { label: 'Current Rank', value: currentRank ? `#${currentRank}` : '—', icon: Medal },
             { label: 'Time Remaining', value: formatTime(timeRemaining), icon: Clock3 },
             { label: 'Eligible Products', value: String(products.length), icon: Package },
           ].map(item => (
@@ -359,7 +359,7 @@ export default function SalesChallengePage() {
         </div>
         <div className="mt-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">
           {products.map(product => (
-            <Link key={product.product_id} to={\`/product/\${product.product_id}\`}
+            <Link key={product.product_id} to={`/product/${product.product_id}`}
               className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 hover:border-slate-400 transition-colors">
               <p className="font-bold text-slate-950 dark:text-white">{product.product_name_snapshot}</p>
               <div className="mt-3 flex justify-between text-sm text-slate-500">
@@ -380,7 +380,7 @@ export default function SalesChallengePage() {
               const claimed = claimedTierIds.has(tier.id);
               const active = participant?.current_cycle_tier_id === tier.id;
               return (
-                <div key={tier.id} className={\`flex items-center gap-3 rounded-2xl border p-4 \${active ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200 dark:border-slate-700'}\`}>
+                <div key={tier.id} className={`flex items-center gap-3 rounded-2xl border p-4 ${active ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200 dark:border-slate-700'}`}>
                   <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 grid place-items-center font-black text-sm">{tier.sort_order}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-slate-950 dark:text-white">{tier.sales_required.toLocaleString()} fresh sales</p>
