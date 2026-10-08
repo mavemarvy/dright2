@@ -260,20 +260,57 @@ export default function AdminSalesChallengesPage() {
     setBusy(true); setError(''); setMessage('');
     try {
       const { data: auth } = await supabase.auth.getUser();
+      const template = challenges.find(item => item.is_template) || null;
+
       const { data, error: createError } = await supabase.from('sales_challenges').insert({
-        title: 'New DRIGHT Sales Challenge',
-        tagline: 'Sell More. Earn More. Unlock Bigger Rewards.',
-        short_description: 'Promote Admin-selected products and unlock one-time rewards through fresh sales missions.',
-        long_description: 'Each mission starts from zero after the previous mission reward is successfully claimed. Normal affiliate commission remains separate from challenge bonuses.',
+        title: template ? `${template.title} Copy` : 'New DRIGHT Sales Challenge',
+        tagline: template?.tagline || 'Sell More. Earn More. Unlock Bigger Rewards.',
+        short_description: template?.short_description || 'Promote Admin-selected products and unlock one-time rewards through fresh sales missions.',
+        long_description: template?.long_description || 'Each mission starts from zero after the previous mission reward is successfully claimed. Normal affiliate commission remains separate from challenge bonuses.',
+        cta_label: template?.cta_label || 'Start Selling',
         status: 'DRAFT',
-        currency: 'NGN',
-        minimum_product_price: 20000,
-        minimum_retained_margin_pct: 15,
+        currency: template?.currency || 'NGN',
+        minimum_product_price: Number(template?.minimum_product_price ?? 20000),
+        minimum_retained_margin_pct: Number(template?.minimum_retained_margin_pct ?? 15),
+        estimated_payment_cost_pct: Number(template?.estimated_payment_cost_pct ?? 0),
+        estimated_payment_cost_fixed: Number(template?.estimated_payment_cost_fixed ?? 0),
+        leaderboard_enabled: template?.leaderboard_enabled ?? true,
+        claims_enabled: template?.claims_enabled ?? true,
+        is_template: false,
         created_by: auth.user?.id || null,
       }).select('id').single();
       if (createError) throw createError;
+
+      if (template) {
+        const { data: templateTiers, error: templateTierError } = await supabase
+          .from('sales_challenge_tiers')
+          .select('*')
+          .eq('challenge_id', template.id)
+          .order('sort_order');
+        if (templateTierError) throw templateTierError;
+
+        const tierPayload = ((templateTiers || []) as Tier[]).map((tier, index) => ({
+          sort_order: index + 1,
+          sales_required: Number(tier.sales_required),
+          reward_type: tier.reward_type,
+          cash_reward: Number(tier.cash_reward || 0),
+          prize_name: tier.prize_name,
+          prize_description: tier.prize_description,
+          prize_estimated_cost: Number(tier.prize_estimated_cost || 0),
+          enabled: tier.enabled,
+        }));
+
+        if (tierPayload.length > 0) {
+          const { error: cloneTierError } = await supabase.rpc('admin_replace_sales_challenge_tiers', {
+            p_challenge_id: data.id,
+            p_tiers: tierPayload,
+          });
+          if (cloneTierError) throw cloneTierError;
+        }
+      }
+
       setChallengeId(data.id);
-      setMessage('Draft challenge created.');
+      setMessage(template ? 'Draft challenge created from the default template. Products were not copied.' : 'Draft challenge created.');
       await load(data.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to create challenge.');
@@ -504,7 +541,7 @@ export default function AdminSalesChallengesPage() {
           </select>
           <button onClick={() => void createChallenge()} disabled={busy}
             className="rounded-xl bg-slate-950 text-white px-4 py-2 font-bold flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Create Challenge
+            <Plus className="w-4 h-4" /> Create from Default
           </button>
           <button onClick={() => void load(challengeId)} className="rounded-xl border border-slate-200 dark:border-slate-700 p-2.5">
             <RefreshCw className="w-5 h-5" />
