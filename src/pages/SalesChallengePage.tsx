@@ -198,8 +198,10 @@ export default function SalesChallengePage() {
   }, []);
 
   const currentTier = useMemo(
-    () => tiers.find(t => t.id === participant?.current_cycle_tier_id) || null,
-    [tiers, participant?.current_cycle_tier_id],
+    () => participant?.status === 'COMPLETED'
+      ? null
+      : tiers.find(t => t.id === participant?.current_cycle_tier_id) || tiers[0] || null,
+    [tiers, participant?.current_cycle_tier_id, participant?.status],
   );
 
   const claimedTierIds = useMemo(() => new Set(claims.map(c => c.cycle_tier_id)), [claims]);
