@@ -18,6 +18,7 @@ type Challenge = {
   expired_message: string;
   status: 'DRAFT' | 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'ARCHIVED';
   currency: string;
+  minimum_product_price: number;
 };
 
 type Cycle = {
@@ -348,11 +349,30 @@ export default function SalesChallengePage() {
         </section>
       </div>
 
+      <section className="rounded-3xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-6 shadow-sm">
+        <div className="flex items-start gap-3">
+          <Award className="w-6 h-6 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" />
+          <div>
+            <h2 className="text-xl font-black text-slate-950 dark:text-white">Challenge Rules</h2>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">These rules determine which sales are counted in this cycle.</p>
+            <ul className="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+              <li>• <b>Admin-selected products only:</b> a product does not qualify automatically just because of its price.</li>
+              <li>• <b>Minimum price:</b> selected products must be priced at least {formatMoney(Number(challenge.minimum_product_price || 0), challenge.currency)} for this challenge.</li>
+              <li>• <b>Completed affiliate sales only:</b> the sale must be legitimately completed and attributed to your affiliate account.</li>
+              <li>• <b>One order, one count:</b> the same order cannot be counted twice.</li>
+              <li>• <b>Fresh mission counting:</b> after a tier reward is successfully claimed, your next mission starts from 0.</li>
+              <li>• <b>Separate earnings:</b> your normal affiliate commission continues separately from challenge bonuses.</li>
+              <li>• <b>Refund protection:</b> cancelled/refunded qualifying sales may be reversed from challenge accounting.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-black text-slate-950 dark:text-white">Eligible Products</h2>
-            <p className="text-sm text-slate-500 mt-1">Only Admin-selected products in this cycle count toward the challenge.</p>
+            <p className="text-sm text-slate-500 mt-1">Only Admin-selected products in this cycle count. Each must also meet the current minimum price of <b>{formatMoney(Number(challenge.minimum_product_price || 0), challenge.currency)}</b>.</p>
           </div>
           <button onClick={() => void load()} className="p-2 rounded-xl border border-slate-200 dark:border-slate-700" aria-label="Refresh challenge">
             <RefreshCw className="w-5 h-5" />
