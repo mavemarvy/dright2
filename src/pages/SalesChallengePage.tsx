@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 type Challenge = {
   id: string;
@@ -75,13 +76,6 @@ type LeaderboardRow = {
   rank: number;
 };
 
-const formatMoney = (value: number, currency = 'NGN') =>
-  new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-
 const formatTime = (ms: number) => {
   if (ms <= 0) return 'Ended';
   const totalMinutes = Math.floor(ms / 60000);
@@ -93,6 +87,11 @@ const formatTime = (ms: number) => {
 };
 
 export default function SalesChallengePage() {
+  const { format: formatDisplayCurrency } = useCurrency();
+  const formatMoney = useCallback(
+    (value: number, currency = 'NGN') => formatDisplayCurrency(Number(value || 0), currency),
+    [formatDisplayCurrency],
+  );
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
