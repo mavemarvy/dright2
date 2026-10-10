@@ -5,6 +5,7 @@ import {
   RefreshCw, Save, Search, ShieldCheck, Trophy, Users, WalletCards, XCircle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useCurrency } from '../../contexts/CurrencyContext';
 
 type Challenge = {
   id: string;
@@ -102,10 +103,6 @@ const tabs = [
 ] as const;
 type Tab = typeof tabs[number];
 
-const money = (value: number, currency = 'NGN') =>
-  new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 })
-    .format(Number(value || 0));
-
 const localInput = (iso?: string | null) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -114,6 +111,11 @@ const localInput = (iso?: string | null) => {
 };
 
 export default function AdminSalesChallengesPage() {
+  const { format: formatDisplayCurrency } = useCurrency();
+  const money = useCallback(
+    (value: number, currency = 'NGN') => formatDisplayCurrency(Number(value || 0), currency),
+    [formatDisplayCurrency],
+  );
   const [tab, setTab] = useState<Tab>('Overview');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
