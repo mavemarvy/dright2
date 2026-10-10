@@ -136,6 +136,7 @@ export default function AdminSalesChallengesPage() {
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [scheduleReason, setScheduleReason] = useState('');
+  const [extensionEndsAt, setExtensionEndsAt] = useState('');
 
   const challenge = challenges.find(c => c.id === challengeId) || null;
   const latestCycle = cycles[0] || null;
@@ -177,6 +178,7 @@ export default function AdminSalesChallengesPage() {
       if (cycle) {
         setStartsAt(localInput(cycle.starts_at));
         setEndsAt(localInput(cycle.ends_at));
+        setExtensionEndsAt(localInput(cycle.ends_at));
         const [participantsRes, claimsRes] = await Promise.all([
           supabase.from('sales_challenge_participants').select('*')
             .eq('challenge_cycle_id', cycle.id).order('lifetime_qualified_sales', { ascending: false }),
@@ -207,6 +209,7 @@ export default function AdminSalesChallengesPage() {
         const end = new Date(start.getTime() + 30 * 86400000);
         setStartsAt(localInput(start.toISOString()));
         setEndsAt(localInput(end.toISOString()));
+        setExtensionEndsAt(localInput(end.toISOString()));
       }
 
       const { data: auditRows, error: auditError } = await supabase
@@ -324,21 +327,20 @@ export default function AdminSalesChallengesPage() {
   const toggleProduct = async (productId: string, active: boolean) => {
     await run(async () => {
       if (!challenge) return;
-      if (active) {
-        const { data: auth } = await supabase.auth.getUser();
-        const { error: productError } = await supabase.from('sales_challenge_products').upsert({
-          challenge_id: challenge.id,
-          product_id: productId,
-          active: true,
-          added_by: auth.user?.id || null,
-        }, { onConflict: 'challenge_id,product_id' });
-        if (productError) throw productError;
-      } else {
-        const { error: productError } = await supabase.from('sales_challenge_products')
-          .update({ active: false }).eq('challenge_id', challenge.id).eq('product_id', productId);
-        if (productError) throw productError;
+      const product = products.find(item => item.id === productId);
+      if (active && product && Number(product.price) < Number(challenge.minimum_product_price)) {
+        throw new Error(`Only products priced at or above ${money(challenge.minimum_product_price, challenge.currency)} can be added.`);
       }
-    }, active ? 'Product added to the challenge.' : 'Product removed from the challenge.');
+      const { error: productError } = await supabase.rpc('admin_set_sales_challenge_product', {
+        p_challenge_id: challenge.id,
+        p_product_id: productId,
+        p_active: active,
+        p_reason: scheduleReason || (active ? 'Added by admin from challenge manager' : 'Removed by admin from challenge manager'),
+      });
+      if (productError) throw productError;
+    }, active
+      ? 'Product added. It now qualifies for future completed sales in the current cycle.'
+      : 'Product removed. Future sales for it no longer count; already-counted sales remain intact.');
   };
 
   const saveTiers = () => run(async () => {
@@ -379,6 +381,30 @@ export default function AdminSalesChallengesPage() {
     });
     if (launchError) throw launchError;
   }, latestCycle ? 'Challenge schedule updated.' : 'Challenge cycle scheduled.');
+
+  const extendCurrentCycle = () => run(async () => {
+    if (!latestCycle) throw new Error('There is no current challenge cycle to extend.');
+    if (!extensionEndsAt) throw new Error('Choose the new end date and time.');
+
+    const currentEnd = new Date(latestCycle.ends_at);
+    const newEnd = new Date(extensionEndsAt);
+    if (Number.isNaN(newEnd.getTime()) || newEnd.getTime() <= currentEnd.getTime()) {
+      throw new Error('The new end time must be later than the current end time.');
+    }
+
+    const { error: extendError } = await supabase.rpc('admin_extend_sales_challenge_cycle', {
+      p_cycle_id: latestCycle.id,
+      p_new_ends_at: newEnd.toISOString(),
+      p_reason: scheduleReason || 'Challenge duration extended by admin',
+    });
+    if (extendError) throw extendError;
+  }, 'Challenge duration extended. Existing participant progress and already-counted sales were preserved.');
+
+  const addExtensionDays = (days: number) => {
+    if (!latestCycle) return;
+    const next = new Date(new Date(latestCycle.ends_at).getTime() + days * 86400000);
+    setExtensionEndsAt(localInput(next.toISOString()));
+  };
 
   const restartCycle = () => run(async () => {
     if (!challenge) return;
@@ -444,24 +470,13 @@ export default function AdminSalesChallengesPage() {
       .map(p => p.id);
     if (ids.length === 0) throw new Error(active ? 'No qualifying products are visible to add.' : 'No selected products are visible to remove.');
 
-    if (active) {
-      const { data: auth } = await supabase.auth.getUser();
-      const rows = ids.map(productId => ({
-        challenge_id: challenge.id,
-        product_id: productId,
-        active: true,
-        added_by: auth.user?.id || null,
-      }));
-      const { error: bulkError } = await supabase
-        .from('sales_challenge_products')
-        .upsert(rows, { onConflict: 'challenge_id,product_id' });
-      if (bulkError) throw bulkError;
-    } else {
-      const { error: bulkError } = await supabase
-        .from('sales_challenge_products')
-        .update({ active: false })
-        .eq('challenge_id', challenge.id)
-        .in('product_id', ids);
+    for (const productId of ids) {
+      const { error: bulkError } = await supabase.rpc('admin_set_sales_challenge_product', {
+        p_challenge_id: challenge.id,
+        p_product_id: productId,
+        p_active: active,
+        p_reason: scheduleReason || (active ? 'Bulk-added by admin from challenge manager' : 'Bulk-removed by admin from challenge manager'),
+      });
       if (bulkError) throw bulkError;
     }
   }, active ? 'Visible qualifying products added.' : 'Visible selected products removed.');
@@ -608,27 +623,57 @@ export default function AdminSalesChallengesPage() {
           )}
 
           {tab === 'Schedule' && (
-            <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 space-y-5">
-              <div className="flex items-center gap-3"><CalendarClock className="w-6 h-6" /><div><h2 className="text-xl font-black">Schedule / Reset / Restart / Reschedule</h2><p className="text-sm text-slate-500">Supports short campaigns and long multi-year cycles.</p></div></div>
-              <div className="grid md:grid-cols-2 gap-4">
-                <label className="space-y-1"><span className="text-sm font-bold">Start</span><input type="datetime-local" value={startsAt} onChange={e => setStartsAt(e.target.value)} className="w-full rounded-xl border p-3 bg-transparent" /></label>
-                <label className="space-y-1"><span className="text-sm font-bold">End</span><input type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} className="w-full rounded-xl border p-3 bg-transparent" /></label>
+            <div className="space-y-5">
+              <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 space-y-5">
+                <div className="flex items-center gap-3"><CalendarClock className="w-6 h-6" /><div><h2 className="text-xl font-black">Challenge Period & Schedule</h2><p className="text-sm text-slate-500">Edit a future schedule, launch a new cycle, or deliberately restart/reschedule after a cycle has started.</p></div></div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <label className="space-y-1"><span className="text-sm font-bold">Start</span><input type="datetime-local" value={startsAt} onChange={e => setStartsAt(e.target.value)} className="w-full rounded-xl border p-3 bg-transparent" /></label>
+                  <label className="space-y-1"><span className="text-sm font-bold">End</span><input type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} className="w-full rounded-xl border p-3 bg-transparent" /></label>
+                </div>
+                <label className="space-y-1 block"><span className="text-sm font-bold">Reason / audit note</span><input value={scheduleReason} onChange={e => setScheduleReason(e.target.value)} className="w-full rounded-xl border p-3 bg-transparent" placeholder="Why is the period or product eligibility changing?" /></label>
+                {latestCycle && <div className="rounded-2xl bg-slate-50 dark:bg-slate-800 p-4 text-sm">Current/latest: Cycle {latestCycle.cycle_number} · <b>{latestCycle.status}</b> · {new Date(latestCycle.starts_at).toLocaleString()} → {new Date(latestCycle.ends_at).toLocaleString()}</div>}
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  <b>Accounting rule:</b> once a cycle has started, changing its start date or doing a full reschedule creates a new cycle so old progress is not rewritten. Use the extension control below when you only want more time and want to preserve everyone&apos;s current progress.
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={() => void launchCycle()} disabled={busy} className="rounded-xl bg-emerald-600 text-white px-5 py-3 font-bold">{latestCycle?.status === 'ACTIVE' ? 'Reschedule as New Cycle' : latestCycle ? 'Save Future Schedule' : 'Schedule / Launch'}</button>
+                  <button onClick={() => void restartCycle()} disabled={busy || !latestCycle} className="rounded-xl border border-amber-300 text-amber-800 px-5 py-3 font-bold">Reset / Restart as New Cycle</button>
+                  <button onClick={() => void stopChallenge(false)} disabled={busy} className="rounded-xl border border-red-200 text-red-700 px-5 py-3 font-bold">Stop Challenge</button>
+                  <button onClick={() => void stopChallenge(true)} disabled={busy} className="rounded-xl border border-slate-300 px-5 py-3 font-bold flex gap-2 items-center"><Archive className="w-4 h-4" /> Archive</button>
+                </div>
               </div>
-              <label className="space-y-1 block"><span className="text-sm font-bold">Reason / note</span><input value={scheduleReason} onChange={e => setScheduleReason(e.target.value)} className="w-full rounded-xl border p-3 bg-transparent" placeholder="Optional audit note" /></label>
-              {latestCycle && <div className="rounded-2xl bg-slate-50 dark:bg-slate-800 p-4 text-sm">Current/latest: Cycle {latestCycle.cycle_number} · <b>{latestCycle.status}</b> · {new Date(latestCycle.starts_at).toLocaleString()} → {new Date(latestCycle.ends_at).toLocaleString()}</div>}
-              <div className="flex flex-wrap gap-3">
-                <button onClick={() => void launchCycle()} disabled={busy} className="rounded-xl bg-emerald-600 text-white px-5 py-3 font-bold">Save Schedule / Launch</button>
-                <button onClick={() => void restartCycle()} disabled={busy || !latestCycle} className="rounded-xl border border-amber-300 text-amber-800 px-5 py-3 font-bold">Reset / Restart as New Cycle</button>
-                <button onClick={() => void stopChallenge(false)} disabled={busy} className="rounded-xl border border-red-200 text-red-700 px-5 py-3 font-bold">Stop Challenge</button>
-                <button onClick={() => void stopChallenge(true)} disabled={busy} className="rounded-xl border border-slate-300 px-5 py-3 font-bold flex gap-2 items-center"><Archive className="w-4 h-4" /> Archive</button>
-              </div>
+
+              {latestCycle && ['ACTIVE','SCHEDULED'].includes(latestCycle.status) && (
+                <div className="rounded-3xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-6 space-y-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-wider font-black text-emerald-700 dark:text-emerald-300">Preserve participant progress</p>
+                    <h3 className="mt-1 text-xl font-black text-slate-950 dark:text-white">Extend Current Cycle</h3>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Adds time to this exact cycle. Current mission counts, lifetime sales, claims and leaderboard positions remain unchanged.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[7,14,30,60,90].map(days => (
+                      <button key={days} type="button" onClick={() => addExtensionDays(days)}
+                        className="rounded-xl border border-emerald-300 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                        +{days} days
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid md:grid-cols-[1fr_auto] gap-3 items-end">
+                    <label className="space-y-1"><span className="text-sm font-bold">New end date & time</span><input type="datetime-local" value={extensionEndsAt} onChange={e => setExtensionEndsAt(e.target.value)} className="w-full rounded-xl border p-3 bg-white dark:bg-slate-900" /></label>
+                    <button onClick={() => void extendCurrentCycle()} disabled={busy}
+                      className="min-h-[50px] rounded-xl bg-emerald-700 text-white px-5 py-3 font-black">
+                      Extend Without Reset
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {tab === 'Eligible Products' && (
             <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div><h2 className="text-xl font-black">Challenge → Eligible Products</h2><p className="text-sm text-slate-500">No product joins automatically, even when it meets the price threshold.</p></div>
+                <div><h2 className="text-xl font-black">Challenge → Eligible Products</h2><p className="text-sm text-slate-500">Admin controls the exact product list. A product must also be priced at or above <b>{money(challenge.minimum_product_price, challenge.currency)}</b> to qualify.</p></div>
                 <div className="flex flex-wrap gap-2">
                   <select value={productFilter} onChange={e => setProductFilter(e.target.value as typeof productFilter)}
                     className="rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2">
@@ -640,7 +685,11 @@ export default function AdminSalesChallengesPage() {
                   <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder="Search products" className="rounded-xl border pl-9 pr-3 py-2 bg-transparent" /></div>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4 text-sm text-blue-900 dark:text-blue-200">
+                <b>Live-cycle behavior:</b> adding a qualifying product makes future completed affiliate sales for that product count immediately. Removing it stops future sales from counting. Sales that were already legitimately counted stay in the historical ledger.
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm font-black">{selectedIds.size} selected</span>
                 <button onClick={() => void bulkSetProducts(true)} disabled={busy} className="rounded-xl bg-slate-950 text-white px-4 py-2 text-sm font-bold">Add qualifying shown</button>
                 <button onClick={() => void bulkSetProducts(false)} disabled={busy} className="rounded-xl border border-red-200 text-red-700 px-4 py-2 text-sm font-bold">Remove selected shown</button>
               </div>
@@ -652,8 +701,10 @@ export default function AdminSalesChallengesPage() {
                   return <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800">
                     <td className="py-4 font-semibold">{p.name}<div className="text-xs text-slate-500">{meets ? 'Meets configured minimum' : 'Below configured minimum'}</div></td>
                     <td>{money(p.price, challenge.currency)}</td><td>{Number(p.affiliate_commission_percent || 0).toFixed(0)}%</td><td>{money(contribution, challenge.currency)}</td>
-                    <td className="text-right"><button onClick={() => void toggleProduct(p.id, !active)} disabled={busy}
-                      className={`rounded-lg px-3 py-2 font-bold ${active ? 'border border-red-200 text-red-700' : 'bg-slate-950 text-white'}`}>{active ? 'Remove' : 'Add to Challenge'}</button></td>
+                    <td className="text-right"><button onClick={() => void toggleProduct(p.id, !active)} disabled={busy || (!active && !meets)}
+                      className={`rounded-lg px-3 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50 ${active ? 'border border-red-200 text-red-700' : meets ? 'bg-slate-950 text-white' : 'border border-slate-200 text-slate-400'}`}>
+                      {active ? 'Remove' : meets ? 'Add to Challenge' : 'Below Minimum'}
+                    </button></td>
                   </tr>;
                 })}</tbody></table></div>
             </div>
