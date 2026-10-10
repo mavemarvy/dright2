@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Medal, Sparkles, Target, Trophy } from 'lucide-react';
+import { ArrowRight, Medal, Package, ShieldCheck, Sparkles, Target, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -9,6 +9,7 @@ type Challenge = {
   id: string;
   title: string;
   currency: string;
+  minimum_product_price: number;
 };
 
 type Cycle = {
@@ -39,6 +40,13 @@ type Leader = {
   rank: number;
 };
 
+type EligibleProduct = {
+  product_id: string;
+  product_name_snapshot: string;
+  price_snapshot: number;
+  affiliate_pct_snapshot: number;
+};
+
 const plural = (value: number, singular: string, pluralValue = `${singular}s`) =>
   `${value.toLocaleString()} ${value === 1 ? singular : pluralValue}`;
 
@@ -50,6 +58,7 @@ export default function SalesChallengeDashboardCard({ className = '' }: { classN
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [participant, setParticipant] = useState<Participant | null>(null);
   const [leaders, setLeaders] = useState<Leader[]>([]);
+  const [products, setProducts] = useState<EligibleProduct[]>([]);
   const [myRank, setMyRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -59,7 +68,7 @@ export default function SalesChallengeDashboardCard({ className = '' }: { classN
     try {
       const { data: challengeData, error: challengeError } = await supabase
         .from('sales_challenges')
-        .select('id,title,currency')
+        .select('id,title,currency,minimum_product_price')
         .eq('status', 'ACTIVE')
         .order('updated_at', { ascending: false })
         .limit(1)
@@ -72,6 +81,7 @@ export default function SalesChallengeDashboardCard({ className = '' }: { classN
         setTiers([]);
         setParticipant(null);
         setLeaders([]);
+        setProducts([]);
         setMyRank(null);
         return;
       }
@@ -93,7 +103,7 @@ export default function SalesChallengeDashboardCard({ className = '' }: { classN
       }
 
       const currentCycle = cycleData as Cycle;
-      const [tiersRes, participantRes, leadersRes, rankRes] = await Promise.all([
+      const [tiersRes, participantRes, leadersRes, productsRes, rankRes] = await Promise.all([
         supabase
           .from('sales_challenge_cycle_tiers')
           .select('id,sort_order,sales_required,reward_type,cash_reward,prize_name')
@@ -112,10 +122,17 @@ export default function SalesChallengeDashboardCard({ className = '' }: { classN
           .eq('challenge_cycle_id', currentCycle.id)
           .order('rank')
           .limit(5),
+        supabase
+          .from('sales_challenge_cycle_products')
+          .select('product_id,product_name_snapshot,price_snapshot,affiliate_pct_snapshot')
+          .eq('challenge_cycle_id', currentCycle.id)
+          .eq('active', true)
+          .eq('meets_minimum_product_price', true)
+          .order('price_snapshot'),
         supabase.rpc('get_sales_challenge_my_rank', { p_cycle_id: currentCycle.id }),
       ]);
 
-      for (const result of [tiersRes, participantRes, leadersRes, rankRes]) {
+      for (const result of [tiersRes, participantRes, leadersRes, productsRes, rankRes]) {
         if (result.error) throw result.error;
       }
 
@@ -124,6 +141,7 @@ export default function SalesChallengeDashboardCard({ className = '' }: { classN
       setTiers((tiersRes.data || []) as Tier[]);
       setParticipant((participantRes.data || null) as Participant | null);
       setLeaders((leadersRes.data || []) as Leader[]);
+      setProducts((productsRes.data || []) as EligibleProduct[]);
       setMyRank(rankRes.data == null ? null : Number(rankRes.data));
     } catch (error) {
       console.error('Unable to load sales challenge dashboard card:', error);
@@ -244,6 +262,56 @@ export default function SalesChallengeDashboardCard({ className = '' }: { classN
             All challenge levels completed for this cycle.
           </div>
         )}
+
+        <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-black text-slate-950 dark:text-white">Challenge Rules</h3>
+              <ul className="mt-2 space-y-1.5 text-sm text-slate-700 dark:text-slate-200">
+                <li>• Only products explicitly selected by DRIGHT Admin for this cycle count.</li>
+                <li>• A selected product must cost at least <b>{format(Number(challenge.minimum_product_price || 0), challenge.currency)}</b> for this challenge.</li>
+                <li>• Only legitimate completed affiliate sales count, and each eligible order counts once.</li>
+                <li>• After you claim a mission reward, the next mission starts fresh from 0 sales.</li>
+                <li>• Your normal affiliate commission is separate from challenge rewards.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="font-black text-slate-950 dark:text-white">Admin-Selected Eligible Products</h3>
+              <p className="text-xs text-slate-500">{products.length} product{products.length === 1 ? '' : 's'} currently count toward this cycle</p>
+            </div>
+            <Package className="w-5 h-5 text-primary-500" />
+          </div>
+          {products.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-4 text-sm text-slate-500 text-center">
+              Admin has not selected any qualifying products for this cycle yet.
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-2">
+              {products.slice(0, 6).map((product) => (
+                <Link
+                  key={product.product_id}
+                  to={`/product/${product.product_id}`}
+                  className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3 hover:border-slate-400 transition-colors"
+                >
+                  <p className="text-sm font-black text-slate-950 dark:text-white line-clamp-2">{product.product_name_snapshot}</p>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
+                    <span>{format(Number(product.price_snapshot || 0), challenge.currency)}</span>
+                    <span>{Number(product.affiliate_pct_snapshot || 0).toFixed(0)}% affiliate</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+          {products.length > 6 && (
+            <p className="mt-2 text-xs text-slate-500">+{products.length - 6} more eligible products are listed on the full challenge page.</p>
+          )}
+        </div>
 
         <div className="mt-6">
           <div className="flex items-center justify-between gap-3 mb-3">
