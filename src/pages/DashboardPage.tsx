@@ -33,6 +33,7 @@ import SponsoredPlacementCard from '../components/promotion/SponsoredPlacementCa
 import { DiscoveryPromoGallery } from '../components/promotion/PromotionSurfaces';
 import DrightStarterProductCard from '../components/DrightStarterProductCard';
 import StarterAffiliateProgressBoard from '../components/StarterAffiliateProgressBoard';
+import SalesChallengeDashboardCard from '../components/SalesChallengeDashboardCard';
 
 interface Announcement {
   id: string;
