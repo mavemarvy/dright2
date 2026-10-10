@@ -16,6 +16,7 @@ import { SearchAnalyticsSection } from '../../components/analytics/SearchAnalyti
 import { AdminIntelligenceDashboard, TrendingEngineDashboard } from '../../components/analytics/AdvancedAnalytics';
 import { LiveLeaderboards, FraudDetectionDashboard } from '../../components/analytics/IntelligenceComponents';
 import { formatCurrency } from '../../lib/currency';
+import AdminSalesChallengeDashboardPanel from '../../components/admin/AdminSalesChallengeDashboardPanel';
 
 export default function AdminDashboardPage() {
   const { analytics: kpis, loading } = useAdminAnalytics();
@@ -98,6 +99,8 @@ export default function AdminDashboardPage() {
           </div>
         </motion.div>
       )}
+
+      <AdminSalesChallengeDashboardPanel className="mb-6" />
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
