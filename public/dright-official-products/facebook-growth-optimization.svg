@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+<defs><linearGradient id="b3" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071634"/><stop offset=".55" stop-color="#1648c8"/><stop offset="1" stop-color="#22a3ff"/></linearGradient></defs>
+<rect width="1200" height="675" rx="36" fill="url(#b3)"/>
+<circle cx="1010" cy="175" r="260" fill="#fff" opacity=".08"/>
+<g font-family="Arial,Helvetica,sans-serif" fill="#fff">
+<text x="70" y="78" font-size="28" font-weight="700" letter-spacing="2">DRIGHT OFFICIAL STORE</text>
+<rect x="70" y="112" width="145" height="42" rx="21" fill="#fff" opacity=".14"/><text x="94" y="141" font-size="20" font-weight="700">SERVICE</text>
+<text x="70" y="245" font-size="61" font-weight="900">Facebook Profile Growth</text>
+<text x="70" y="318" font-size="61" font-weight="900">&amp; Optimization Service</text>
+<text x="72" y="376" font-size="26" fill="#dbeafe">Organic strategy • Profile optimization • Monetization readiness</text>
+</g>
+<g transform="translate(850 145)">
+  <rect width="220" height="220" rx="56" fill="#fff" opacity=".95"/>
+  <text x="110" y="159" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="150" font-weight="900" fill="#1769e0">f</text>
+</g>
+<g transform="translate(70 500)" font-family="Arial,Helvetica,sans-serif">
+<rect width="1000" height="108" rx="24" fill="#fff" opacity=".11"/>
+<g fill="#fff" font-size="21" font-weight="700">
+<text x="34" y="44">✓ Profile audit</text><text x="265" y="44">✓ Organic growth plan</text><text x="585" y="44">✓ Content strategy</text>
+<text x="34" y="80">✓ Engagement guidance</text><text x="350" y="80">✓ No bots</text><text x="585" y="80">✓ No fixed follower guarantee</text>
+</g></g>
+</svg>
