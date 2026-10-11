@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#090909"/><stop offset=".48" stop-color="#5f0808"/><stop offset="1" stop-color="#e11d2e"/></linearGradient>
+  <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffffff" stop-opacity=".16"/><stop offset="1" stop-color="#ffffff" stop-opacity=".06"/></linearGradient>
+  <filter id="shadow"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-opacity=".35"/></filter>
+</defs>
+<rect width="1200" height="675" rx="36" fill="url(#bg)"/>
+<circle cx="1040" cy="100" r="180" fill="#ff3045" opacity=".18"/><circle cx="1080" cy="610" r="250" fill="#000" opacity=".2"/>
+<g font-family="Arial,Helvetica,sans-serif" fill="#fff">
+  <text x="70" y="78" font-size="28" font-weight="700" letter-spacing="2">DRIGHT OFFICIAL STORE</text>
+  <rect x="70" y="112" width="145" height="42" rx="21" fill="#fff" opacity=".14"/><text x="94" y="141" font-size="20" font-weight="700">SERVICE</text>
+  <text x="70" y="242" font-size="67" font-weight="900">Get Your YouTube</text>
+  <text x="70" y="315" font-size="67" font-weight="900">Channel Monetized</text>
+  <text x="70" y="388" font-size="67" font-weight="900">in a Week</text>
+  <text x="73" y="438" font-size="25" fill="#ffd7d7">Policy-compliant monetization consultation &amp; support</text>
+</g>
+<g transform="translate(790 150)" filter="url(#shadow)">
+  <rect x="0" y="0" width="300" height="206" rx="38" fill="#f7192b"/>
+  <polygon points="120,55 120,151 205,103" fill="#fff"/>
+</g>
+<g transform="translate(70 500)" font-family="Arial,Helvetica,sans-serif">
+  <rect width="990" height="110" rx="24" fill="url(#card)" stroke="#fff" stroke-opacity=".12"/>
+  <g fill="#fff" font-size="21" font-weight="700">
+    <text x="34" y="45">✓ Eligibility review</text><text x="275" y="45">✓ Watch-hours guidance</text><text x="574" y="45">✓ AdSense setup</text>
+    <text x="34" y="82">✓ Policy-safe strategy</text><text x="275" y="82">✓ Issue checks</text><text x="574" y="82">✓ Online consultation</text>
+  </g>
+</g>
+<text x="1120" y="625" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#fff" opacity=".65">DRIGHT • Lagos, Nigeria</text>
+</svg>
