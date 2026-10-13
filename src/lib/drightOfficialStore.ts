@@ -107,6 +107,17 @@ export async function updateAdminDrightOfficialProduct(
   if (error) throw error;
 }
 
+export async function setAdminDrightOfficialProductDelivery(
+  marketplaceProductId: string,
+  input: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_dright_official_product_delivery', {
+    p_product_id: marketplaceProductId,
+    p_input: input,
+  });
+  if (error) throw error;
+}
+
 export async function uploadOfficialProductImages(userId: string, files: File[]): Promise<string[]> {
   const urls: string[] = [];
   for (let index = 0; index < files.length; index += 1) {
