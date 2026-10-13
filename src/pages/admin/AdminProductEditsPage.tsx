@@ -81,6 +81,7 @@ export default function AdminProductEditsPage() {
       if (changes.stock_quantity !== undefined) updateData.stock_quantity = changes.stock_quantity;
       if (changes.category) updateData.category = changes.category;
       if (changes.image_url !== undefined) updateData.image_url = changes.image_url;
+      if (changes.demo_video_url !== undefined) updateData.demo_video_url = changes.demo_video_url;
 
       if (Object.keys(updateData).length > 0) {
         const { error: prodErr } = await supabase.from('products').update(updateData).eq('id', edit.product_id);
@@ -187,6 +188,7 @@ export default function AdminProductEditsPage() {
   const fieldLabels: Record<string, string> = {
     name: 'Title', description: 'Description', price: 'Price', stock_quantity: 'Stock',
     category: 'Category', tags: 'Tags', image_url: 'Image',
+    demo_video_url: 'Product-page YouTube Video',
     listing_extension: 'Detailed Category & Attributes',
   };
 
