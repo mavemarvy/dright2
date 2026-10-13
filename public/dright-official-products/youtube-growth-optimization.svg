@@ -1,23 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-<defs><linearGradient id="b4" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b0b0c"/><stop offset=".48" stop-color="#541015"/><stop offset="1" stop-color="#e11d2e"/></linearGradient></defs>
-<rect width="1200" height="675" rx="36" fill="url(#b4)"/>
-<circle cx="1040" cy="120" r="230" fill="#ff4b59" opacity=".14"/>
-<g font-family="Arial,Helvetica,sans-serif" fill="#fff">
-<text x="70" y="78" font-size="28" font-weight="700" letter-spacing="2">DRIGHT OFFICIAL STORE</text>
-<rect x="70" y="112" width="145" height="42" rx="21" fill="#fff" opacity=".14"/><text x="94" y="141" font-size="20" font-weight="700">SERVICE</text>
-<text x="70" y="235" font-size="58" font-weight="900">YouTube Subscriber Growth</text>
-<text x="70" y="307" font-size="58" font-weight="900">Strategy &amp; Channel Optimization</text>
-<text x="72" y="365" font-size="25" fill="#fecdd3">Organic channel growth • Discoverability • Monetization readiness</text>
+<defs>
+ <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#050505"/><stop offset=".46" stop-color="#210307"/><stop offset="1" stop-color="#9d0713"/></linearGradient>
+ <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#fff6ad"/><stop offset=".47" stop-color="#ffcf37"/><stop offset="1" stop-color="#c67900"/></linearGradient>
+ <filter id="shadow"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000" flood-opacity=".55"/></filter>
+ <filter id="glow"><feGaussianBlur stdDeviation="20"/></filter>
+</defs>
+<rect width="1200" height="675" rx="30" fill="url(#bg)"/>
+<circle cx="1000" cy="170" r="250" fill="#e11d2e" opacity=".17" filter="url(#glow)"/><circle cx="120" cy="600" r="220" fill="#ef2234" opacity=".11"/>
+<g font-family="Arial,Helvetica,sans-serif">
+ <g fill="#fff"><rect x="34" y="24" width="28" height="28" rx="7" fill="#fff"/><path d="M43 34h10v12H43z" fill="#ca0918"/><text x="72" y="48" font-size="26" font-weight="800" letter-spacing="1.4">DRIGHT STORE</text></g>
+ <text x="38" y="165" fill="#ff2c3c" font-size="108" font-weight="900">1000</text>
+ <g transform="translate(40 186)"><rect width="80" height="55" rx="15" fill="#ef1729"/><path d="M31 13v30l28-15z" fill="#fff"/></g>
+ <text x="135" y="236" fill="#fff" font-size="58" font-weight="900">YouTube</text>
+ <text x="38" y="302" fill="#fff" font-size="58" font-weight="900">Subscribers</text>
+ <text x="38" y="365" fill="#ffd21f" font-size="58" font-weight="900">Growth</text>
+
+ <g transform="translate(655 45)" filter="url(#shadow)">
+  <rect width="480" height="294" rx="26" fill="#f8fafc"/>
+  <text x="25" y="38" fill="#111827" font-size="20" font-weight="900">Channel analytics</text>
+  <rect x="25" y="61" width="430" height="82" rx="15" fill="#f0f5ff"/>
+  <text x="45" y="89" fill="#64748b" font-size="14">Current subscribers</text><text x="45" y="127" fill="#111827" font-size="38" font-weight="900">1,000</text><circle cx="245" cy="107" r="20" fill="#22c55e"/><path d="M236 111l9-11 10 11" fill="none" stroke="#fff" stroke-width="4"/>
+  <text x="285" y="115" fill="#16a34a" font-size="15" font-weight="800">+1,000 in last 7 days</text>
+  <path d="M30 245 C72 228 100 247 135 221 C169 196 199 214 236 180 C271 148 310 176 349 126 C373 96 400 108 437 73" fill="none" stroke="#22c55e" stroke-width="8" stroke-linecap="round"/>
+  <g fill="#60a5fa" opacity=".5"><rect x="52" y="226" width="24" height="30"/><rect x="93" y="211" width="24" height="45"/><rect x="134" y="196" width="24" height="60"/><rect x="175" y="181" width="24" height="75"/><rect x="216" y="159" width="24" height="97"/><rect x="257" y="140" width="24" height="116"/><rect x="298" y="116" width="24" height="140"/></g>
+ </g>
+ <g transform="translate(903 285)" filter="url(#shadow)"><circle cx="80" cy="80" r="72" fill="url(#gold)"/><circle cx="80" cy="80" r="58" fill="none" stroke="#8b5600" stroke-width="4"/><text x="80" y="69" text-anchor="middle" fill="#3b2500" font-size="19" font-weight="900">REAL &amp;</text><text x="80" y="94" text-anchor="middle" fill="#3b2500" font-size="19" font-weight="900">ORGANIC</text><text x="80" y="119" text-anchor="middle" fill="#3b2500" font-size="19" font-weight="900">GROWTH</text></g>
+ <g transform="translate(760 402)" filter="url(#shadow)"><rect width="340" height="66" rx="20" fill="#ef1729"/><circle cx="50" cy="33" r="16" fill="#fff"/><path d="M43 33h14M50 26v14" stroke="#ef1729" stroke-width="3"/><text x="86" y="43" fill="#fff" font-size="29" font-weight="900">Subscribe</text></g>
+
+ <g transform="translate(30 498)">
+  <rect width="1140" height="116" rx="20" fill="#09090b" fill-opacity=".72" stroke="#fff" stroke-opacity=".13"/>
+  <g text-anchor="middle">
+   <g transform="translate(10 10)"><rect width="208" height="78" rx="14" fill="#111115"/><circle cx="104" cy="24" r="14" fill="#22c55e"/><text x="104" y="58" fill="#fff" font-size="14" font-weight="800">Genuine Subscribers</text></g>
+   <g transform="translate(236 10)"><rect width="208" height="78" rx="14" fill="#111115"/><path d="M96 10h22l-12 20h14L91 63l8-27H84z" fill="#facc15"/><text x="104" y="70" fill="#fff" font-size="14" font-weight="800">Fast Delivery</text></g>
+   <g transform="translate(462 10)"><rect width="208" height="78" rx="14" fill="#111115"/><path d="M104 8l18 8v15c0 14-9 22-18 27-9-5-18-13-18-27V16z" fill="#8b5cf6"/><text x="104" y="70" fill="#fff" font-size="14" font-weight="800">No Bots / No Fake Engagement</text></g>
+   <g transform="translate(688 10)"><rect width="208" height="78" rx="14" fill="#111115"/><circle cx="104" cy="27" r="17" fill="#0ea5e9"/><circle cx="104" cy="27" r="9" fill="none" stroke="#fff" stroke-width="3"/><text x="104" y="70" fill="#fff" font-size="14" font-weight="800">Works for All Niches</text></g>
+   <g transform="translate(914 10)"><rect width="208" height="78" rx="14" fill="#111115"/><rect x="88" y="12" width="32" height="33" rx="5" fill="#ef4444"/><text x="104" y="70" fill="#fff" font-size="14" font-weight="800">Growth Strategy</text></g>
+  </g>
+ </g>
+ <g fill="#fff" font-size="18" font-weight="800"><text x="55" y="648">✓ Boost Your Channel</text><text x="405" y="648">✓ Gain Credibility</text><text x="765" y="648">✓ Monetization Readiness</text></g>
 </g>
-<g transform="translate(870 150)">
-<rect width="220" height="155" rx="35" fill="#f7192b"/><polygon points="85,40 85,116 155,78" fill="#fff"/>
-<path d="M18 236 C70 210 95 230 135 188 C168 154 187 162 206 130" fill="none" stroke="#34d399" stroke-width="15" stroke-linecap="round"/>
-<circle cx="206" cy="130" r="13" fill="#34d399"/>
-</g>
-<g transform="translate(70 500)" font-family="Arial,Helvetica,sans-serif">
-<rect width="1000" height="108" rx="24" fill="#fff" opacity=".10"/>
-<g fill="#fff" font-size="21" font-weight="700">
-<text x="34" y="44">✓ Channel audit</text><text x="275" y="44">✓ Content strategy</text><text x="545" y="44">✓ Titles &amp; thumbnails</text>
-<text x="34" y="80">✓ Retention guidance</text><text x="310" y="80">✓ No bots</text><text x="545" y="80">✓ No fixed subscriber guarantee</text>
-</g></g>
 </svg>
