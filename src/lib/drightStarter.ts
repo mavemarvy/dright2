@@ -219,6 +219,12 @@ export async function updateAdminDrightStarterSettings(
     },
   });
   if (error) throw error;
+
+  const { error: videoError } = await supabase.rpc('admin_set_dright_starter_demo_video', {
+    p_url: settings.product.demo_video_url,
+  });
+  if (videoError) throw videoError;
+
   const next = await getAdminDrightStarterSettings();
   if (!next) throw new Error('Unable to reload DRIGHT Starter settings.');
   return next;
