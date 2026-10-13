@@ -7,7 +7,7 @@ import {
   Copy, ExternalLink, Users, Award, ChevronRight,
 } from 'lucide-react';
 import { generateAffiliateLink, copyToClipboard } from '../lib/affiliate';
-import { formatCurrency } from '../lib/currency';
+import { useCurrency } from '../contexts/CurrencyContext';
 import PortfolioSection, { type PortfolioItem } from './PortfolioSection';
 import ProductReviews from './ProductReviews';
 import ContactSeller from './ContactSeller';
@@ -66,6 +66,7 @@ interface ServiceDetailViewProps {
   product: ServiceProduct;
   productImages: string[];
   imageFit?: 'cover' | 'contain';
+  sourceCurrency?: string;
   tiers: ServiceTier[];
   customizations: ServiceCustomization[];
   portfolioItems: PortfolioItem[];
@@ -78,10 +79,6 @@ interface ServiceDetailViewProps {
   onDismissResult: () => void;
 }
 
-// Service prices are stored in DRIGHT's canonical USD currency and converted
-// only for display. Never relabel the numeric USD value as NGN.
-const formatNaira = (amount: number) => formatCurrency(amount);
-
 function getDeliveryDate(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -92,6 +89,7 @@ export default function ServiceDetailView({
   product,
   productImages,
   imageFit = 'cover',
+  sourceCurrency = 'USD',
   tiers,
   customizations,
   portfolioItems,
@@ -103,6 +101,8 @@ export default function ServiceDetailView({
   checkoutResult,
   onDismissResult,
 }: ServiceDetailViewProps) {
+  const { format: formatMoney } = useCurrency();
+  const formatPrice = (amount: number) => formatMoney(amount, sourceCurrency);
   const [selectedTierId, setSelectedTierId] = useState<string>(
     tiers.find(t => t.is_most_popular)?.id || tiers[0]?.id || ''
   );
@@ -357,7 +357,7 @@ export default function ServiceDetailView({
                         {label}
                       </span>
                       <span className={`text-base font-bold transition-colors ${isSelected ? 'text-white' : 'text-gray-500'}`}>
-                        {formatNaira(Number(tier.price))}
+                        {formatPrice(Number(tier.price))}
                       </span>
                     </button>
                   );
@@ -444,7 +444,7 @@ export default function ServiceDetailView({
                                   <span className="text-gray-200 text-sm truncate">{opt.option_name}</span>
                                 </div>
                                 <span className="text-white text-sm font-medium ml-2 shrink-0">
-                                  +{formatNaira(Number(opt.additional_price))}
+                                  +{formatPrice(Number(opt.additional_price))}
                                 </span>
                               </div>
                             ))}
@@ -498,7 +498,7 @@ export default function ServiceDetailView({
                         <td className="py-2.5 text-gray-400 pr-4 whitespace-nowrap">Price</td>
                         {tiers.map(tier => (
                           <td key={tier.id} className="py-2.5 text-center text-white font-bold px-2">
-                            {formatNaira(Number(tier.price))}
+                            {formatPrice(Number(tier.price))}
                           </td>
                         ))}
                       </tr>
@@ -640,7 +640,7 @@ export default function ServiceDetailView({
               {tierLabels[selectedTier.tier_name] || selectedTier.tier_name} tier
               {customPrice > 0 && ` + add-ons`}
             </span>
-            <span className="text-white font-bold text-sm">{formatNaira(totalPrice)}</span>
+            <span className="text-white font-bold text-sm">{formatPrice(totalPrice)}</span>
           </div>
         )}
 
@@ -653,7 +653,7 @@ export default function ServiceDetailView({
             {checkoutLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              `Continue (${formatNaira(totalPrice)})`
+              `Continue (${formatPrice(totalPrice)})`
             )}
           </button>
         ) : (
@@ -666,9 +666,10 @@ export default function ServiceDetailView({
             selectedTierId={selectedTierId}
             customizationOptionIds={[...selectedCustomIds]}
             buyerRequirements={requirements}
+            sourceCurrency={sourceCurrency}
             trigger={
               <button className="w-full py-4 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-bold text-base transition-colors flex items-center justify-center gap-2 min-h-[56px]">
-                Continue ({formatNaira(totalPrice)})
+                Continue ({formatPrice(totalPrice)})
               </button>
             }
           />
