@@ -128,10 +128,13 @@ export default function ServiceDetailView({
   const customPrice = selectedCustomObjs.reduce((s, c) => s + Number(c.additional_price), 0);
   const tierBasePrice = selectedTier ? Number(selectedTier.price) : 0;
   const productBasePrice = Number(product.price || 0);
-  // Match the authoritative checkout Edge Function exactly: base listing price
-  // + selected service tier + add-ons + task fee calculated from listing base.
-  const adminTask = product.is_free ? 0 : productBasePrice * (Number(product.admin_task_percent || 15) / 100);
-  const totalPrice = product.is_free ? 0 : productBasePrice + tierBasePrice + customPrice + adminTask;
+  // Match checkout pricing without turning an explicit 0% fee into a default fee.
+  // Official DRIGHT products intentionally use 0% marketplace/admin task fees.
+  const salesTeamPercent = Number(product.sales_team_task_percent ?? 0);
+  const adminTaskPercent = Number(product.admin_task_percent ?? 0);
+  const effectiveTaskPercent = salesTeamPercent > 0 ? salesTeamPercent : adminTaskPercent;
+  const taskAmount = product.is_free ? 0 : productBasePrice * (effectiveTaskPercent / 100);
+  const totalPrice = product.is_free ? 0 : productBasePrice + tierBasePrice + customPrice + taskAmount;
   const deliveryDays = (selectedTier?.delivery_days || 7) + extraDays;
 
   const toggleCustom = (id: string) => {
