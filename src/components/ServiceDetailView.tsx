@@ -65,6 +65,7 @@ export interface SellerProfile {
 interface ServiceDetailViewProps {
   product: ServiceProduct;
   productImages: string[];
+  imageFit?: 'cover' | 'contain';
   tiers: ServiceTier[];
   customizations: ServiceCustomization[];
   portfolioItems: PortfolioItem[];
@@ -90,6 +91,7 @@ function getDeliveryDate(days: number): string {
 export default function ServiceDetailView({
   product,
   productImages,
+  imageFit = 'cover',
   tiers,
   customizations,
   portfolioItems,
@@ -215,7 +217,7 @@ export default function ServiceDetailView({
                   key={idx}
                   src={img}
                   alt={`${product.name} ${idx + 1}`}
-                  className="w-full aspect-video object-cover shrink-0"
+                  className={`w-full aspect-video ${imageFit === 'contain' ? 'object-contain bg-slate-950' : 'object-cover'} shrink-0`}
                 />
               ))}
             </div>
