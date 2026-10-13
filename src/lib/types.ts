@@ -264,6 +264,7 @@ export interface ProductEditChanges {
   price?: number;
   category?: string;
   image_url?: string;
+  demo_video_url?: string | null;
   tags?: string[];
   stock_quantity?: number | null;
   listing_extension?: ProductListingExtensionEdit;
