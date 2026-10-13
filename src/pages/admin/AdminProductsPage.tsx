@@ -536,6 +536,15 @@ export default function AdminProductsPage() {
 
                 {/* Actions */}
                 <div className="flex sm:flex-col gap-2 shrink-0 flex-wrap">
+                  <a
+                    href={`/product/${product.id}?admin_preview=1`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-medium hover:bg-indigo-100 transition-colors min-h-[48px]"
+                    title="Open product preview. Admins can inspect product/course content without purchasing."
+                  >
+                    <Eye className="w-5 h-5" /><span className="hidden sm:inline">Preview</span>
+                  </a>
                   {product.approval_status === 'pending' && (
                     <>
                       <button
