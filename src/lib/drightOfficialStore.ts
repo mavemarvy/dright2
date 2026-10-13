@@ -24,7 +24,11 @@ export interface DrightOfficialProduct {
   benefits: string[];
   expiry_days: number | null;
   delivery_type?: string | null;
+  download_file_url?: string | null;
   access_link?: string | null;
+  file_format?: string | null;
+  download_limit?: number | null;
+  includes_bonus_materials?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -54,7 +58,11 @@ function normalize(row: Record<string, any>): DrightOfficialProduct {
     benefits: Array.isArray(row.benefits) ? row.benefits.map(String) : [],
     expiry_days: row.expiry_days == null ? null : Number(row.expiry_days),
     delivery_type: row.delivery_type == null ? null : String(row.delivery_type),
+    download_file_url: row.download_file_url == null ? null : String(row.download_file_url),
     access_link: row.access_link == null ? null : String(row.access_link),
+    file_format: row.file_format == null ? null : String(row.file_format),
+    download_limit: row.download_limit == null ? null : Number(row.download_limit),
+    includes_bonus_materials: row.includes_bonus_materials === true,
     created_at: row.created_at ? String(row.created_at) : undefined,
     updated_at: row.updated_at ? String(row.updated_at) : undefined,
   };
