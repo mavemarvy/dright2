@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ElementType } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight, BadgeCheck, Check, Copy, Gift, Loader2, LockKeyhole,
-  Rocket, ShieldCheck, Sparkles, Star, Trophy, UserPlus, Users, WalletCards,
+  Rocket, ShieldCheck, Sparkles, Star, Trophy, UserPlus, Users, WalletCards, PlayCircle,
 } from 'lucide-react';
 import { DrightMark } from '../components/DrightBrand';
 import TurnstileWidget from '../components/TurnstileWidget';
@@ -22,6 +22,7 @@ import SeoHead from '../components/SeoHead';
 import ListingMarketingMaterialsPanel from '../components/listing/ListingMarketingMaterialsPanel';
 import StarterAffiliateProgressBoard from '../components/StarterAffiliateProgressBoard';
 import RegisteredStarterAssistedSignup from '../components/RegisteredStarterAssistedSignup';
+import VideoPlayer from '../components/VideoPlayer';
 
 export default function DrightStarterProductPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -35,6 +36,7 @@ export default function DrightStarterProductPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [videoCopied, setVideoCopied] = useState(false);
 
   useEffect(() => {
     void fetchDrightStarterProduct().then((value) => {
@@ -73,6 +75,17 @@ export default function DrightStarterProductPage() {
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       window.location.assign(link);
+    }
+  };
+
+  const copyProductVideo = async () => {
+    if (!product?.demo_video_url) return;
+    try {
+      await navigator.clipboard.writeText(product.demo_video_url);
+      setVideoCopied(true);
+      window.setTimeout(() => setVideoCopied(false), 1800);
+    } catch {
+      window.open(product.demo_video_url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -171,8 +184,22 @@ export default function DrightStarterProductPage() {
                     <img
                       src={product.image_url}
                       alt={product.title}
-                      className="w-full max-h-[420px] object-cover"
+                      className="w-full max-h-[420px] object-contain"
                     />
+                  </div>
+                )}
+
+                {product.demo_video_url && (
+                  <div className="mb-6 max-w-2xl space-y-3">
+                    <VideoPlayer url={product.demo_video_url} title={product.title + ' — Product Video'} />
+                    <button
+                      type="button"
+                      onClick={copyProductVideo}
+                      className="min-h-[44px] px-4 rounded-xl border border-red-400/30 bg-red-500/10 text-red-100 font-bold inline-flex items-center gap-2"
+                    >
+                      {videoCopied ? <BadgeCheck className="w-4 h-4 text-emerald-300" /> : <PlayCircle className="w-4 h-4" />}
+                      {videoCopied ? 'YouTube video link copied' : 'Copy YouTube video link'}
+                    </button>
                   </div>
                 )}
 
