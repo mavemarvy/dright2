@@ -7,6 +7,7 @@ import {
   ChevronLeft, ShoppingBag, Award,
   ChevronDown, Edit2,
   BadgeCheck, Store, TrendingUp,
+  PlayCircle, ShieldCheck, ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -145,6 +146,7 @@ export default function ProductDetailPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState<{ success: boolean; orderId?: string; message: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [videoCopied, setVideoCopied] = useState(false);
   const [showPromotionWizard, setShowPromotionWizard] = useState(false);
   const [hasPurchased, setHasPurchased] = useState(false);
   const [purchasedOrder, setPurchasedOrder] = useState<{ id: string; download_token: string | null } | null>(null);
@@ -315,6 +317,13 @@ export default function ProductDetailPage() {
     copyToClipboard(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyPromoVideo = () => {
+    if (!product?.demo_video_url) return;
+    copyToClipboard(product.demo_video_url);
+    setVideoCopied(true);
+    setTimeout(() => setVideoCopied(false), 2000);
   };
 
   const incrementQty = () => {
@@ -524,6 +533,28 @@ export default function ProductDetailPage() {
           checkoutResult={checkoutResult}
           onDismissResult={() => setCheckoutResult(null)}
         />
+        {product.demo_video_url && (
+          <div className="max-w-5xl mx-auto px-4 pb-5">
+            <div className="rounded-2xl border border-red-100 bg-red-50/70 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <PlayCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-black text-gray-900">Product-page YouTube video</p>
+                  <p className="text-xs leading-5 text-gray-600">Watch the product explainer, or copy the original YouTube link for affiliate advertising.</p>
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <a href={product.demo_video_url} target="_blank" rel="noreferrer" className="min-h-[42px] px-3 rounded-xl bg-white border border-red-200 text-red-700 text-xs font-black inline-flex items-center justify-center gap-1.5">
+                  <ExternalLink className="w-4 h-4" /> Watch
+                </a>
+                <button type="button" onClick={handleCopyPromoVideo} className="min-h-[42px] px-3 rounded-xl bg-red-600 text-white text-xs font-black inline-flex items-center justify-center gap-1.5">
+                  {videoCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {videoCopied ? 'Video link copied' : 'Copy video link'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {directSaleSetting.enabled && (
           <div className="max-w-5xl mx-auto px-4 pb-6">
             <GuestCheckout
@@ -617,6 +648,31 @@ export default function ProductDetailPage() {
               <p className="font-black text-sm">ADMIN ONLY • NOT PUBLIC</p>
               <p className="text-xs leading-5 mt-1">You can see this product because you are a DRIGHT admin. Regular marketplace users cannot see or open it while Admin only visibility is enabled.</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="mb-5 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-indigo-950">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5 text-indigo-600" />
+              <div>
+                <p className="font-black text-sm">ADMIN PRODUCT PREVIEW</p>
+                <p className="text-xs leading-5 mt-1">Admins can inspect this listing and open available buyer/course content without creating a purchase.</p>
+              </div>
+            </div>
+            {(digitalDetails?.access_link || digitalDetails?.download_file_url) && (
+              <a
+                href={digitalDetails.access_link || digitalDetails.download_file_url || '#'}
+                target={(digitalDetails.access_link || digitalDetails.download_file_url || '').startsWith('http') ? '_blank' : undefined}
+                rel="noreferrer"
+                className="min-h-[42px] px-4 rounded-xl bg-indigo-600 text-white text-xs font-black inline-flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                {product.product_type === 'COURSE' ? 'Open full course as admin' : 'Open buyer content as admin'}
+              </a>
+            )}
           </div>
         </div>
       )}
@@ -773,6 +829,18 @@ export default function ProductDetailPage() {
                   }`}>
                   {copied ? <><Check className="w-4 h-4" />Affiliate Link Copied!</> : <><Copy className="w-4 h-4" />Copy Affiliate Link</>}
                 </button>
+                {product.demo_video_url && (
+                  <button
+                    type="button"
+                    onClick={handleCopyPromoVideo}
+                    className={`w-full py-2.5 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                      videoCopied ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-red-300'
+                    }`}
+                  >
+                    {videoCopied ? <Check className="w-4 h-4" /> : <PlayCircle className="w-4 h-4" />}
+                    {videoCopied ? 'YouTube Video Link Copied!' : 'Copy YouTube Product Video'}
+                  </button>
+                )}
                 <CompareButton productId={product.id} isInList={compareIds.includes(product.id)} onToggle={toggleCompare} />
               </div>
             </div>
