@@ -46,6 +46,7 @@ type ProductEditDraft = {
   benefits: string;
   image_url: string | null;
   image_urls: string[];
+  demo_video_url: string;
   public_visible: boolean;
   is_enabled: boolean;
   is_featured: boolean;
@@ -72,6 +73,7 @@ function editDraftFromProduct(product: DrightOfficialProduct): ProductEditDraft 
     benefits: product.benefits.join('\n'),
     image_url: images[0] || null,
     image_urls: images,
+    demo_video_url: product.demo_video_url || '',
     public_visible: product.public_visible,
     is_enabled: product.is_enabled,
     is_featured: product.is_featured,
@@ -98,6 +100,7 @@ const DEFAULT_FORM = {
   brand: '',
   condition: 'new',
   benefits: '',
+  demo_video_url: '',
   public_visible: false,
   is_enabled: true,
   is_featured: true,
@@ -251,6 +254,7 @@ export default function AdminDrightOfficialProductManager() {
         official_rating_enabled: form.official_rating_enabled,
         official_rating: Number(form.official_rating || 0),
         benefits: form.benefits.split('\n').map((value) => value.trim()).filter(Boolean),
+        demo_video_url: form.demo_video_url.trim() || null,
         image_url: imageUrls[0],
         image_urls: imageUrls,
       });
@@ -479,6 +483,7 @@ export default function AdminDrightOfficialProductManager() {
         official_rating_enabled: editDraft.official_rating_enabled,
         official_rating: rating,
         benefits: editDraft.benefits.split('\n').map((value) => value.trim()).filter(Boolean),
+        demo_video_url: editDraft.demo_video_url.trim() || null,
         image_url: editDraft.image_urls[0] || null,
         image_urls: editDraft.image_urls,
       });
@@ -568,6 +573,18 @@ export default function AdminDrightOfficialProductManager() {
               <Field label="Description">
                 <textarea rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inputClass} />
               </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Product-page YouTube video link (optional)">
+                <input
+                  type="url"
+                  value={form.demo_video_url}
+                  onChange={(e) => setForm({ ...form, demo_video_url: e.target.value })}
+                  className={inputClass}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
+              </Field>
+              <p className="mt-1 text-[11px] leading-4 text-gray-500">This video appears on the public product page only; it is not inserted into course lessons. Affiliates can copy the same video link from the product page.</p>
             </div>
           </div>
 
@@ -863,6 +880,18 @@ export default function AdminDrightOfficialProductManager() {
                     <Field label="Description">
                       <textarea rows={5} value={editDraft.description} onChange={(e) => setEditDraft({ ...editDraft, description: e.target.value })} className={inputClass} />
                     </Field>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Field label="Product-page YouTube video link (optional)">
+                      <input
+                        type="url"
+                        value={editDraft.demo_video_url}
+                        onChange={(e) => setEditDraft({ ...editDraft, demo_video_url: e.target.value })}
+                        className={inputClass}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                      />
+                    </Field>
+                    <p className="mt-1 text-[11px] leading-4 text-gray-500">Marketing/demo video for the product page. It stays separate from course tutorial videos.</p>
                   </div>
                 </div>
 
