@@ -522,6 +522,7 @@ export default function ProductDetailPage() {
             price: product.price,
           }}
           productImages={productImages}
+          imageFit={productIsOfficial ? 'contain' : 'cover'}
           tiers={tiers}
           customizations={customizations}
           portfolioItems={portfolioItems}
@@ -690,7 +691,7 @@ export default function ProductDetailPage() {
             images={productImages}
             alt={product.name}
             videoUrl={product.demo_video_url}
-            imageFit={product.product_type === 'COURSE' ? 'contain' : 'cover'}
+            imageFit={isOfficialDrightProduct || product.product_type === 'COURSE' ? 'contain' : 'cover'}
             aspect={product.product_type === 'COURSE' ? 'video' : 'square'}
           />
 
