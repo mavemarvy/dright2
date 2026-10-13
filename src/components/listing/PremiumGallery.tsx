@@ -12,6 +12,31 @@ interface PremiumGalleryProps {
   aspect?: 'square' | 'video';
 }
 
+function toEmbeddableVideoUrl(rawUrl: string): string {
+  const value = rawUrl.trim();
+  if (!value) return value;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+    if (host === 'youtu.be') {
+      const id = parsed.pathname.split('/').filter(Boolean)[0];
+      if (id) return `https://www.youtube.com/embed/${id}`;
+    }
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (parsed.pathname.startsWith('/embed/')) return value;
+      if (parsed.pathname.startsWith('/shorts/')) {
+        const id = parsed.pathname.split('/').filter(Boolean)[1];
+        if (id) return `https://www.youtube.com/embed/${id}`;
+      }
+      const id = parsed.searchParams.get('v');
+      if (id) return `https://www.youtube.com/embed/${id}`;
+    }
+  } catch {
+    // Keep non-URL values untouched so legacy/direct media links can still be handled.
+  }
+  return value;
+}
+
 export default function PremiumGallery({ images, alt, videoUrl, imageFit = 'cover', aspect = 'square' }: PremiumGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0);
@@ -22,8 +47,10 @@ export default function PremiumGallery({ images, alt, videoUrl, imageFit = 'cove
   const imageRef = useRef<HTMLDivElement>(null);
 
   const media: Array<{ type: 'image' | 'video'; url: string }> = [];
-  if (videoUrl) media.push({ type: 'video', url: videoUrl });
+  // Keep the high-quality product cover as the first slide. The optional
+  // product-page video is a separate media item, not a replacement for the cover.
   images.forEach(url => media.push({ type: 'image', url }));
+  if (videoUrl) media.push({ type: 'video', url: toEmbeddableVideoUrl(videoUrl) });
 
   const hasMedia = media.length > 0;
 
