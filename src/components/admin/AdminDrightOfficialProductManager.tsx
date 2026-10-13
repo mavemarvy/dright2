@@ -47,6 +47,11 @@ type ProductEditDraft = {
   image_url: string | null;
   image_urls: string[];
   demo_video_url: string;
+  delivery_type: string;
+  download_file_url: string;
+  access_link: string;
+  file_format: string;
+  includes_bonus_materials: boolean;
   public_visible: boolean;
   is_enabled: boolean;
   is_featured: boolean;
@@ -74,6 +79,11 @@ function editDraftFromProduct(product: DrightOfficialProduct): ProductEditDraft 
     image_url: images[0] || null,
     image_urls: images,
     demo_video_url: product.demo_video_url || '',
+    delivery_type: product.delivery_type || (product.product_type === 'SERVICE' ? 'NONE' : product.product_type === 'COURSE' ? 'LINK_ACCESS' : 'INSTANT_DOWNLOAD'),
+    download_file_url: product.download_file_url || '',
+    access_link: product.access_link || '',
+    file_format: product.file_format || 'PDF',
+    includes_bonus_materials: product.includes_bonus_materials === true,
     public_visible: product.public_visible,
     is_enabled: product.is_enabled,
     is_featured: product.is_featured,
@@ -101,6 +111,11 @@ const DEFAULT_FORM = {
   condition: 'new',
   benefits: '',
   demo_video_url: '',
+  delivery_type: 'INSTANT_DOWNLOAD',
+  download_file_url: '',
+  access_link: '',
+  file_format: 'PDF',
+  includes_bonus_materials: false,
   public_visible: false,
   is_enabled: true,
   is_featured: true,
@@ -255,6 +270,11 @@ export default function AdminDrightOfficialProductManager() {
         official_rating: Number(form.official_rating || 0),
         benefits: form.benefits.split('\n').map((value) => value.trim()).filter(Boolean),
         demo_video_url: form.demo_video_url.trim() || null,
+        delivery_type: form.delivery_type,
+        download_file_url: form.download_file_url.trim() || null,
+        access_link: form.access_link.trim() || null,
+        file_format: form.file_format.trim() || null,
+        includes_bonus_materials: form.includes_bonus_materials,
         image_url: imageUrls[0],
         image_urls: imageUrls,
       });
@@ -458,7 +478,7 @@ export default function AdminDrightOfficialProductManager() {
       setMessage('Official rating must be between 0 and 5.');
       return;
     }
-    if (['DIGITAL', 'COURSE'].includes(product.product_type) && (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 3650)) {
+    if (product.product_type !== 'PHYSICAL' && editDraft.delivery_type !== 'NONE' && (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 3650)) {
       setMessage('Access expiry must be between 1 and 3650 days.');
       return;
     }
@@ -484,6 +504,11 @@ export default function AdminDrightOfficialProductManager() {
         official_rating: rating,
         benefits: editDraft.benefits.split('\n').map((value) => value.trim()).filter(Boolean),
         demo_video_url: editDraft.demo_video_url.trim() || null,
+        delivery_type: editDraft.delivery_type,
+        download_file_url: editDraft.download_file_url.trim() || null,
+        access_link: editDraft.access_link.trim() || null,
+        file_format: editDraft.file_format.trim() || null,
+        includes_bonus_materials: editDraft.includes_bonus_materials,
         image_url: editDraft.image_urls[0] || null,
         image_urls: editDraft.image_urls,
       });
@@ -553,7 +578,18 @@ export default function AdminDrightOfficialProductManager() {
         <div className="rounded-2xl border border-primary-100 bg-primary-50/30 p-4 md:p-5 space-y-5">
           <div className="grid sm:grid-cols-2 gap-4">
             <Field label="Product type">
-              <select value={form.product_type} onChange={(e) => setForm({ ...form, product_type: e.target.value as ProductType })} className={inputClass}>
+              <select value={form.product_type} onChange={(e) => {
+                const nextType = e.target.value as ProductType;
+                setForm({
+                  ...form,
+                  product_type: nextType,
+                  delivery_type: nextType === 'SERVICE' || nextType === 'PHYSICAL'
+                    ? 'NONE'
+                    : nextType === 'COURSE'
+                      ? 'LINK_ACCESS'
+                      : 'INSTANT_DOWNLOAD',
+                });
+              }} className={inputClass}>
                 <option value="DIGITAL">Digital product</option>
                 <option value="PHYSICAL">Physical product</option>
                 <option value="SERVICE">Service</option>
@@ -587,6 +623,37 @@ export default function AdminDrightOfficialProductManager() {
               <p className="mt-1 text-[11px] leading-4 text-gray-500">This video appears on the public product page only; it is not inserted into course lessons. Affiliates can copy the same video link from the product page.</p>
             </div>
           </div>
+
+          {form.product_type !== 'PHYSICAL' && (
+            <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-black text-violet-950">After-purchase delivery</h3>
+                <p className="mt-1 text-xs leading-5 text-violet-800">
+                  Choose what the buyer receives after verified payment. Use a PDF/file URL to open a file, or a redirect URL to send the buyer to another page. DRIGHT Starter uses its own access flow and does not use these fields.
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Delivery action">
+                  <select value={form.delivery_type} onChange={(e) => setForm({ ...form, delivery_type: e.target.value })} className={inputClass}>
+                    {form.product_type === 'SERVICE' && <option value="NONE">No automatic delivery</option>}
+                    <option value="INSTANT_DOWNLOAD">Open PDF / file after payment</option>
+                    <option value="LINK_ACCESS">Redirect buyer after payment</option>
+                    <option value="EMAIL_DELIVERY">Email / manual delivery</option>
+                  </select>
+                </Field>
+                <Field label="File format">
+                  <input value={form.file_format} onChange={(e) => setForm({ ...form, file_format: e.target.value })} className={inputClass} placeholder="PDF, ZIP, Video, etc." />
+                </Field>
+                <Field label="PDF / file URL">
+                  <input type="url" value={form.download_file_url} onChange={(e) => setForm({ ...form, download_file_url: e.target.value })} className={inputClass} placeholder="https://.../guide.pdf" />
+                </Field>
+                <Field label="Redirect / access URL">
+                  <input type="url" value={form.access_link} onChange={(e) => setForm({ ...form, access_link: e.target.value })} className={inputClass} placeholder="https://example.com/after-purchase" />
+                </Field>
+              </div>
+              <ToggleCard label="Includes bonus materials" value={form.includes_bonus_materials} onChange={() => setForm({ ...form, includes_bonus_materials: !form.includes_bonus_materials })} compact />
+            </div>
+          )}
 
           {engine?.taxonomy_enabled ? (
             <TaxonomyCategoryPicker
@@ -667,7 +734,7 @@ export default function AdminDrightOfficialProductManager() {
               <Field label="Stock">
                 <input type="number" min="0" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} className={inputClass} />
               </Field>
-            ) : ['DIGITAL', 'COURSE'].includes(form.product_type) ? (
+            ) : form.delivery_type !== 'NONE' ? (
               <Field label="Access expiry">
                 <select value={form.expiry_days} onChange={(e) => setForm({ ...form, expiry_days: e.target.value })} className={inputClass}>
                   <option value="180">6 months (180 days)</option>
@@ -895,6 +962,37 @@ export default function AdminDrightOfficialProductManager() {
                   </div>
                 </div>
 
+                {product.product_type !== 'PHYSICAL' && (
+                  <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4 space-y-4">
+                    <div>
+                      <h4 className="text-sm font-black text-violet-950">After-purchase delivery</h4>
+                      <p className="mt-1 text-xs leading-5 text-violet-800">
+                        Configure the protected file or redirect that becomes available after verified payment. This is separate from the public YouTube marketing video.
+                      </p>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <Field label="Delivery action">
+                        <select value={editDraft.delivery_type} onChange={(e) => setEditDraft({ ...editDraft, delivery_type: e.target.value })} className={inputClass}>
+                          {product.product_type === 'SERVICE' && <option value="NONE">No automatic delivery</option>}
+                          <option value="INSTANT_DOWNLOAD">Open PDF / file after payment</option>
+                          <option value="LINK_ACCESS">Redirect buyer after payment</option>
+                          <option value="EMAIL_DELIVERY">Email / manual delivery</option>
+                        </select>
+                      </Field>
+                      <Field label="File format">
+                        <input value={editDraft.file_format} onChange={(e) => setEditDraft({ ...editDraft, file_format: e.target.value })} className={inputClass} placeholder="PDF, ZIP, Video, etc." />
+                      </Field>
+                      <Field label="PDF / file URL">
+                        <input type="url" value={editDraft.download_file_url} onChange={(e) => setEditDraft({ ...editDraft, download_file_url: e.target.value })} className={inputClass} placeholder="https://.../guide.pdf" />
+                      </Field>
+                      <Field label="Redirect / access URL">
+                        <input type="url" value={editDraft.access_link} onChange={(e) => setEditDraft({ ...editDraft, access_link: e.target.value })} className={inputClass} placeholder="https://example.com/after-purchase" />
+                      </Field>
+                    </div>
+                    <ToggleCard label="Includes bonus materials" value={editDraft.includes_bonus_materials} onChange={() => setEditDraft({ ...editDraft, includes_bonus_materials: !editDraft.includes_bonus_materials })} compact />
+                  </div>
+                )}
+
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <Field label="Price">
                     <input type="number" min="0" step="0.01" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} className={inputClass} />
@@ -921,8 +1019,8 @@ export default function AdminDrightOfficialProductManager() {
                       className={inputClass}
                     />
                   </Field>
-                  {['DIGITAL', 'COURSE'].includes(product.product_type) && (
-                    <Field label="Course / access expiry">
+                  {product.product_type !== 'PHYSICAL' && editDraft.delivery_type !== 'NONE' && (
+                    <Field label="Delivery / access expiry">
                       <div className="space-y-2">
                         <select value={['180','365','730'].includes(editDraft.expiry_days) ? editDraft.expiry_days : 'custom'} onChange={(e) => {
                           if (e.target.value !== 'custom') setEditDraft({ ...editDraft, expiry_days: e.target.value });
@@ -942,8 +1040,8 @@ export default function AdminDrightOfficialProductManager() {
 
                 <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs leading-5 text-blue-900">
                   <strong>Currency authority:</strong> this source currency is the real product price. Marketplace may convert it for a viewer, but checkout preserves this amount and only normalizes internally for DRIGHT ledger accounting.
-                  {['DIGITAL', 'COURSE'].includes(product.product_type) && (
-                    <div className="mt-1"><strong>Access expiry:</strong> buyer access starts from the completed purchase date and expires after {editDraft.expiry_days || '365'} days.</div>
+                  {product.product_type !== 'PHYSICAL' && editDraft.delivery_type !== 'NONE' && (
+                    <div className="mt-1"><strong>Delivery access expiry:</strong> buyer access starts from the completed purchase date and expires after {editDraft.expiry_days || '365'} days.</div>
                   )}
                 </div>
 
