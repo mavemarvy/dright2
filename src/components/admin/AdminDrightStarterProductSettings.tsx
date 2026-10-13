@@ -429,6 +429,19 @@ export default function AdminDrightStarterProductSettings() {
             </p>
           </div>
           <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Product-page YouTube video link (optional)</label>
+            <input
+              type="url"
+              value={product.demo_video_url || ''}
+              onChange={(e) => setSettings({ ...settings, product: { ...product, demo_video_url: e.target.value || null } })}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-red-500"
+            />
+            <p className="text-[11px] leading-4 text-gray-500 mt-1">
+              This is the public Starter product explainer video. It is separate from Starter access and affiliates can copy the original YouTube link from the product page.
+            </p>
+          </div>
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">What users get during Starter access</label>
             <textarea
               rows={6}
