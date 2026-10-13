@@ -42,6 +42,7 @@ export default function PaymentCallbackPage() {
   const [availableGateways, setAvailableGateways] = useState<string[]>([]);
   const [showReceipt, setShowReceipt] = useState(false);
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
+  const [postPurchaseHandoff, setPostPurchaseHandoff] = useState<{ url: string; label: string } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeline = usePaymentTimeline(false);
@@ -128,6 +129,51 @@ export default function PaymentCallbackPage() {
     }
   }, []);
 
+  const resolvePostPurchaseHandoff = useCallback(async (ref: string) => {
+    try {
+      const { data: tx } = await supabase
+        .from('paystack_transactions')
+        .select('purpose, reference_id')
+        .eq('reference', ref)
+        .maybeSingle();
+
+      const purpose = tx?.purpose ? String(tx.purpose) : '';
+      const orderId = tx?.reference_id ? String(tx.reference_id) : '';
+      if (!orderId || (purpose !== 'product_purchase' && purpose !== 'escrow')) {
+        return { purpose, orderId, url: '', label: '' };
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return { purpose, orderId, url: '', label: '' };
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-download`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      const delivery = await response.json();
+      if (!response.ok || delivery?.verified !== true) {
+        return { purpose, orderId, url: '', label: '' };
+      }
+
+      if (delivery.delivery_type === 'LINK_ACCESS' && delivery.access_link) {
+        return { purpose, orderId, url: String(delivery.access_link), label: 'your purchase access' };
+      }
+      if (delivery.delivery_type === 'INSTANT_DOWNLOAD' && delivery.download_url) {
+        return { purpose, orderId, url: String(delivery.download_url), label: 'your PDF / file' };
+      }
+      if (delivery.delivery_type === 'EMAIL_DELIVERY' && delivery.download_url) {
+        return { purpose, orderId, url: String(delivery.download_url), label: 'your delivered file' };
+      }
+      return { purpose, orderId, url: '', label: '' };
+    } catch {
+      return { purpose: '', orderId: '', url: '', label: '' };
+    }
+  }, []);
+
   const handleSuccess = useCallback(async (ref: string, amount?: number, msg?: string) => {
     if (processedRef.current) return;
     processedRef.current = true;
@@ -137,8 +183,15 @@ export default function PaymentCallbackPage() {
     setMessage(msg || 'Payment confirmed successfully.');
     setTxDetails({ reference: ref, amount, purpose: 'payment' });
 
-    // Build receipt with full details
+    // Build receipt with full details and resolve any product delivery handoff.
     await buildReceipt(ref, amount);
+    const handoff = await resolvePostPurchaseHandoff(ref);
+    if (handoff.url) {
+      setPostPurchaseHandoff({ url: handoff.url, label: handoff.label });
+      setMessage(handoff.label === 'your PDF / file'
+        ? 'Payment confirmed. Your file is ready and will open automatically.'
+        : 'Payment confirmed. Your purchase access is ready and will open automatically.');
+    }
 
     // Refresh all wallet-related queries before showing success receipt
     try {
@@ -163,23 +216,27 @@ export default function PaymentCallbackPage() {
       setCountdown((prev) => {
         if (prev <= 1) {
           if (countdownRef.current) clearInterval(countdownRef.current);
-          // Auto-redirect: wallet for funding, order page for purchases, subscriptions for sub
-          const purpose = txDetails?.purpose || receiptData?.product;
-          if (purpose === 'wallet_funding' || purpose === 'Wallet Funding' || purpose === 'advertiser_funding') {
-            navigate('/wallet');
-          } else if (purpose === 'subscription' || purpose === 'affiliate_subscription' || purpose === 'vendor_subscription') {
-            navigate('/subscriptions');
-          } else if (txDetails?.orderId || receiptData?.orderId) {
-            navigate('/my-orders');
+          // A configured protected delivery link takes priority after verified payment.
+          if (handoff.url) {
+            window.location.assign(handoff.url);
           } else {
-            navigate('/wallet');
+            const purpose = handoff.purpose || txDetails?.purpose || receiptData?.product;
+            if (purpose === 'wallet_funding' || purpose === 'Wallet Funding' || purpose === 'advertiser_funding') {
+              navigate('/wallet');
+            } else if (purpose === 'subscription' || purpose === 'affiliate_subscription' || purpose === 'vendor_subscription') {
+              navigate('/subscriptions');
+            } else if (handoff.orderId || txDetails?.orderId || receiptData?.orderId) {
+              navigate('/my-orders');
+            } else {
+              navigate('/wallet');
+            }
           }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-  }, [buildReceipt, timeline, navigate, txDetails?.purpose, txDetails?.orderId, receiptData?.product, receiptData?.orderId]);
+  }, [buildReceipt, resolvePostPurchaseHandoff, timeline, navigate, txDetails?.purpose, txDetails?.orderId, receiptData?.product, receiptData?.orderId]);
 
   useEffect(() => {
     if (!reference) {
@@ -317,10 +374,16 @@ export default function PaymentCallbackPage() {
     navigate(path);
   };
 
+  const openPostPurchaseHandoff = () => {
+    if (!postPurchaseHandoff?.url) return;
+    cancelAutoRedirect();
+    window.location.assign(postPurchaseHandoff.url);
+  };
+
   const isFunding = txDetails?.purpose === 'wallet_funding' || receiptData?.product === 'Wallet Funding';
   const isPurchase = txDetails?.purpose === 'product_purchase' || txDetails?.purpose === 'escrow' || !!txDetails?.orderId || !!receiptData?.orderId;
   const targetPage = isFunding ? '/wallet' : isPurchase ? '/my-orders' : '/wallet';
-  const targetLabel = isFunding ? 'Wallet' : isPurchase ? 'Orders' : 'Wallet';
+  const targetLabel = postPurchaseHandoff?.label || (isFunding ? 'Wallet' : isPurchase ? 'Orders' : 'Wallet');
   const progressPercent = countdown > 0 ? ((COUNTDOWN_SECONDS - countdown) / COUNTDOWN_SECONDS) * 100 : 100;
   const displayCurrency = txDetails?.currency || 'NGN';
 
@@ -406,11 +469,13 @@ export default function PaymentCallbackPage() {
             <div className="flex flex-col gap-3 mt-6 w-full">
               <div className="flex gap-3">
                 <button
-                  onClick={() => redirectTo(targetPage)}
+                  onClick={postPurchaseHandoff ? openPostPurchaseHandoff : () => redirectTo(targetPage)}
                   className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
                 >
                   <Home className="w-4 h-4" />
-                  {isFunding ? 'Go to Wallet' : 'View Order'}
+                  {postPurchaseHandoff
+                    ? (postPurchaseHandoff.label.includes('PDF') || postPurchaseHandoff.label.includes('file') ? 'Open Purchased File' : 'Open Purchase Access')
+                    : isFunding ? 'Go to Wallet' : 'View Order'}
                 </button>
                 <button
                   onClick={() => { cancelAutoRedirect(); setShowReceipt(true); }}
