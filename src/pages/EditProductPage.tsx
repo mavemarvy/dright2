@@ -31,6 +31,7 @@ interface Product {
   price: number;
   category: string;
   image_url: string | null;
+  demo_video_url: string | null;
   stock_quantity: number | null;
   uploaded_by: string;
   product_type: string;
@@ -48,6 +49,7 @@ export default function EditProductPage() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [demoVideoUrl, setDemoVideoUrl] = useState('');
   const [price, setPrice] = useState('');
   const [stockQuantity, setStockQuantity] = useState('');
   const [category, setCategory] = useState('General');
@@ -88,7 +90,7 @@ export default function EditProductPage() {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, category, image_url, stock_quantity, uploaded_by, product_type')
+        .select('id, name, description, price, category, image_url, demo_video_url, stock_quantity, uploaded_by, product_type')
         .eq('id', id!)
         .maybeSingle();
       if (error || !data) { setError('Product not found'); return; }
@@ -100,6 +102,7 @@ export default function EditProductPage() {
       setProduct(p);
       setName(p.name);
       setDescription(p.description || '');
+      setDemoVideoUrl(p.demo_video_url || '');
       setPrice(String(p.price));
       setStockQuantity(p.stock_quantity !== null ? String(p.stock_quantity) : '');
       setCategory(p.category);
@@ -259,6 +262,7 @@ export default function EditProductPage() {
     const changes: ProductEditChanges = {};
     if (name.trim() !== product.name) changes.name = name.trim();
     if (description.trim() !== (product.description || '')) changes.description = description.trim();
+    if (demoVideoUrl.trim() !== (product.demo_video_url || '')) changes.demo_video_url = demoVideoUrl.trim() || null;
     if (parseFloat(price) !== Number(product.price)) changes.price = parseFloat(price);
     const stockNum = stockQuantity ? parseInt(stockQuantity) : null;
     if (stockNum !== product.stock_quantity) changes.stock_quantity = stockNum;
@@ -300,6 +304,7 @@ export default function EditProductPage() {
       const originalSnapshot: ProductEditChanges = {
         name: product.name,
         description: product.description || '',
+        demo_video_url: product.demo_video_url || null,
         price: Number(product.price),
         stock_quantity: product.stock_quantity ?? undefined,
         category: product.category,
@@ -460,6 +465,18 @@ export default function EditProductPage() {
               <AIGenerateButton type="description" productName={name} category={category} description={description} onApply={setDescription} />
               <AIGenerateButton type="rewrite" content={description} onApply={setDescription} />
             </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Product-page YouTube video link (optional)</label>
+            <input
+              type="url"
+              value={demoVideoUrl}
+              onChange={e => setDemoVideoUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none text-gray-900"
+            />
+            <p className="mt-2 text-xs leading-5 text-gray-500">This is a marketing/demo video shown on the product page. It is separate from course lesson videos, and affiliates can copy the original YouTube link.</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-6">
