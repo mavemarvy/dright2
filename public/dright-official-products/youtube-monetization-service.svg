@@ -1,29 +1,52 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
 <defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#090909"/><stop offset=".48" stop-color="#5f0808"/><stop offset="1" stop-color="#e11d2e"/></linearGradient>
-  <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffffff" stop-opacity=".16"/><stop offset="1" stop-color="#ffffff" stop-opacity=".06"/></linearGradient>
-  <filter id="shadow"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-opacity=".35"/></filter>
+ <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#050505"/><stop offset=".46" stop-color="#310303"/><stop offset="1" stop-color="#b50916"/></linearGradient>
+ <linearGradient id="yt" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#ff3b45"/><stop offset="1" stop-color="#c70012"/></linearGradient>
+ <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#fff0a0"/><stop offset=".45" stop-color="#ffbd2e"/><stop offset="1" stop-color="#ce7200"/></linearGradient>
+ <linearGradient id="glass" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity=".045"/></linearGradient>
+ <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="17" flood-color="#000" flood-opacity=".55"/></filter>
+ <filter id="glow"><feGaussianBlur stdDeviation="16"/></filter>
 </defs>
-<rect width="1200" height="675" rx="36" fill="url(#bg)"/>
-<circle cx="1040" cy="100" r="180" fill="#ff3045" opacity=".18"/><circle cx="1080" cy="610" r="250" fill="#000" opacity=".2"/>
-<g font-family="Arial,Helvetica,sans-serif" fill="#fff">
-  <text x="70" y="78" font-size="28" font-weight="700" letter-spacing="2">DRIGHT OFFICIAL STORE</text>
-  <rect x="70" y="112" width="145" height="42" rx="21" fill="#fff" opacity=".14"/><text x="94" y="141" font-size="20" font-weight="700">SERVICE</text>
-  <text x="70" y="242" font-size="67" font-weight="900">Get Your YouTube</text>
-  <text x="70" y="315" font-size="67" font-weight="900">Channel Monetized</text>
-  <text x="70" y="388" font-size="67" font-weight="900">in a Week</text>
-  <text x="73" y="438" font-size="25" fill="#ffd7d7">Policy-compliant monetization consultation &amp; support</text>
-</g>
-<g transform="translate(790 150)" filter="url(#shadow)">
-  <rect x="0" y="0" width="300" height="206" rx="38" fill="#f7192b"/>
-  <polygon points="120,55 120,151 205,103" fill="#fff"/>
-</g>
-<g transform="translate(70 500)" font-family="Arial,Helvetica,sans-serif">
-  <rect width="990" height="110" rx="24" fill="url(#card)" stroke="#fff" stroke-opacity=".12"/>
-  <g fill="#fff" font-size="21" font-weight="700">
-    <text x="34" y="45">✓ Eligibility review</text><text x="275" y="45">✓ Watch-hours guidance</text><text x="574" y="45">✓ AdSense setup</text>
-    <text x="34" y="82">✓ Policy-safe strategy</text><text x="275" y="82">✓ Issue checks</text><text x="574" y="82">✓ Online consultation</text>
+<rect width="1200" height="675" rx="30" fill="url(#bg)"/>
+<circle cx="1030" cy="100" r="260" fill="#ff2939" opacity=".10"/><circle cx="1030" cy="100" r="110" fill="#ff3344" opacity=".16" filter="url(#glow)"/>
+<g font-family="Arial,Helvetica,sans-serif">
+ <g fill="#fff"><rect x="34" y="24" width="28" height="28" rx="7" fill="#fff"/><path d="M43 34h10v12H43z" fill="#ca0918"/><text x="72" y="48" font-size="26" font-weight="800" letter-spacing="1.4">DRIGHT STORE</text></g>
+ <text x="38" y="133" fill="#fff" font-size="64" font-weight="900">Get Your</text>
+ <text x="38" y="199" fill="#ff3140" font-size="64" font-weight="900">YouTube Channel</text>
+ <text x="38" y="265" fill="#fff" font-size="64" font-weight="900">Monetized</text>
+ <rect x="38" y="283" width="420" height="70" rx="13" fill="#f2202f"/><text x="66" y="334" fill="#fff" font-size="48" font-weight="900">in a Week</text>
+
+ <g transform="translate(698 39)" filter="url(#shadow)">
+  <rect width="445" height="186" rx="24" fill="#f8fafc"/>
+  <text x="25" y="34" fill="#111827" font-size="19" font-weight="800">Channel monetization</text>
+  <circle cx="40" cy="72" r="20" fill="#22c55e"/><path d="M31 72l6 7 13-16" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <text x="72" y="80" fill="#16a34a" font-size="25" font-weight="900">Enabled</text>
+  <line x1="25" y1="108" x2="420" y2="108" stroke="#d8dee8"/>
+  <g fill="#4f9cfb"><rect x="255" y="140" width="20" height="22"/><rect x="285" y="128" width="20" height="34"/><rect x="315" y="112" width="20" height="50"/><rect x="345" y="95" width="20" height="67"/><rect x="375" y="76" width="20" height="86"/></g>
+  <text x="26" y="153" fill="#6b7280" font-size="13">Watch time</text><text x="108" y="153" fill="#6b7280" font-size="13">Subscribers</text><text x="190" y="153" fill="#6b7280" font-size="13">Ad revenue</text>
+ </g>
+
+ <g transform="translate(585 205)" filter="url(#shadow)">
+  <rect width="330" height="207" rx="42" fill="url(#yt)"/>
+  <path d="M135 53v102l90-51z" fill="#fff"/>
+  <rect x="0" y="0" width="330" height="207" rx="42" fill="none" stroke="#ff7881" stroke-width="2" opacity=".6"/>
+ </g>
+ <g transform="translate(930 275)" filter="url(#shadow)">
+  <circle cx="64" cy="64" r="61" fill="url(#gold)"/><circle cx="64" cy="64" r="47" fill="none" stroke="#fff3b5" stroke-width="5"/>
+  <text x="64" y="82" text-anchor="middle" fill="#8d5100" font-size="55" font-weight="900">$</text>
+ </g>
+
+ <g transform="translate(30 447)">
+  <rect width="1140" height="153" rx="20" fill="url(#glass)" stroke="#fff" stroke-opacity=".13"/>
+  <g text-anchor="middle">
+   <g transform="translate(8 10)"><rect width="177" height="99" rx="15" fill="#09090b" fill-opacity=".72"/><circle cx="88" cy="29" r="16" fill="#18a7ff"/><text x="88" y="66" fill="#fff" font-size="15" font-weight="800">Eligibility</text><text x="88" y="84" fill="#fff" font-size="15" font-weight="800">Review</text></g>
+   <g transform="translate(195 10)"><rect width="177" height="99" rx="15" fill="#09090b" fill-opacity=".72"/><path d="M72 41l12-14 13 9 16-22" stroke="#22c55e" stroke-width="6" fill="none"/><text x="88" y="66" fill="#fff" font-size="14" font-weight="800">Watch Hours &amp;</text><text x="88" y="84" fill="#fff" font-size="14" font-weight="800">Subscribers</text></g>
+   <g transform="translate(382 10)"><rect width="177" height="99" rx="15" fill="#09090b" fill-opacity=".72"/><path d="M88 13l19 8v18c0 14-9 23-19 28-10-5-19-14-19-28V21z" fill="#8b5cf6"/><text x="88" y="77" fill="#fff" font-size="14" font-weight="800">Policy-Compliant</text><text x="88" y="94" fill="#fff" font-size="14" font-weight="800">Strategies</text></g>
+   <g transform="translate(569 10)"><rect width="177" height="99" rx="15" fill="#09090b" fill-opacity=".72"/><circle cx="88" cy="32" r="18" fill="#f7b500"/><text x="88" y="38" fill="#3b2600" font-size="22" font-weight="900">⚙</text><text x="88" y="77" fill="#fff" font-size="14" font-weight="800">AdSense Setup</text><text x="88" y="94" fill="#fff" font-size="14" font-weight="800">&amp; Linking</text></g>
+   <g transform="translate(756 10)"><rect width="177" height="99" rx="15" fill="#09090b" fill-opacity=".72"/><rect x="72" y="15" width="32" height="32" rx="6" fill="#ef4444"/><text x="88" y="78" fill="#fff" font-size="14" font-weight="800">Issue Checks</text><text x="88" y="94" fill="#fff" font-size="13">(Copyright / Reuse)</text></g>
+   <g transform="translate(943 10)"><rect width="177" height="99" rx="15" fill="#09090b" fill-opacity=".72"/><circle cx="88" cy="31" r="18" fill="#ec4899"/><text x="88" y="78" fill="#fff" font-size="14" font-weight="800">Step-by-Step</text><text x="88" y="94" fill="#fff" font-size="14" font-weight="800">Support</text></g>
   </g>
+  <g font-size="17" font-weight="800" fill="#fff"><text x="40" y="138">● 100% Policy-Compliant</text><text x="374" y="138">● No Fake Traffic</text><text x="655" y="138">● Free Initial Consultation</text></g>
+ </g>
 </g>
-<text x="1120" y="625" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#fff" opacity=".65">DRIGHT • Lagos, Nigeria</text>
 </svg>
