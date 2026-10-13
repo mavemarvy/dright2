@@ -14,6 +14,7 @@ export interface DrightOfficialProduct {
   affiliate_commission_percent: number;
   image_url: string | null;
   image_urls: string[];
+  demo_video_url: string | null;
   public_visible: boolean;
   is_enabled: boolean;
   is_featured: boolean;
@@ -43,6 +44,7 @@ function normalize(row: Record<string, any>): DrightOfficialProduct {
     affiliate_commission_percent: Number(row.affiliate_commission_percent || 0),
     image_url: row.image_url == null ? null : String(row.image_url),
     image_urls: Array.isArray(row.image_urls) ? row.image_urls.map(String) : [],
+    demo_video_url: row.demo_video_url == null ? null : String(row.demo_video_url),
     public_visible: row.public_visible !== false,
     is_enabled: row.is_enabled !== false,
     is_featured: row.is_featured === true,
