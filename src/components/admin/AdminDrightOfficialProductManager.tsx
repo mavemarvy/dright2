@@ -7,6 +7,7 @@ import {
   createAdminDrightOfficialProduct,
   listAdminDrightOfficialProducts,
   updateAdminDrightOfficialProduct,
+  setAdminDrightOfficialProductDelivery,
   uploadOfficialProductImages,
   type DrightOfficialProduct,
 } from '../../lib/drightOfficialStore';
@@ -279,6 +280,17 @@ export default function AdminDrightOfficialProductManager() {
         image_urls: imageUrls,
       });
 
+      if (form.product_type !== 'PHYSICAL') {
+        await setAdminDrightOfficialProductDelivery(result.marketplaceProductId, {
+          delivery_type: form.delivery_type,
+          download_file_url: form.download_file_url.trim() || null,
+          access_link: form.access_link.trim() || null,
+          file_format: form.file_format.trim() || null,
+          expiry_days: Number(form.expiry_days || 365),
+          includes_bonus_materials: form.includes_bonus_materials,
+        });
+      }
+
       try {
         await setDirectGuestSaleSetting('product', result.marketplaceProductId, form.allow_direct_sale, 10);
       } catch (directSaleError) {
@@ -512,6 +524,16 @@ export default function AdminDrightOfficialProductManager() {
         image_url: editDraft.image_urls[0] || null,
         image_urls: editDraft.image_urls,
       });
+      if (product.product_type !== 'PHYSICAL') {
+        await setAdminDrightOfficialProductDelivery(product.marketplace_product_id, {
+          delivery_type: editDraft.delivery_type,
+          download_file_url: editDraft.download_file_url.trim() || null,
+          access_link: editDraft.access_link.trim() || null,
+          file_format: editDraft.file_format.trim() || null,
+          expiry_days: expiryDays,
+          includes_bonus_materials: editDraft.includes_bonus_materials,
+        });
+      }
       try {
         await setDirectGuestSaleSetting('product', product.marketplace_product_id, editDraft.allow_direct_sale, 10);
       } catch (directSaleError) {
