@@ -270,7 +270,7 @@ export default function ProductDetailPage() {
         if (portfolio) setPortfolioItems(portfolio as PortfolioItem[]);
       }
 
-      if (prod.product_type === 'DIGITAL' || prod.product_type === 'COURSE') {
+      if (prod.product_type === 'DIGITAL' || prod.product_type === 'COURSE' || prod.product_type === 'SERVICE') {
         const { data: dd } = await supabase
           .from('digital_product_details').select('*').eq('product_id', id!).maybeSingle();
         if (dd) setDigitalDetails(dd);
@@ -523,6 +523,7 @@ export default function ProductDetailPage() {
           }}
           productImages={productImages}
           imageFit={productIsOfficial ? 'contain' : 'cover'}
+          sourceCurrency={sourceCurrency}
           tiers={tiers}
           customizations={customizations}
           portfolioItems={portfolioItems}
@@ -534,6 +535,20 @@ export default function ProductDetailPage() {
           checkoutResult={checkoutResult}
           onDismissResult={() => setCheckoutResult(null)}
         />
+        {hasPurchased && purchasedOrder && digitalDetails && (
+          <div className="max-w-5xl mx-auto px-4 pb-5">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+              <p className="text-sm font-black text-emerald-950 mb-3">Your purchased access</p>
+              <AccessDownload
+                orderId={purchasedOrder.id}
+                downloadToken={purchasedOrder.download_token}
+                productName={product.name}
+                productType={product.product_type}
+                hasPurchased
+              />
+            </div>
+          </div>
+        )}
         {product.demo_video_url && (
           <div className="max-w-5xl mx-auto px-4 pb-5">
             <div className="rounded-2xl border border-red-100 bg-red-50/70 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
