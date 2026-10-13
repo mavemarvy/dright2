@@ -29,6 +29,7 @@ export interface DrightStarterProduct {
   benefits: string[];
   image_url: string | null;
   image_urls: string[];
+  demo_video_url: string | null;
 }
 
 export interface DrightStarterPublicSettings {
@@ -72,6 +73,7 @@ export interface DrightStarterAdminSettings {
     benefits: string[];
     image_url: string | null;
     image_urls: string[];
+    demo_video_url: string | null;
     updated_at: string;
     updated_by: string | null;
   };
@@ -132,6 +134,7 @@ export async function fetchDrightStarterProduct(): Promise<DrightStarterPublicSe
       official_rating: Number(payload.product?.official_rating ?? 0),
       image_url: payload.product?.image_url ? String(payload.product.image_url) : null,
       image_urls: Array.isArray(payload.product?.image_urls) ? payload.product.image_urls.map(String) : [],
+      demo_video_url: payload.product?.demo_video_url ? String(payload.product.demo_video_url) : null,
       description: renderDrightStarterTemplate(
         String(payload.product?.description || ''),
         Number(payload.product?.included_trial_days ?? 0),
@@ -177,6 +180,7 @@ export async function getAdminDrightStarterSettings(): Promise<DrightStarterAdmi
       benefits: Array.isArray(payload.product?.benefits) ? payload.product.benefits.map(String) : [],
       image_url: payload.product?.image_url ? String(payload.product.image_url) : null,
       image_urls: Array.isArray(payload.product?.image_urls) ? payload.product.image_urls.map(String) : [],
+      demo_video_url: payload.product?.demo_video_url ? String(payload.product.demo_video_url) : null,
     },
   };
 }
@@ -211,6 +215,7 @@ export async function updateAdminDrightStarterSettings(
       benefits: settings.product.benefits,
       image_url: settings.product.image_url,
       image_urls: settings.product.image_urls,
+      demo_video_url: settings.product.demo_video_url,
     },
   });
   if (error) throw error;
