@@ -137,7 +137,7 @@ function accentClasses(accent: PremiumCourseConfig['accent']) {
 }
 
 export default function PremiumCourseLearningPage({ config }: { config: PremiumCourseConfig }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const guestToken = searchParams.get('guest') || '';
   const colors = accentClasses(config.accent);
@@ -307,9 +307,9 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
         const isExpired = Date.now() > expiresAt;
         setExpired(isExpired);
         setAllowed(!isExpired);
-      } else if (hiddenAdminCourse) {
-        // Admin QA preview remains available, but once the admin buys the hidden
-        // product the real buyer-order entitlement above takes precedence.
+      } else if (isAdmin || hiddenAdminCourse) {
+        // DRIGHT admins can QA any course without creating a fake purchase.
+        // A real completed buyer order still takes precedence when one exists.
         setAdminPreview(true);
         setAllowed(true);
       }
@@ -317,7 +317,7 @@ export default function PremiumCourseLearningPage({ config }: { config: PremiumC
       setChecking(false);
     };
     void check();
-  }, [user?.id, config.slug, guestToken]);
+  }, [user?.id, isAdmin, config.slug, guestToken]);
 
   useEffect(() => {
     setSelectedAnswer(null);
