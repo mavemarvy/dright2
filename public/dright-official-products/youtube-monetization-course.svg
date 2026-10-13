@@ -1,31 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
 <defs>
-  <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#061b3d"/><stop offset=".52" stop-color="#0b4db8"/><stop offset="1" stop-color="#e11d2e"/></linearGradient>
-  <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity=".07"/></linearGradient>
+ <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#06162f"/><stop offset=".52" stop-color="#073e94"/><stop offset="1" stop-color="#07111f"/></linearGradient>
+ <linearGradient id="phone" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#1b1d25"/><stop offset="1" stop-color="#030409"/></linearGradient>
+ <filter id="shadow"><feDropShadow dx="0" dy="15" stdDeviation="16" flood-color="#000" flood-opacity=".45"/></filter>
+ <filter id="glow"><feGaussianBlur stdDeviation="20"/></filter>
 </defs>
-<rect width="1200" height="675" rx="36" fill="url(#bg2)"/>
-<circle cx="1020" cy="90" r="210" fill="#60a5fa" opacity=".15"/><circle cx="990" cy="610" r="290" fill="#fb1d38" opacity=".16"/>
-<g font-family="Arial,Helvetica,sans-serif" fill="#fff">
-  <text x="70" y="78" font-size="28" font-weight="700" letter-spacing="2">DRIGHT OFFICIAL STORE</text>
-  <rect x="70" y="112" width="150" height="42" rx="21" fill="#fff" opacity=".14"/><text x="94" y="141" font-size="20" font-weight="700">COURSE</text>
-  <text x="70" y="242" font-size="64" font-weight="900">YouTube Monetization</text>
-  <text x="70" y="316" font-size="64" font-weight="900">in Just 7 Days</text>
-  <text x="72" y="370" font-size="29" font-weight="700" fill="#fde047">7-Day Monetization Guide</text>
-  <text x="72" y="412" font-size="23" fill="#dbeafe">Paid • Distance Learning • PDF / Video Guide</text>
-</g>
-<g transform="translate(805 160)">
-  <rect width="265" height="330" rx="30" fill="#07111f" stroke="#fff" stroke-opacity=".2"/>
-  <rect x="26" y="30" width="213" height="126" rx="20" fill="#ef233c"/>
-  <polygon points="108,62 108,126 166,94" fill="#fff"/>
-  <text x="132" y="205" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="900" fill="#fff">7-DAY</text>
-  <text x="132" y="244" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="900" fill="#fff">YOUTUBE</text>
-  <text x="132" y="283" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="900" fill="#fde047">GUIDE</text>
-</g>
-<g transform="translate(70 495)" font-family="Arial,Helvetica,sans-serif">
-  <rect width="1000" height="110" rx="24" fill="url(#panel)" stroke="#fff" stroke-opacity=".13"/>
-  <g fill="#fff" font-size="21" font-weight="700">
-    <text x="34" y="45">✓ 1,000-subscriber roadmap</text><text x="365" y="45">✓ 4,000-watch-hour strategy</text><text x="750" y="45">✓ Content strategy</text>
-    <text x="34" y="82">✓ Rank videos better</text><text x="365" y="82">✓ Attract real viewers</text><text x="750" y="82">✓ No fake bots</text>
-  </g>
+<rect width="1200" height="675" rx="30" fill="url(#bg)"/>
+<circle cx="245" cy="215" r="250" fill="#155ed0" opacity=".28" filter="url(#glow)"/><circle cx="1110" cy="575" r="260" fill="#e11d2e" opacity=".12"/>
+<g font-family="Arial,Helvetica,sans-serif">
+ <g fill="#fff"><rect x="34" y="24" width="28" height="28" rx="7" fill="#fff"/><path d="M43 34h10v12H43z" fill="#173b81"/><text x="72" y="48" font-size="26" font-weight="800" letter-spacing="1.4">DRIGHT STORE</text></g>
+ <text x="38" y="132" fill="#fff" font-size="64" font-weight="900">YouTube</text>
+ <text x="38" y="197" fill="#ffc51d" font-size="64" font-weight="900">Monetization</text>
+ <text x="38" y="260" fill="#fff" font-size="57" font-weight="900">in Just <tspan fill="#ff3445">7 Days</tspan></text>
+ <text x="40" y="304" fill="#fff" font-size="27" font-weight="800">Fast &amp; Guaranteed Guide</text>
+
+ <g transform="translate(40 337)">
+  <g fill="#fff" font-size="23" font-weight="800"><text y="0">✓ 1,000 Subscribers</text><text y="43">✓ 4,000 Watch Hours</text><text y="86">✓ Content Strategy</text><text y="129">✓ Rank Videos Fast</text><text y="172">✓ Attract Real Viewers</text></g>
+  <g fill="#22c55e"><circle cx="-18" cy="-7" r="13"/><circle cx="-18" cy="36" r="13"/><circle cx="-18" cy="79" r="13"/><circle cx="-18" cy="122" r="13"/><circle cx="-18" cy="165" r="13"/></g>
+ </g>
+
+ <g transform="translate(648 67)" filter="url(#shadow)">
+  <rect width="510" height="300" rx="25" fill="#f8fafc"/>
+  <text x="24" y="37" font-size="20" font-weight="900" fill="#111827">YouTube Studio • Channel analytics</text>
+  <rect x="24" y="62" width="202" height="93" rx="16" fill="#eef5ff"/><text x="42" y="90" font-size="14" fill="#64748b">Current subscribers</text><text x="42" y="128" font-size="34" font-weight="900" fill="#111827">1,028</text><text x="42" y="148" font-size="13" font-weight="800" fill="#16a34a">+1,028 in last 7 days</text>
+  <rect x="244" y="62" width="240" height="93" rx="16" fill="#eefbf3"/><text x="263" y="90" font-size="14" fill="#64748b">Watch time (hours)</text><text x="263" y="128" font-size="34" font-weight="900" fill="#111827">4,236</text><text x="263" y="148" font-size="13" font-weight="800" fill="#16a34a">+4,236 in last 7 days</text>
+  <path d="M35 245 C90 224 118 251 166 216 C215 180 244 209 285 188 C328 165 365 177 409 121 L452 83" fill="none" stroke="#22c55e" stroke-width="8" stroke-linecap="round"/>
+  <path d="M440 87l18-13-5 22" fill="#ef4444"/>
+ </g>
+
+ <g transform="translate(825 278)" filter="url(#shadow)">
+  <rect width="250" height="315" rx="28" fill="url(#phone)" stroke="#434752" stroke-width="3"/>
+  <rect x="25" y="29" width="200" height="72" rx="17" fill="#ef1729"/><path d="M94 48v35l43-18z" fill="#fff"/>
+  <text x="125" y="147" text-anchor="middle" fill="#fff" font-size="29" font-weight="900">7 DAY</text>
+  <text x="125" y="184" text-anchor="middle" fill="#fff" font-size="27" font-weight="900">YouTube</text>
+  <text x="125" y="221" text-anchor="middle" fill="#ffd21f" font-size="28" font-weight="900">Monetization</text>
+  <text x="125" y="257" text-anchor="middle" fill="#ffd21f" font-size="31" font-weight="900">GUIDE</text>
+  <g fill="#ef1729"><rect x="40" y="279" width="24" height="18"/><rect x="72" y="268" width="24" height="29"/><rect x="104" y="256" width="24" height="41"/><rect x="136" y="241" width="24" height="56"/><rect x="168" y="225" width="24" height="72"/></g>
+ </g>
+
+ <g transform="translate(30 585)">
+  <rect width="1140" height="62" rx="20" fill="#f8fafc"/>
+  <g text-anchor="middle" font-size="15" font-weight="800" fill="#111827"><text x="110" y="38">📄 Step-by-Step PDF/Video</text><text x="350" y="38">📈 Proven Strategies</text><text x="570" y="38">⚡ Easy To Follow</text><text x="790" y="38">👥 No Fake Bots</text><text x="1010" y="38">🚀 Instant Delivery</text></g>
+ </g>
 </g>
 </svg>
